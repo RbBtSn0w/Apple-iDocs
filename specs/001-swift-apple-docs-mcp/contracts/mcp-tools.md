@@ -174,7 +174,7 @@
   "required": ["action"],
   "if": { "properties": { "action": { "const": "search" } } },
   "then": { "required": ["action", "symbol"] },
-  "else": { "not": { "required": ["symbol"] } }
+  "else": { "properties": { "symbol": false }, "errorMessage": "action 为 list 时必须省略 symbol 参数" }
 }
 ```
 

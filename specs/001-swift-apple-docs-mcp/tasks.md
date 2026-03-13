@@ -101,7 +101,7 @@
 
 ### 测试 ⚠️
 
-- [ ] T024 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
+- [ ] T024 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取、**Spotlight 模糊检索独立验证用例 (G7)**）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
 
 ### 实现
 
@@ -218,7 +218,7 @@
 ### 端到端测试与日志
 
 - [ ] T046 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
-- [ ] T047 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T045 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
+- [ ] T047 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T046 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
 
 ### 性能基准验证 (G2: SC-001/002/006/008/009)
 

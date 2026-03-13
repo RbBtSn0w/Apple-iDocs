@@ -44,15 +44,18 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `key` | `String` | 缓存键 |
+| `key` | `String` | 缓存键（严格要求为 String 类型以便于 LRU 和哈希查找） |
 | `value` | `T` | 缓存的数据 |
 | `createdAt` | `Date` | 创建时间 |
 | `expiresAt` | `Date` | 过期时间 |
 | `source` | `DataSource` | 数据来源 |
+| `sizeBytes` | `Int?` | 数据体积预估（用于容量控制策略） |
+| `lastAccessedAt`| `Date` | 最后访问时间（用于内存 LRU 淘汰淘汰） |
 
-**验证规则**:
-- `expiresAt` 必须晚于 `createdAt`
-- 过期的条目在查询时自动淘汰
+**验证与容量策略规则**:
+- `expiresAt` 必须晚于 `createdAt`。
+- 过期的条目在磁盘层和内存层查询时自动淘汰。
+- `MemoryCache` (<String, CacheEntry>)：严格的 LRU (Least Recently Used) 淘汰策略。依靠 `lastAccessedAt` 维护，容量上限默认 100 条目，达到上限或 `sizeBytes` 触发阈值时自动移除最近最少使用项，查找和淘汰操作时间复杂度 `O(1)`。
 
 **TTL 预设**:
 | 数据类型 | TTL |
