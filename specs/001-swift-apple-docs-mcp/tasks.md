@@ -217,23 +217,23 @@
 
 ### 端到端测试与日志
 
-- [ ] T046 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
-- [ ] T047 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T046 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
+- [x] T046 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
+- [x] T047 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T046 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
 
 ### 性能基准验证 (G2: SC-001/002/006/008/009)
 
-- [ ] T048 [P] 编写性能基准测试：搜索响应 ≤2s (SC-001)、本地符号定位 p95 ≤100ms (SC-002)、缓存命中 ≥10x 加速 (SC-008)、优雅关闭 ≤5s (SC-009) in `Tests/iDocsTests/IntegrationTests/BenchmarkTests.swift`
-- [ ] T049 [P] 编写 UserAgent 重试成功率测试：模拟 403/429 响应，断言自动重试成功率 ≥90% (SC-006) in `Tests/iDocsTests/ToolTests.swift`
+- [x] T048 [P] 编写性能基准测试：搜索响应 ≤2s (SC-001)、本地符号定位 p95 ≤100ms (SC-002)、缓存命中 ≥10x 加速 (SC-008)、优雅关闭 ≤5s (SC-009) in `Tests/iDocsTests/IntegrationTests/BenchmarkTests.swift`
+- [x] T049 [P] 编写 UserAgent 重试成功率测试：模拟 403/429 响应，断言自动重试成功率 ≥90% (SC-006) in `Tests/iDocsTests/ToolTests.swift`
 
 ### 产物验收 (G1: FR-018/SC-005)
 
-- [ ] T050 [P] 编写 Distribution Validation 脚本：`otool -L` 动态依赖扫描（断言零外部 dylib）、`ls -lh` 体积门禁 ≤20MB (SC-005)、确认 static Mach-O 产物类型 in `scripts/validate-distribution.sh`
+- [x] T050 [P] 编写 Distribution Validation 脚本：`otool -L` 动态依赖扫描（断言零外部 dylib）、`ls -lh` 体积门禁 ≤20MB (SC-005)、确认 static Mach-O 产物类型 in `scripts/validate-distribution.sh`
 
 ### 文档与收尾
 
-- [ ] T051 [P] 创建 README.md（至少包含：项目简介、安装步骤、AI 客户端配置、7 工具列表、贡献指南）**DoD**: 覆盖 quickstart 全流程 in `README.md`
-- [ ] T052 代码清理和重构 **DoD**: 零编译警告、全量测试通过、无 `any`/`AnyObject` 残留、无重复代码块 >10 行
-- [ ] T053 运行 `quickstart.md` 完整验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试、性能基准通过、产物验收通过）
+- [x] T051 [P] 创建 README.md（至少包含：项目简介、安装步骤、AI 客户端配置、7 工具列表、贡献指南）**DoD**: 覆盖 quickstart 全流程 in `README.md`
+- [x] T052 代码清理和重构 **DoD**: 零编译警告、全量测试通过、无 `any`/`AnyObject` 残留、无重复代码块 >10 行
+- [x] T053 运行 `quickstart.md` 完整验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试、性能基准通过、产物验收通过）
 
 ---
 

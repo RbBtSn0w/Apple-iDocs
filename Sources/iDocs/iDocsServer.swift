@@ -100,6 +100,31 @@ public actor iDocsServer: Service {
                         ]),
                         "required": .array([.string("videoID")])
                     ])
+                ),
+                Tool(
+                    name: "search_documentation",
+                    description: "Alias for search_docs",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "query": .string("Search query")
+                        ]),
+                        "required": .array([.string("query")])
+                    ])
+                ),
+                Tool(
+                    name: "get_documentation",
+                    description: "Alias for fetch_doc",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "path": .string("Documentation path")
+                        ]),
+                        "required": .array([.string("path")])
+                    ])
+                ),
+                Tool(
+                    name: "list_technologies",
+                    description: "Alias for browse_technologies",
+                    inputSchema: .object([:])
                 )
             ]
             return .init(tools: tools)
@@ -108,7 +133,7 @@ public actor iDocsServer: Service {
         // Handle tool calls
         await server.withMethodHandler(CallTool.self) { [self] params in
             switch params.name {
-            case "search_docs":
+            case "search_docs", "search_documentation":
                 guard let query = params.arguments?["query"]?.stringValue else {
                     return .init(content: [.text("Missing query parameter")], isError: true)
                 }
@@ -121,7 +146,7 @@ public actor iDocsServer: Service {
                     return .init(content: [.text("Search failed: \(error.localizedDescription)")], isError: true)
                 }
                 
-            case "fetch_doc":
+            case "fetch_doc", "get_documentation":
                 guard let path = params.arguments?["path"]?.stringValue else {
                     return .init(content: [.text("Missing path parameter")], isError: true)
                 }
@@ -144,7 +169,7 @@ public actor iDocsServer: Service {
                     return .init(content: [.text("Xcode docs query failed: \(error.localizedDescription)")], isError: true)
                 }
 
-            case "browse_technologies":
+            case "browse_technologies", "list_technologies":
                 do {
                     let markdown = try await BrowseTechnologiesTool().run()
                     return .init(content: [.text(markdown)], isError: false)
