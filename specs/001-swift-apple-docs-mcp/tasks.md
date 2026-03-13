@@ -161,13 +161,13 @@
 
 ### 测试 ⚠️
 
-- [ ] T036 [P] [US6] 编写 `ExternalDocCFetcher` & `FetchExternalDocTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/ExternalDocTests.swift`
+- [x] T036 [P] [US6] 编写 `ExternalDocCFetcher` & `FetchExternalDocTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/ExternalDocTests.swift`
 
 ### 实现
 
-- [ ] T037 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
-- [ ] T038 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
-- [ ] T039 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
+- [x] T037 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
+- [x] T038 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
+- [x] T039 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 6 独立可用
 

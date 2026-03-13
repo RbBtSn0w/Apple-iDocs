@@ -71,6 +71,16 @@ public actor iDocsServer: Service {
                         ]),
                         "required": .array([.string("topic")])
                     ])
+                ),
+                Tool(
+                    name: "fetch_external_doc",
+                    description: "Fetch DocC documentation from an external URL (e.g., swiftpackageindex.com)",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "url": .string("Complete URL to the external DocC documentation page")
+                        ]),
+                        "required": .array([.string("url")])
+                    ])
                 )
             ]
             return .init(tools: tools)
@@ -133,6 +143,18 @@ public actor iDocsServer: Service {
                     return .init(content: [.text(markdown)], isError: false)
                 } catch {
                     return .init(content: [.text("Fetch HIG failed: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "fetch_external_doc":
+                guard let url = params.arguments?["url"]?.stringValue else {
+                    return .init(content: [.text("Missing url parameter")], isError: true)
+                }
+                
+                do {
+                    let markdown = try await FetchExternalDocTool().run(url: url)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Fetch external doc failed: \(error.localizedDescription)")], isError: true)
                 }
                 
             default:
