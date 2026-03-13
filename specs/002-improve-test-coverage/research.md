@@ -6,58 +6,33 @@
 采用 **构造函数注入 (Constructor Injection)** 结合 **Swift 协议 (Protocols)**。
 
 ### 理由
+- **隔离性**: 通过注入独立实例，确保测试用例之间不共享状态，符合 SC-003。
 - **线程安全**: Protocols 声明为 `Sendable` 可确保在 Actor 边界安全传输。
-- **静态检查**: 编译器确保所有依赖在初始化时就绪，避免运行时错误。
-- **无框架依赖**: 遵循 Constitution V (极简主义)，不引入外部 DI 容器。
+- **重置机制**: 强制实现 `reset()` 方法以清空 Mock 内部的 Stub 数据。
 
-### 模式示例
-```swift
-public protocol NetworkSession: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, URLResponse)
-}
-
-public actor AppleJSONAPI {
-    private let session: any NetworkSession
-    public init(session: any NetworkSession = URLSession.shared) {
-        self.session = session
-    }
-}
-```
-
-## 2. 抽象系统级 API (Spotlight & FileSystem)
+## 2. 模拟系统级错误 (Mocking Strategy)
 
 ### 决策
-- **FileSystem**: 抽象 `FileManager` 的常用方法（`fileExists`, `contentsOfDirectory`, `removeItem`）。
-- **Spotlight**: 抽象 `NSMetadataQuery` 为 `SearchProvider` 协议。
+定义强类型 `MockError` 枚举。
 
 ### 理由
-- `NSMetadataQuery` 依赖 RunLoop 和全局索引，直接测试极难且不可靠。
-- 通过 `SearchProvider` 协议，测试可以模拟“命中”、“未命中”或“索引损坏”等多种状态。
+- 统一模拟 `noPermission`, `diskFull`, `networkTimeout`, `invalidResponse`, `fileNotFound` 等关键路径。
+- 通过协议抽象 `FileManager` (FileSystem) 和 `URLSession` (NetworkSession)，实现 100% 的错误路径注入。
 
-## 3. 自动化覆盖率监测
+## 3. 自动化覆盖率门禁 (CI Pipeline)
 
 ### 决策
-使用 `swift test --enable-code-coverage` 结合 `xcrun llvm-cov`。
+使用 `swift test --enable-code-coverage` 结合自定义 Bash 脚本进行硬拦截。
 
-### 操作步骤
-1. 执行测试并启用覆盖率: `swift test --enable-code-coverage`
-2. 获取二进制路径: `swift build --show-bin-path`
-3. 生成报告: 
-   ```bash
-   xcrun llvm-cov report \
-     .build/debug/iDocsPackageTests.xctest/Contents/MacOS/iDocsPackageTests \
-     -instr-profile=.build/debug/codecov/default.profdata \
-     -ignore-filename-regex=".build|Tests"
-   ```
-
-### 自动化门禁
-编写简单的 Bash 脚本解析 `llvm-cov` 的输出，若总覆盖率低于 80% 则 `exit 1`。
+### 操作流程
+1. 执行测试: `swift test --enable-code-coverage`
+2. 聚合结果: 使用 `xcrun llvm-cov report`
+3. 门禁检查: 脚本解析 "TOTAL" 行的 "Cover" 百分比，若 < 80% 则中断 CI 流程。
 
 ## 4. 备选方案评估
 
 | 方案 | 评价 | 结论 |
 |------|------|------|
-| **使用 Swift OpenAPI Generator Mock** | 太过重量级，本项目只需简单的 JSON 模拟。 | **拒绝** |
-| **SwiftyMocky 等代码生成库** | 需要额外依赖和预处理步骤，违反 Constitution VI。 | **拒绝** |
-| **基于子类的 Mock** | 无法处理 Actor，且对 Struct 无效。 | **拒绝** |
-| **协议 Mock (当前方案)** | 最灵活，支持 Struct/Class/Actor，零依赖。 | **采纳** |
+| **Vapor Test 框架** | 仅限于网络层，对本地 Xcode 文档无能为力。 | **拒绝** |
+| **SwiftyMocky** | 需要 Sourcery 生成代码，增加编译复杂度。 | **拒绝** |
+| **原生协议 Mock** | 最轻量级，完全符合 Constitution V (极简主义)。 | **采纳** |

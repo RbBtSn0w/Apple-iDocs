@@ -3,49 +3,46 @@
 ## 核心抽象协议 (Core Protocols)
 
 ### NetworkSession
-用于抽象网络 IO，解耦 `URLSession`。
+用于抽象网络请求，使 `AppleJSONAPI` 等组件可测试。
 
-| 方法 | 说明 |
-|------|------|
-| `data(for: URLRequest)` | 异步获取数据与响应，支持抛出网络错误。 |
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `data(for: URLRequest)` | `(Data, URLResponse)` | 异步获取数据，支持抛出 `MockError` |
 
 ### FileSystem
-用于抽象磁盘 IO，解耦 `FileManager`。
+用于抽象本地磁盘 IO，使 `DiskCache` 和 `XcodeLocalDocs` 可测试。
 
 | 方法 | 说明 |
 |------|------|
-| `contentsOfDirectory(at:includingPropertiesForKeys:options:)` | 枚举目录。 |
-| `fileExists(atPath:)` | 检查路径。 |
-| `removeItem(at:)` | 删除文件。 |
-| `write(_:to:)` | 写入数据。 |
+| `contentsOfDirectory(at:...)` | 遍历目录 |
+| `fileExists(atPath:)` | 检查路径是否存在 |
+| `removeItem(at:)` | 删除文件/目录 |
+| `write(_:to:)` | 写入数据 |
 
-### SearchProvider (Spotlight)
-用于抽象本地元数据查询。
+### SearchProvider
+用于抽象 Spotlight (`NSMetadataQuery`) 本地搜索逻辑。
 
 | 方法 | 说明 |
 |------|------|
-| `execute(query: String)` | 执行搜索并返回路径列表。 |
+| `search(query: String)` | 执行模糊匹配，返回匹配的文档路径列表 |
 
 ## 测试实体 (Test Entities)
 
-### MockNetworkSession
-实现 `NetworkSession` 协议。
-- **属性**: `stubbedData`, `stubbedResponse`, `stubbedError`。
-- **行为**: 根据预设值返回数据或抛出错误。
+### Mock 状态管理
+所有 Mock 实体必须包含以下共性行为：
+- `reset()`: 重置所有记录的调用次数和 Stub 返回值。
+- `stubbedError`: 可选的 `MockError` 成员，用于触发异常路径。
 
-### MockFileSystem
-实现 `FileSystem` 协议。
-- **属性**: `virtualFiles: [String: Data]` (内存中的虚拟文件系统)。
-- **行为**: 模拟文件读写、权限错误、磁盘空间满等场景。
+### Mock 对象定义
+- **MockNetworkSession**: 支持 Stubbing `Data` 和 `URLResponse`。
+- **MockFileSystem**: 在内存中维护一个虚拟文件字典，模拟真实读写。
+- **MockSearchProvider**: 支持预设一组路径作为搜索结果。
 
-### MockSearchProvider
-实现 `SearchProvider` 协议。
-- **属性**: `mockResults: [String]`。
-- **行为**: 模拟 Spotlight 搜索结果。
+## 实体关系图 (Entity Relationships)
 
-## 关联关系
-
-- `AppleJSONAPI` -> 依赖 `NetworkSession`
-- `XcodeLocalDocs` -> 依赖 `FileSystem` + `SearchProvider`
-- `DiskCache` -> 依赖 `FileSystem`
-- `FetchDocTool` -> 依赖 `AppleJSONAPI` + `XcodeLocalDocs`
+```text
+AppleJSONAPI ----> [NetworkSession]
+DiskCache --------> [FileSystem]
+XcodeLocalDocs ---> [FileSystem] + [SearchProvider]
+SearchDocsTool ---> [AppleJSONAPI] + [XcodeLocalDocs] + [MemoryCache]
+```

@@ -5,6 +5,16 @@
 **Status**: Draft  
 **Input**: User description: "因为单元测试的覆盖率低，不满足整体质量。 需要新增技术需求完成项目重构， 支持单元测试的覆盖率。"
 
+## Clarifications
+
+### Session 2026-03-13
+- Q: 需要明确 12 种核心 DocC 节点的具体清单以确保 100% 覆盖可验证。 → A: declarations, parameters, properties, paragraph, aside, list, table, heading, codeListing, image, link, section
+- Q: 需要明确 Mock 实体在每次测试前如何重置状态以确保隔离性。 → A: 所有 Mock 实体必须实现 reset() 方法，并在测试框架的 beforeEach 中调用。
+- Q: 为了确保能够测试各种失败路径，需要预定义一组 Mock 必须支持的核心错误。 → A: noPermission, diskFull, networkTimeout, invalidResponse, fileNotFound
+- Q: 需要明确 CI 门禁的具体环境配置。 → A: CI 门禁环境锁定为：macOS 14 (Sonoma), Xcode 15.4 / Swift 6.0
+- Q: 是否在 Functional Requirements 中增加 FR-010 以强制要求 CI 失败时自动导出诊断产物（.xcresult/日志）？ → A: 不增加，依赖 CI 界面控制台输出。
+- Q: 是否强制要求核心组件在测试时必须注入全新的 Mock 实例，而非共享全局实例？ → A: 强制要求：每个测试用例必须使用独立的 Mock 实例，禁止使用全局/单例 Mock。
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - 核心模块重构以支持依赖注入 (Priority: P1)
@@ -17,7 +27,7 @@
 
 **Acceptance Scenarios**:
 
-1. **Given** 一个需要访问网络的工具, **When** 在测试环境中注入一个返回模拟数据的 Mock 网络层, **Then** 工具应能正确处理模拟数据而不产生任何真实网络流量。
+1. **Given** 一个需要访问网络的工具, **When** 在测试环境中注入一个返回模拟数据的 Mock 网络层, **Then** 工具应能正确 handle 模拟数据而不产生任何真实网络流量。
 2. **Given** 重构后的模块, **When** 检查其公共接口, **Then** 所有依赖项（如 Session, FileManager）均可通过构造函数或属性注入。
 
 ---
@@ -55,7 +65,7 @@
 ### Edge Cases
 
 - **并发测试冲突**: 多个异步测试同时操作共享的磁盘缓存 Mock 时是否会发生竞争？
-- **深度递归渲染**: `DocCRenderer` 处理超过 50 层嵌套的 DocC JSON 时是否会触发堆栈溢出且有相应测试覆盖？
+- **深度递归渲染**: `DocCRenderer` 处理超过 50 层嵌套 of DocC JSON 时是否会触发堆栈溢出且有相应测试覆盖？
 - **网络超时与重试**: 当 Mock 模拟连续 2 次失败后第 3 次成功时，重试逻辑是否按预期执行？
 - **环境路径依赖**: 测试代码是否能完全脱离开发者的 `~/Library` 路径依赖，实现“开箱即运行”？
 
@@ -65,11 +75,13 @@
 
 - **FR-001**: 系统 MUST 定义统一的 `NetworkSession` 和 `FileSystem` 协议，以抽象 `URLSession` 和 `FileManager`。
 - **FR-002**: 核心组件（`AppleJSONAPI`, `XcodeLocalDocs`, `DiskCache`）MUST 支持构造函数注入上述抽象协议。
-- **FR-003**: 系统 MUST 提供标准化的 `MockDataTransport` 用于模拟各种 HTTP 响应状态码和 Payload。
-- **FR-004**: 单元测试 MUST 覆盖 `DocCRenderer` 支持的所有 10+ 种 DocC 节点类型。
+- **FR-003**: 系统 MUST 提供标准化的 `MockDataTransport` 用于模拟以下核心错误：noPermission, diskFull, networkTimeout, invalidResponse, fileNotFound。
+- **FR-004**: 单元测试 MUST 覆盖以下 12 种核心 DocC 节点类型：declarations, parameters, properties, paragraph, aside, list, table, heading, codeListing, image, link, section。
 - **FR-005**: 测试套件 MUST 包含针对 `iDocsServer` 启动参数解析和 Transport 切换的逻辑验证。
 - **FR-006**: 系统 MUST 在 `Sources/` 下实现逻辑，避免在 `Sources/` 中出现对 `Tests/` 模块的引用。
 - **FR-007**: 系统 MUST 支持通过命令行参数或配置文件定义测试覆盖率的最低合格阈值。
+- **FR-008**: 所有 Mock 实体 MUST 实现统一的 `reset()` 方法，并确保每个测试用例使用独立的 Mock 实例，严禁共享全局/单例 Mock，以确保测试状态的绝对隔离。
+- **FR-009**: 系统 MUST 在指定的 CI 环境（macOS 14 Sonoma, Xcode 15.4）下执行全量测试门禁。
 
 ### Key Entities *(include if feature involves data)*
 
@@ -81,8 +93,8 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: 核心算法模块（Cache, Rendering, Utils）的行覆盖率 MUST 达到 **90%** 以上。
+- **SC-001**: 核心算法模块（Cache, Rendering, Utils）的行覆盖率 MUST 达到 **90%** 以上名列清单中的节点。
 - **SC-002**: 整体项目（排除 main 入口）的总行覆盖率 MUST 达到 **80%** 以上。
-- **SC-003**: 单元测试套件在 10 次连续运行中 MUST 保持 **100% 通过率**（无随机失败/Flaky tests）。
+- **SC-003**: 单元测试套件在 10 次连续运行中 MUST 保持 **100% 确定性通过率**，严禁使用自动重试掩盖竞争条件。
 - **SC-004**: 所有外部 IO 操作（网络、磁盘）在单元测试阶段 MUST 被 **100% 隔离**，无需网络连接即可运行全量测试。
 - **SC-005**: 生成一份覆盖率可视化报告，清晰展示每个文件的覆盖盲点。
