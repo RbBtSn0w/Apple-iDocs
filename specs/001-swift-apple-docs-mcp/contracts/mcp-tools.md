@@ -161,19 +161,25 @@
 {
   "type": "object",
   "properties": {
-    "symbol": {
-      "type": "string",
-      "description": "要查询的符号名称 (如 'Array.append', 'UIView')"
-    },
     "action": {
       "type": "string",
       "enum": ["search", "list"],
-      "description": "可选，'search' 搜索符号 (默认)，'list' 列出已下载的文档集"
+      "description": "'search' 搜索符号，'list' 列出已下载的文档集"
+    },
+    "symbol": {
+      "type": "string",
+      "description": "要查询的符号名称 (如 'Array.append', 'UIView')。action=search 时必填，action=list 时忽略"
     }
   },
-  "required": ["symbol"]
+  "required": ["action"],
+  "if": { "properties": { "action": { "const": "search" } } },
+  "then": { "required": ["action", "symbol"] }
 }
 ```
+
+**Conditional Constraints**:
+- `action=search` → `symbol` **required**
+- `action=list` → `symbol` **forbidden** (传入也会被忽略)
 
 **Output**:
 - `search` 模式：匹配符号的本地文档内容

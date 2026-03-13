@@ -80,7 +80,7 @@
 
 ### 测试 ⚠️
 
-- [ ] T019 [P] [US2] 编写 `DocCRenderer` 单元测试（各节点类型渲染、递归深度保护、边界情况）in `Tests/iDocsTests/RenderingTests.swift`
+- [ ] T019 [P] [US2] 编写 `DocCRenderer` 单元测试（各节点类型渲染、递归深度保护、边界情况、golden file 对比验证 SC-003 语义结构 100% 保留）in `Tests/iDocsTests/RenderingTests.swift`
 
 ### 实现
 
@@ -212,13 +212,27 @@
 
 ## Phase 11: Polish & Cross-Cutting Concerns
 
-**Purpose**: 全局优化和收尾
+**Purpose**: 全局优化、验收门禁和收尾
 
-- [ ] T045 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下完整工具调用流程）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
-- [ ] T046 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）in `Sources/iDocs/iDocsServer.swift`
-- [ ] T047 [P] 创建 README.md（项目介绍、安装、使用、AI 客户端配置）in `README.md`
-- [ ] T048 代码清理和重构（消除重复代码、统一错误处理）
-- [ ] T049 运行 `quickstart.md` 验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试）
+### 端到端测试与日志
+
+- [ ] T045 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
+- [ ] T046 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T045 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
+
+### 性能基准验证 (G2: SC-001/002/006/008/009)
+
+- [ ] T047 [P] 编写性能基准测试：搜索响应 ≤2s (SC-001)、本地符号定位 p95 ≤100ms (SC-002)、缓存命中 ≥10x 加速 (SC-008)、优雅关闭 ≤5s (SC-009) in `Tests/iDocsTests/IntegrationTests/BenchmarkTests.swift`
+- [ ] T048 [P] 编写 UserAgent 重试成功率测试：模拟 403/429 响应，断言自动重试成功率 ≥90% (SC-006) in `Tests/iDocsTests/ToolTests.swift`
+
+### 产物验收 (G1: FR-018/SC-005)
+
+- [ ] T049 [P] 编写 Distribution Validation 脚本：`otool -L` 动态依赖扫描（断言零外部 dylib）、`ls -lh` 体积门禁 ≤20MB (SC-005)、确认 static Mach-O 产物类型 in `scripts/validate-distribution.sh`
+
+### 文档与收尾
+
+- [ ] T050 [P] 创建 README.md（至少包含：项目简介、安装步骤、AI 客户端配置、7 工具列表、贡献指南）**DoD**: 覆盖 quickstart 全流程 in `README.md`
+- [ ] T051 代码清理和重构 **DoD**: 零编译警告、全量测试通过、无 `any`/`AnyObject` 残留、无重复代码块 >10 行
+- [ ] T052 运行 `quickstart.md` 完整验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试、性能基准通过、产物验收通过）
 
 ---
 
