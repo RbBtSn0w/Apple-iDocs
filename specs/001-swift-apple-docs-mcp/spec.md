@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-swift-apple-docs-mcp`
 **Created**: 2026-03-12
-**Status**: Ready for Implementation
+**Status**: Completed
 **Input**: User description: "用 Swift 构建一个'终极版'Apple 文档 MCP 服务器，集三者之长、补三者之短，并利用 Swift 独有能力直接访问 Xcode 本地文档。"
 
 ## User Scenarios & Testing *(mandatory)*
