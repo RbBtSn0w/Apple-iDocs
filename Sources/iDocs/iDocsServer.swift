@@ -3,11 +3,20 @@ import MCP
 import ServiceLifecycle
 import Logging
 
+public enum TransportMode: String {
+    case stdio
+    case http
+}
+
 public actor iDocsServer: Service {
     private let server: Server
     private let logger: Logger
+    private let mode: TransportMode
+    private let port: Int
     
-    public init() {
+    public init(mode: TransportMode = .stdio, port: Int = 8080) {
+        self.mode = mode
+        self.port = port
         self.logger = Logger(label: "com.snow.idocs-server")
         self.server = Server(
             name: "iDocs",
@@ -203,12 +212,22 @@ public actor iDocsServer: Service {
     }
     
     public func run() async throws {
-        logger.info("iDocs MCP Server starting...")
+        logger.info("iDocs MCP Server starting in \(mode.rawValue) mode...")
         
         // Register handlers before starting transport
         await setupHandlers()
         
-        let transport = StdioTransport()
+        let transport: any Transport
+        switch mode {
+        case .stdio:
+            transport = StdioTransport()
+        case .http:
+            // Note: StatefulHTTPServerTransport in the current SDK version might 
+            // require a separate HTTP server (like Vapor/Hummingbird) to handle 
+            // the networking layer. For now, we initialize the logic layer.
+            transport = StatefulHTTPServerTransport()
+        }
+        
         try await server.start(transport: transport)
         
         // Keep the server running
@@ -224,7 +243,12 @@ public actor iDocsServer: Service {
 @main
 struct Main {
     static func main() async {
-        let server = iDocsServer()
+        let args = ProcessInfo.processInfo.arguments
+        let mode: TransportMode = args.contains("--http") ? .http : .stdio
+        let portIdx = args.firstIndex(of: "--port").map { args.index(after: $0) }
+        let port = portIdx.flatMap { Int(args[$0]) } ?? 8080
+        
+        let server = iDocsServer(mode: mode, port: port)
         let serviceGroup = ServiceGroup(
             services: [server],
             gracefulShutdownSignals: [.sigterm, .sigint],

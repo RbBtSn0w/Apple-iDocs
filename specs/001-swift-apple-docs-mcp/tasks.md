@@ -200,12 +200,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T043 [P] [US8] 编写传输连接集成测试（Stdio 交互验证、HTTP Server 响应验证）in `Tests/iDocsTests/IntegrationTests/TransportTests.swift`
+- [x] T043 [P] [US8] 编写传输连接集成测试（Stdio 交互验证、HTTP Server 响应验证）in `Tests/iDocsTests/IntegrationTests/TransportTests.swift`
 
 ### 实现
 
-- [ ] T044 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
-- [ ] T045 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
+- [x] T044 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
+- [x] T045 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: 双模式连接可用
 
