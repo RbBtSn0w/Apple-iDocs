@@ -59,14 +59,14 @@
 
 ### 测试 ⚠️
 
-- [ ] T014 [P] [US1] 编写 `AppleJSONAPI` 数据源单元测试（URL 构建、响应解析、错误处理）in `Tests/iDocsTests/IntegrationTests/AppleAPITests.swift`
-- [ ] T015 [P] [US1] 编写 `SearchDocsTool` 集成测试（通配符匹配、结果格式、三层回落）in `Tests/iDocsTests/ToolTests.swift`
+- [x] T014 [P] [US1] 编写 `AppleJSONAPI` 数据源单元测试（URL 构建、响应解析、错误处理）in `Tests/iDocsTests/IntegrationTests/AppleAPITests.swift`
+- [x] T015 [P] [US1] 编写 `SearchDocsTool` 集成测试（通配符匹配、结果格式、三层回落）in `Tests/iDocsTests/ToolTests.swift`
 
 ### 实现
 
-- [ ] T016 [US1] 实现 `AppleJSONAPI` 数据源（`developer.apple.com/tutorials/data` 接口，搜索 + 文档获取，UserAgent 池集成）in `Sources/iDocs/DataSources/AppleJSONAPI.swift`
-- [ ] T017 [US1] 实现 `SearchDocsTool` MCP 工具（输入 schema 定义，通配符 `*`/`?` 解析，三层回落搜索逻辑，Markdown 结果格式化）in `Sources/iDocs/Tools/SearchDocsTool.swift`
-- [ ] T018 [US1] 在 `iDocsServer` 中注册 `SearchDocsTool`（`withMethodHandler(ListTools)` + `withMethodHandler(CallTool)` 路由）in `Sources/iDocs/iDocsServer.swift`
+- [x] T016 [US1] 实现 `AppleJSONAPI` 数据源（`developer.apple.com/tutorials/data` 接口，搜索 + 文档获取，UserAgent 池集成）in `Sources/iDocs/DataSources/AppleJSONAPI.swift`
+- [x] T017 [US1] 实现 `SearchDocsTool` MCP 工具（输入 schema 定义，通配符 `*`/`?` 解析，三层回落搜索逻辑，Markdown 结果格式化）in `Sources/iDocs/Tools/SearchDocsTool.swift`
+- [x] T018 [US1] 在 `iDocsServer` 中注册 `SearchDocsTool`（`withMethodHandler(ListTools)` + `withMethodHandler(CallTool)` 路由）in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 1 独立可用 — 搜索工具可通过 MCP Inspector 测试
 

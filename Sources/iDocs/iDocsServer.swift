@@ -21,7 +21,60 @@ public actor iDocsServer: Service {
     }
     
     private func setupHandlers() async {
-        // Handlers will be registered here as tools are implemented
+        // List available tools
+        await server.withMethodHandler(ListTools.self) { _ in
+            let tools = [
+                Tool(
+                    name: "search_docs",
+                    description: "Search Apple documentation (Xcode local, disk cache, and remote API)",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "query": .string("Search query (keywords, supports * and ? wildcards)")
+                        ]),
+                        "required": .array([.string("query")])
+                    ])
+                )
+            ]
+            return .init(tools: tools)
+        }
+        
+        // Handle tool calls
+        await server.withMethodHandler(CallTool.self) { [self] params in
+            switch params.name {
+            case "search_docs":
+                guard let query = params.arguments?["query"]?.stringValue else {
+                    return .init(content: [.text("Missing query parameter")], isError: true)
+                }
+                
+                do {
+                    let results = try await SearchDocsTool().run(query: query)
+                    let markdown = formatSearchResults(results)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Search failed: \(error.localizedDescription)")], isError: true)
+                }
+                
+            default:
+                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
+            }
+        }
+    }
+    
+    private nonisolated func formatSearchResults(_ results: [SearchResult]) -> String {
+        if results.isEmpty {
+            return "No matching documentation found."
+        }
+        
+        var output = "### Apple Documentation Search Results\n\n"
+        for result in results {
+            output += "#### \(result.title) (\(result.kind.rawValue))\n"
+            if let abstract = result.abstract {
+                output += "\(abstract)\n"
+            }
+            output += "- Path: `\(result.path)`\n"
+            output += "- Source: \(result.source.rawValue)\n\n"
+        }
+        return output
     }
     
     public func run() async throws {
