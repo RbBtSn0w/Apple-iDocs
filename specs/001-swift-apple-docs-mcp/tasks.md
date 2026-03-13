@@ -119,10 +119,14 @@
 
 **Independent Test**: 请求技术目录并验证返回分类列表
 
+### 测试 ⚠️
+
+- [ ] T028 [P] [US4] 编写 `BrowseTechnologiesTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+
 ### 实现
 
-- [ ] T028 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
-- [ ] T029 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T029 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
+- [ ] T030 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 4 独立可用
 
@@ -134,11 +138,15 @@
 
 **Independent Test**: 请求 HIG 主题 "navigation" 并验证返回完整内容
 
+### 测试 ⚠️
+
+- [ ] T031 [P] [US5] 编写 `HIGFetcher` & `FetchHIGTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/HIGTests.swift`
+
 ### 实现
 
-- [ ] T030 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
-- [ ] T031 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
-- [ ] T032 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T032 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
+- [ ] T033 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
+- [ ] T034 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 5 独立可用
 
@@ -150,11 +158,15 @@
 
 **Independent Test**: 请求一个已知的第三方 DocC 文档 URL 并验证返回 Markdown 内容
 
+### 测试 ⚠️
+
+- [ ] T035 [P] [US6] 编写 `ExternalDocCFetcher` & `FetchExternalDocTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/ExternalDocTests.swift`
+
 ### 实现
 
-- [ ] T033 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
-- [ ] T034 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
-- [ ] T035 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T036 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
+- [ ] T037 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
+- [ ] T038 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 6 独立可用
 
@@ -166,10 +178,14 @@
 
 **Independent Test**: 请求已知 WWDC 视频 ID 并验证返回转录内容
 
+### 测试 ⚠️
+
+- [ ] T039 [P] [US7] 编写 `FetchVideoTranscriptTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+
 ### 实现
 
-- [ ] T036 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
-- [ ] T037 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T040 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
+- [ ] T041 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 7 独立可用
 
@@ -181,10 +197,14 @@
 
 **Independent Test**: 分别以两种模式启动服务器并发送工具调用请求
 
+### 测试 ⚠️
+
+- [ ] T042 [P] [US8] 编写传输连接集成测试（Stdio 交互验证、HTTP Server 响应验证）in `Tests/iDocsTests/IntegrationTests/TransportTests.swift`
+
 ### 实现
 
-- [ ] T038 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
-- [ ] T039 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
+- [ ] T043 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
+- [ ] T044 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: 双模式连接可用
 
@@ -194,11 +214,11 @@
 
 **Purpose**: 全局优化和收尾
 
-- [ ] T040 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下完整工具调用流程）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
-- [ ] T041 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）in `Sources/iDocs/iDocsServer.swift`
-- [ ] T042 [P] 创建 README.md（项目介绍、安装、使用、AI 客户端配置）in `README.md`
-- [ ] T043 代码清理和重构（消除重复代码、统一错误处理）
-- [ ] T044 运行 `quickstart.md` 验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试）
+- [ ] T045 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下完整工具调用流程）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
+- [ ] T046 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）in `Sources/iDocs/iDocsServer.swift`
+- [ ] T047 [P] 创建 README.md（项目介绍、安装、使用、AI 客户端配置）in `README.md`
+- [ ] T048 代码清理和重构（消除重复代码、统一错误处理）
+- [ ] T049 运行 `quickstart.md` 验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试）
 
 ---
 
