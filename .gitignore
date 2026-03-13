@@ -31,3 +31,7 @@ apple-doc-mcp/*
 apple-docs-mcp/*
 sosumi.ai/*
 
+
+# Test Coverage
+coverage_report/
+.xcresult

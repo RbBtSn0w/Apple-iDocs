@@ -34,3 +34,14 @@ open coverage_report/index.html
 ```bash
 for i in {1..10}; do swift test || break; done
 ```
+
+## 5. CI/CD 集成 (Github Actions 示例)
+
+### 环境要求
+- **Runner**: `macos-14`
+- **Xcode**: `15.4` (使用 `sudo xcode-select -s /Applications/Xcode_15.4.app`)
+
+### 自动化流水线步骤
+1. **测试执行**: `swift test --enable-code-coverage`
+2. **覆盖率门禁**: `./scripts/coverage-gate.sh`
+3. **报告归档**: 上传 `coverage_report/` 目录作为 Build Artifact

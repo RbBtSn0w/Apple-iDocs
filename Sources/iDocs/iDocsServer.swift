@@ -132,90 +132,83 @@ public actor iDocsServer: Service {
         
         // Handle tool calls
         await server.withMethodHandler(CallTool.self) { [self] params in
-            switch params.name {
-            case "search_docs", "search_documentation":
-                guard let query = params.arguments?["query"]?.stringValue else {
-                    return .init(content: [.text("Missing query parameter")], isError: true)
-                }
-                
-                do {
-                    let results = try await SearchDocsTool().run(query: query)
-                    let markdown = formatSearchResults(results)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Search failed: \(error.localizedDescription)")], isError: true)
-                }
-                
-            case "fetch_doc", "get_documentation":
-                guard let path = params.arguments?["path"]?.stringValue else {
-                    return .init(content: [.text("Missing path parameter")], isError: true)
-                }
-                
-                do {
-                    let markdown = try await FetchDocTool().run(path: path)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Fetch failed: \(error.localizedDescription)")], isError: true)
-                }
-                
-            case "xcode_docs":
-                let query = params.arguments?["query"]?.stringValue
-                let list = params.arguments?["list"]?.boolValue ?? false
-                
-                do {
-                    let markdown = try await XcodeDocsTool().run(query: query, list: list)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Xcode docs query failed: \(error.localizedDescription)")], isError: true)
-                }
-
-            case "browse_technologies", "list_technologies":
-                do {
-                    let markdown = try await BrowseTechnologiesTool().run()
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Browse failed: \(error.localizedDescription)")], isError: true)
-                }
-
-            case "fetch_hig":
-                guard let topic = params.arguments?["topic"]?.stringValue else {
-                    return .init(content: [.text("Missing topic parameter")], isError: true)
-                }
-                
-                do {
-                    let markdown = try await FetchHIGTool().run(topic: topic)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Fetch HIG failed: \(error.localizedDescription)")], isError: true)
-                }
-
-            case "fetch_external_doc":
-                guard let url = params.arguments?["url"]?.stringValue else {
-                    return .init(content: [.text("Missing url parameter")], isError: true)
-                }
-                
-                do {
-                    let markdown = try await FetchExternalDocTool().run(url: url)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Fetch external doc failed: \(error.localizedDescription)")], isError: true)
-                }
-
-            case "fetch_video_transcript":
-                guard let videoID = params.arguments?["videoID"]?.stringValue else {
-                    return .init(content: [.text("Missing videoID parameter")], isError: true)
-                }
-                
-                do {
-                    let markdown = try await FetchVideoTranscriptTool().run(videoID: videoID)
-                    return .init(content: [.text(markdown)], isError: false)
-                } catch {
-                    return .init(content: [.text("Fetch transcript failed: \(error.localizedDescription)")], isError: true)
-                }
-                
-            default:
-                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
+            await handleToolCall(name: params.name, arguments: params.arguments)
+        }
+    }
+    
+    private func handleToolCall(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+        switch name {
+        case "search_docs", "search_documentation":
+            guard let query = arguments?["query"]?.stringValue else {
+                return .init(content: [.text("Missing query parameter")], isError: true)
             }
+            return await runTool {
+                let results = try await SearchDocsTool(
+                    api: AppleJSONAPI(session: URLSession.shared),
+                    xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider())
+                ).run(query: query)
+                return formatSearchResults(results)
+            }
+            
+        case "fetch_doc", "get_documentation":
+            guard let path = arguments?["path"]?.stringValue else {
+                return .init(content: [.text("Missing path parameter")], isError: true)
+            }
+            return await runTool {
+                return try await FetchDocTool(
+                    api: AppleJSONAPI(session: URLSession.shared),
+                    xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider()),
+                    diskCache: DiskCache(name: "docs", fileManager: FileManager.default)
+                ).run(path: path)
+            }
+            
+        case "xcode_docs":
+            let query = arguments?["query"]?.stringValue
+            let list = arguments?["list"]?.boolValue ?? false
+            return await runTool {
+                return try await XcodeDocsTool().run(query: query, list: list)
+            }
+
+        case "browse_technologies", "list_technologies":
+            return await runTool {
+                return try await BrowseTechnologiesTool().run()
+            }
+
+        case "fetch_hig":
+            guard let topic = arguments?["topic"]?.stringValue else {
+                return .init(content: [.text("Missing topic parameter")], isError: true)
+            }
+            return await runTool {
+                return try await FetchHIGTool().run(topic: topic)
+            }
+
+        case "fetch_external_doc":
+            guard let url = arguments?["url"]?.stringValue else {
+                return .init(content: [.text("Missing url parameter")], isError: true)
+            }
+            return await runTool {
+                return try await FetchExternalDocTool().run(url: url)
+            }
+
+        case "fetch_video_transcript":
+            guard let videoID = arguments?["videoID"]?.stringValue else {
+                return .init(content: [.text("Missing videoID parameter")], isError: true)
+            }
+            return await runTool {
+                return try await FetchVideoTranscriptTool().run(videoID: videoID)
+            }
+            
+        default:
+            return .init(content: [.text("Unknown tool: \(name)")], isError: true)
+        }
+    }
+    
+    private func runTool(_ block: () async throws -> String) async -> CallTool.Result {
+        do {
+            let result = try await block()
+            return .init(content: [.text(result)], isError: false)
+        } catch {
+            return .init(content: [.text("Error: \(error.localizedDescription)")], isError: true)
         }
     }
     
@@ -263,15 +256,19 @@ public actor iDocsServer: Service {
         logger.info("iDocs MCP Server shutting down...")
         await server.stop()
     }
+    
+    public static func parseArgs(_ args: [String]) -> (mode: TransportMode, port: Int) {
+        let mode: TransportMode = args.contains("--http") ? .http : .stdio
+        let portIdx = args.firstIndex(of: "--port").map { args.index(after: $0) }
+        let port = portIdx.flatMap { Int(args[$0]) } ?? 8080
+        return (mode, port)
+    }
 }
 
 @main
 struct Main {
     static func main() async {
-        let args = ProcessInfo.processInfo.arguments
-        let mode: TransportMode = args.contains("--http") ? .http : .stdio
-        let portIdx = args.firstIndex(of: "--port").map { args.index(after: $0) }
-        let port = portIdx.flatMap { Int(args[$0]) } ?? 8080
+        let (mode, port) = iDocsServer.parseArgs(ProcessInfo.processInfo.arguments)
         
         let server = iDocsServer(mode: mode, port: port)
         let serviceGroup = ServiceGroup(

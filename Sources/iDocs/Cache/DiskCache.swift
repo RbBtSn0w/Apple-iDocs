@@ -2,13 +2,14 @@ import Foundation
 
 public struct DiskCache {
     private let cacheDirectory: URL
-    private let fileManager = FileManager.default
+    private let fileManager: any FileSystem
     
-    public init(name: String) {
-        let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+    public init(name: String, fileManager: any FileSystem = FileManager.default) {
+        self.fileManager = fileManager
+        let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         self.cacheDirectory = cachesURL.appendingPathComponent("iDocs").appendingPathComponent(name)
         
-        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
     
     public func get(_ key: String) async throws -> Data? {
@@ -18,7 +19,7 @@ public struct DiskCache {
             return nil
         }
         
-        let data = try Data(contentsOf: fileURL)
+        let data = try fileManager.read(from: fileURL)
         let wrapper = try JSONDecoder().decode(DiskCacheWrapper.self, from: data)
         
         if Date() > wrapper.expiresAt {
@@ -35,7 +36,7 @@ public struct DiskCache {
         let wrapper = DiskCacheWrapper(data: value, expiresAt: expiresAt)
         
         let data = try JSONEncoder().encode(wrapper)
-        try data.write(to: fileURL)
+        try fileManager.write(data, to: fileURL)
     }
     
     public func remove(_ key: String) async throws {
@@ -46,7 +47,7 @@ public struct DiskCache {
     }
     
     public func clear() async throws {
-        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
+        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil, options: [])
         for url in contents {
             try fileManager.removeItem(at: url)
         }

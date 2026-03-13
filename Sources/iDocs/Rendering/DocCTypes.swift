@@ -185,6 +185,7 @@ public enum ContentBlock: Codable, Sendable {
     case aside(style: String, content: [ContentBlock])
     case unorderedList([[ContentBlock]])
     case orderedList([[ContentBlock]])
+    case table(header: [[ContentBlock]], rows: [[[ContentBlock]]])
     
     enum CodingKeys: String, CodingKey {
         case type
@@ -197,6 +198,8 @@ public enum ContentBlock: Codable, Sendable {
         case style
         case content
         case items
+        case header
+        case rows
     }
     
     public init(from decoder: Decoder) throws {
@@ -226,6 +229,11 @@ public enum ContentBlock: Codable, Sendable {
             self = .unorderedList(try container.decode([[ContentBlock]].self, forKey: .items))
         case "orderedList":
             self = .orderedList(try container.decode([[ContentBlock]].self, forKey: .items))
+        case "table":
+            self = .table(
+                header: try container.decode([[ContentBlock]].self, forKey: .header),
+                rows: try container.decode([[[ContentBlock]]].self, forKey: .rows)
+            )
         default:
             self = .paragraph([]) // Fallback
         }
@@ -242,6 +250,8 @@ public enum InlineContent: Codable, Sendable {
     case strong([InlineContent])
     case emphasis([InlineContent])
     case reference(identifier: String, title: String?)
+    case image(identifier: String, altText: String?)
+    case link(destination: String, title: [InlineContent])
     
     enum CodingKeys: String, CodingKey {
         case type
@@ -250,6 +260,8 @@ public enum InlineContent: Codable, Sendable {
         case inlineContent
         case identifier
         case title
+        case destination
+        case alt
     }
     
     public init(from decoder: Decoder) throws {
@@ -269,6 +281,16 @@ public enum InlineContent: Codable, Sendable {
             self = .reference(
                 identifier: try container.decode(String.self, forKey: .identifier),
                 title: try container.decodeIfPresent(String.self, forKey: .title)
+            )
+        case "image":
+            self = .image(
+                identifier: try container.decode(String.self, forKey: .identifier),
+                altText: try container.decodeIfPresent(String.self, forKey: .alt)
+            )
+        case "link":
+            self = .link(
+                destination: try container.decode(String.self, forKey: .destination),
+                title: try container.decode([InlineContent].self, forKey: .title)
             )
         default:
             self = .text("") // Fallback

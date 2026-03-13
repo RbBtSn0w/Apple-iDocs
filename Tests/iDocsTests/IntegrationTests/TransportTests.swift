@@ -6,14 +6,30 @@ import MCP
 @Suite("Transport Tests")
 struct TransportTests {
     
-    @Test("Server starts with StdioTransport")
-    func testStdioTransport() async throws {
-        // This is hard to test in unit tests as it hijacks stdin/stdout
-        // We'll verify the configuration logic instead
+    @Test("Argument parsing: default values")
+    func testDefaultArgs() {
+        let (mode, port) = iDocsServer.parseArgs(["iDocs"])
+        #expect(mode == .stdio)
+        #expect(port == 8080)
     }
     
-    @Test("Server starts with HTTPTransport")
-    func testHTTPTransport() async throws {
-        // Verify server can be initialized with StatefulHTTPServerTransport
+    @Test("Argument parsing: HTTP mode")
+    func testHTTPModeArg() {
+        let (mode, port) = iDocsServer.parseArgs(["iDocs", "--http"])
+        #expect(mode == .http)
+        #expect(port == 8080)
+    }
+    
+    @Test("Argument parsing: custom port")
+    func testCustomPortArg() {
+        let (mode, port) = iDocsServer.parseArgs(["iDocs", "--port", "9090"])
+        #expect(port == 9090)
+    }
+    
+    @Test("Argument parsing: HTTP and custom port")
+    func testHTTPAndCustomPort() {
+        let (mode, port) = iDocsServer.parseArgs(["iDocs", "--http", "--port", "1234"])
+        #expect(mode == .http)
+        #expect(port == 1234)
     }
 }

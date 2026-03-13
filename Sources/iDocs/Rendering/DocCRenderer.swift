@@ -77,6 +77,16 @@ public struct DocCRenderer {
             return items.map { "- " + renderBlocks($0).replacingOccurrences(of: "\n", with: "\n  ") }.joined(separator: "\n")
         case .orderedList(let items):
             return items.enumerated().map { "\($0 + 1). " + renderBlocks($1).replacingOccurrences(of: "\n", with: "\n   ") }.joined(separator: "\n")
+        case .table(let header, let rows):
+            var table = ""
+            // Header
+            table += "| " + header.map { renderBlocks($0) }.joined(separator: " | ") + " |\n"
+            table += "| " + header.map { _ in "---" }.joined(separator: " | ") + " |\n"
+            // Rows
+            for row in rows {
+                table += "| " + row.map { renderBlocks($0) }.joined(separator: " | ") + " |\n"
+            }
+            return table
         }
     }
     
@@ -98,6 +108,10 @@ public struct DocCRenderer {
             return " *\(renderInline(content))*"
         case .reference(_, let title):
             return title ?? "Reference"
+        case .image(let id, let alt):
+            return "![\(alt ?? id)](\(id))"
+        case .link(let dest, let title):
+            return "[\(renderInline(title))](\(dest))"
         }
     }
     

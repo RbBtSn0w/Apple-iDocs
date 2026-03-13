@@ -4,12 +4,18 @@ import MCP
 
 public struct FetchDocTool {
     private let logger = Logger(label: "com.snow.idocs-fetch-tool")
-    private let api = AppleJSONAPI()
-    private let xcodeDocs = XcodeLocalDocs()
+    private let api: AppleJSONAPI
+    private let xcodeDocs: XcodeLocalDocs
     private let renderer = DocCRenderer()
-    private let diskCache = DiskCache(name: "docs")
+    private let diskCache: DiskCache
     
-    public init() {}
+    public init(api: AppleJSONAPI = AppleJSONAPI(),
+                xcodeDocs: XcodeLocalDocs = XcodeLocalDocs(),
+                diskCache: DiskCache = DiskCache(name: "docs")) {
+        self.api = api
+        self.xcodeDocs = xcodeDocs
+        self.diskCache = diskCache
+    }
     
     public func run(path: String) async throws -> String {
         logger.info("Fetching Apple documentation for path: \(path)")

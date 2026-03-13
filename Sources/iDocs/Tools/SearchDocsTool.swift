@@ -4,11 +4,17 @@ import MCP
 
 public struct SearchDocsTool {
     private let logger = Logger(label: "com.snow.idocs-search-tool")
-    private let api = AppleJSONAPI()
-    private let xcodeDocs = XcodeLocalDocs()
-    private let memoryCache = MemoryCache<String, [SearchResult]>(capacity: 50)
+    private let api: AppleJSONAPI
+    private let xcodeDocs: XcodeLocalDocs
+    private let memoryCache: MemoryCache<String, [SearchResult]>
     
-    public init() {}
+    public init(api: AppleJSONAPI = AppleJSONAPI(), 
+                xcodeDocs: XcodeLocalDocs = XcodeLocalDocs(),
+                memoryCache: MemoryCache<String, [SearchResult]> = MemoryCache<String, [SearchResult]>(capacity: 50)) {
+        self.api = api
+        self.xcodeDocs = xcodeDocs
+        self.memoryCache = memoryCache
+    }
     
     public func run(query: String) async throws -> [SearchResult] {
         logger.info("Searching Apple documentation for: \(query)")

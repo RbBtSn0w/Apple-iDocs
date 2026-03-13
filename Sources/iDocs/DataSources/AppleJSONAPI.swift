@@ -3,9 +3,11 @@ import Logging
 
 public actor AppleJSONAPI {
     private let logger = Logger(label: "com.snow.idocs-apple-api")
-    private let session = URLSession.shared
+    private let session: any NetworkSession
     
-    public init() {}
+    public init(session: any NetworkSession = URLSession.shared) {
+        self.session = session
+    }
     
     public func search(query: String) async throws -> [SearchResult] {
         guard let url = URLHelpers.dataURL(for: "search?q=\(query)") else {

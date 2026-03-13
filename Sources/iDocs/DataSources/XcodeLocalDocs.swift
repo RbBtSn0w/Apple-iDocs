@@ -3,12 +3,16 @@ import Logging
 
 public struct XcodeLocalDocs {
     private let logger = Logger(label: "com.snow.idocs-xcode-docs")
-    private let fileManager = FileManager.default
+    private let fileManager: any FileSystem
+    private let searchProvider: any SearchProvider
     
     public let cacheDirectory: URL
     
-    public init() {
-        let home = fileManager.homeDirectoryForCurrentUser
+    public init(fileManager: any FileSystem = FileManager.default, 
+                searchProvider: any SearchProvider = SpotlightSearchProvider()) {
+        self.fileManager = fileManager
+        self.searchProvider = searchProvider
+        let home = FileManager.default.homeDirectoryForCurrentUser
         self.cacheDirectory = home.appendingPathComponent("Library/Developer/Xcode/DocumentationCache")
     }
     
@@ -18,13 +22,13 @@ public struct XcodeLocalDocs {
             return []
         }
         
-        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.contentModificationDateKey])
+        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [URLResourceKey.contentModificationDateKey], options: [])
         
         var sdks: [XcodeLocalDocInfo] = []
         for url in contents where url.hasDirectoryPath {
             // Directory names are typically like "iOS 18.0" or contain platform info
             let name = url.lastPathComponent
-            let modificationDate = try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? Date()
+            let modificationDate = try url.resourceValues(forKeys: [URLResourceKey.contentModificationDateKey]).contentModificationDate ?? Date()
             
             sdks.append(XcodeLocalDocInfo(
                 sdkVersion: name,

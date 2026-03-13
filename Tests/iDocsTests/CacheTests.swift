@@ -49,6 +49,36 @@ struct CacheTests {
         #expect(val3 == "value3")
     }
     
+    @Test("MemoryCache high concurrency stability")
+    func memoryCacheConcurrency() async throws {
+        let cache = MemoryCache<Int, Int>(capacity: 100)
+        
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<1000 {
+                group.addTask {
+                    await cache.set(i % 50, value: i)
+                }
+            }
+        }
+        
+        // Should not crash and have 50 items
+        // We can't easily check internal count as it's private, 
+        // but getting items should work.
+        for i in 0..<50 {
+            let val = await cache.get(i)
+            #expect(val != nil)
+        }
+    }
+    
+    @Test("MemoryCache reset and clear")
+    func memoryCacheClear() async throws {
+        let cache = MemoryCache<String, String>(capacity: 10)
+        await cache.set("k", value: "v")
+        await cache.clear()
+        let val = await cache.get("k")
+        #expect(val == nil)
+    }
+    
     // MARK: - DiskCache Tests
     
     @Test("DiskCache basic write and read")
