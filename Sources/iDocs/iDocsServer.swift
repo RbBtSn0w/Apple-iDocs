@@ -34,6 +34,16 @@ public actor iDocsServer: Service {
                         "required": .array([.string("query")])
                     ])
                 )
+                Tool(
+                    name: "fetch_doc",
+                    description: "Fetch full documentation content as high-quality Markdown",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "path": .string("Documentation path (e.g., /documentation/swiftui/view)")
+                        ]),
+                        "required": .array([.string("path")])
+                    ])
+                )
             ]
             return .init(tools: tools)
         }
@@ -52,6 +62,18 @@ public actor iDocsServer: Service {
                     return .init(content: [.text(markdown)], isError: false)
                 } catch {
                     return .init(content: [.text("Search failed: \(error.localizedDescription)")], isError: true)
+                }
+                
+            case "fetch_doc":
+                guard let path = params.arguments?["path"]?.stringValue else {
+                    return .init(content: [.text("Missing path parameter")], isError: true)
+                }
+                
+                do {
+                    let markdown = try await FetchDocTool().run(path: path)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Fetch failed: \(error.localizedDescription)")], isError: true)
                 }
                 
             default:

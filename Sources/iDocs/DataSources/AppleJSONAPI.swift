@@ -27,6 +27,16 @@ public actor AppleJSONAPI {
         }
     }
     
+    public func fetchDoc(path: String) async throws -> DocCContent {
+        guard let url = URLHelpers.dataURL(for: path) else {
+            throw iDocsError.invalidURL
+        }
+        
+        let data = try await fetchWithRetry(url: url)
+        let decoder = JSONDecoder()
+        return try decoder.decode(DocCContent.self, from: data)
+    }
+    
     private func fetchWithRetry(url: URL, maxRetries: Int = 3) async throws -> Data {
         var lastError: Error?
         var delaySeconds: UInt64 = 1
@@ -80,4 +90,5 @@ private struct AppleSearchResult: Codable {
 public enum iDocsError: Error {
     case httpError(statusCode: Int)
     case maxRetriesReached
+    case invalidURL
 }
