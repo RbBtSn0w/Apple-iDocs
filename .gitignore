@@ -1,4 +1,31 @@
+# Swift
+.build/
+/Packages
+/*.xcodeproj
+/*.xcworkspace
+/Package.resolved
+
+# Xcode
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Tuist
+/Derived/
+/.tuist/
+/graph.dot
+
+# macOS
 .DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# iDocs Cache (Local Development)
+~/Library/Caches/iDocs/
 
 apple-doc-mcp/*
 apple-docs-mcp/*

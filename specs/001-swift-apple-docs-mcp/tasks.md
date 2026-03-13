@@ -18,12 +18,12 @@
 ## Phase 1: Setup (项目初始化)
 
 **Purpose**: 项目骨架和基础配置
-- [ ] T000 创建 `Awesome-iDocs-MCP` 目录, 所有涉及iDocs 项目都放在这个目录下.
-- [ ] T001 创建 `Package.swift` 声明 SPM 依赖 (`modelcontextprotocol/swift-sdk` v0.11.0+, `swift-service-lifecycle` v2.3.0+, `swift-log`) in `Package.swift`
-- [ ] T002 创建 `Project.swift` Tuist 工程描述 in `Project.swift`
-- [ ] T003 [P] 创建 `Tuist/Config.swift` Tuist 配置 in `Tuist/Config.swift`
-- [ ] T004 [P] 创建项目目录结构 `Sources/iDocs/Tools/`, `Sources/iDocs/DataSources/`, `Sources/iDocs/Rendering/`, `Sources/iDocs/Cache/`, `Sources/iDocs/Utils/`, `Tests/iDocsTests/`, `Tests/iDocsTests/IntegrationTests/`
-- [ ] T005 [P] 创建 `.gitignore` 添加 Swift/Xcode/Tuist 忽略规则 in `.gitignore`
+- [x] T000 创建 `Awesome-iDocs-MCP` 目录, 所有涉及iDocs 项目都放在这个目录下.
+- [x] T001 创建 `Package.swift` 声明 SPM 依赖 (`modelcontextprotocol/swift-sdk` v0.11.0+, `swift-service-lifecycle` v2.3.0+, `swift-log`) in `Package.swift`
+- [x] T002 创建 `Project.swift` Tuist 工程描述 in `Project.swift`
+- [x] T003 [P] 创建 `Tuist/Config.swift` Tuist 配置 in `Tuist/Config.swift`
+- [x] T004 [P] 创建项目目录结构 `Sources/iDocs/Tools/`, `Sources/iDocs/DataSources/`, `Sources/iDocs/Rendering/`, `Sources/iDocs/Cache/`, `Sources/iDocs/Utils/`, `Tests/iDocsTests/`, `Tests/iDocsTests/IntegrationTests/`
+- [x] T005 [P] 创建 `.gitignore` 添加 Swift/Xcode/Tuist 忽略规则 in `.gitignore`
 
 ---
 
@@ -35,17 +35,17 @@
 
 ### 测试 ⚠️
 
-- [ ] T006 [P] 编写 `MemoryCache` 单元测试（LRU 淘汰、容量限制、过期清理）in `Tests/iDocsTests/CacheTests.swift`
-- [ ] T007 [P] 编写 `DiskCache` 单元测试（TTL 过期、读写、磁盘持久化）in `Tests/iDocsTests/CacheTests.swift`
+- [x] T006 [P] 编写 `MemoryCache` 单元测试（LRU 淘汰、容量限制、过期清理）in `Tests/iDocsTests/CacheTests.swift`
+- [x] T007 [P] 编写 `DiskCache` 单元测试（TTL 过期、读写、磁盘持久化）in `Tests/iDocsTests/CacheTests.swift`
 
 ### 实现
 
-- [ ] T008 定义 DocC Codable 类型体系（`DocumentKind`, `SourceLanguage`, `DataSource`, `DocCContent`, `ContentBlock`, `InlineContent`）in `Sources/iDocs/Rendering/DocCTypes.swift`
-- [ ] T009 [P] 实现 `MemoryCache` Actor（LRU 缓存，容量可配置，O(1) 查找/淘汰）in `Sources/iDocs/Cache/MemoryCache.swift`
-- [ ] T010 [P] 实现 `DiskCache`（`~/Library/Caches/iDocs/` 持久化，TTL 分级过期，JSON 编码）in `Sources/iDocs/Cache/DiskCache.swift`
-- [ ] T011 [P] 实现 `UserAgentPool`（12+ UA 随机轮换，403/429 自动重试，指数退避）in `Sources/iDocs/Utils/UserAgentPool.swift`
-- [ ] T012 [P] 实现 `URLHelpers`（Apple 文档 URL 解析/转换，路径规范化）in `Sources/iDocs/Utils/URLHelpers.swift`
-- [ ] T013 实现 MCP Server 主入口 `iDocsServer`（Server 初始化、capabilities 声明、Transport 切换、ServiceLifecycle 集成、`swift-log` 配置）in `Sources/iDocs/iDocsServer.swift`
+- [x] T008 定义 DocC Codable 类型体系（`DocumentKind`, `SourceLanguage`, `DataSource`, `DocCContent`, `ContentBlock`, `InlineContent`）in `Sources/iDocs/Rendering/DocCTypes.swift`
+- [x] T009 [P] 实现 `MemoryCache` Actor（LRU 缓存，容量可配置，O(1) 查找/淘汰）in `Sources/iDocs/Cache/MemoryCache.swift`
+- [x] T010 [P] 实现 `DiskCache`（`~/Library/Caches/iDocs/` 持久化，TTL 分级过期，JSON 编码）in `Sources/iDocs/Cache/DiskCache.swift`
+- [x] T011 [P] 实现 `UserAgentPool`（12+ UA 随机轮换，403/429 自动重试，指数退避）in `Sources/iDocs/Utils/UserAgentPool.swift`
+- [x] T012 [P] 实现 `URLHelpers`（Apple 文档 URL 解析/转换，路径规范化）in `Sources/iDocs/Utils/URLHelpers.swift`
+- [x] T013 实现 MCP Server 主入口 `iDocsServer`（Server 初始化、capabilities 声明、Transport 切换、ServiceLifecycle 集成、`swift-log` 配置）in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: 基础设施就绪 — 缓存层可用、Server 骨架运行、类型系统定义完成
 
