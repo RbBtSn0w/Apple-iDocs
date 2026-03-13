@@ -173,7 +173,8 @@
   },
   "required": ["action"],
   "if": { "properties": { "action": { "const": "search" } } },
-  "then": { "required": ["action", "symbol"] }
+  "then": { "required": ["action", "symbol"] },
+  "else": { "not": { "required": ["symbol"] } }
 }
 ```
 

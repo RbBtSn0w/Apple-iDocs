@@ -101,14 +101,14 @@
 
 ### 测试 ⚠️
 
-- [ ] T023 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
+- [ ] T024 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
 
 ### 实现
 
-- [ ] T024 [US3] 实现 `XcodeLocalDocs` 数据源（`~/Library/Developer/Xcode/DocumentationCache/` 发现、`Data(contentsOf:options:.mappedIfSafe)` mmap 读取、LMDB C 桥接索引访问、Spotlight `NSMetadataQuery` 全量模糊搜索）in `Sources/iDocs/DataSources/XcodeLocalDocs.swift`
-- [ ] T025 [US3] 实现 `XcodeDocsTool` MCP 工具（`search` 模式符号查询 + `list` 模式文档集列出，回落建议）in `Sources/iDocs/Tools/XcodeDocsTool.swift`
-- [ ] T026 [US3] 在 `iDocsServer` 中注册 `XcodeDocsTool` in `Sources/iDocs/iDocsServer.swift`
-- [ ] T027 [US3] 将 `XcodeLocalDocs` 集成到 `SearchDocsTool` 的三层回落逻辑（优先查询本地层）in `Sources/iDocs/Tools/SearchDocsTool.swift`
+- [ ] T025 [US3] 实现 `XcodeLocalDocs` 数据源（`~/Library/Developer/Xcode/DocumentationCache/` 发现、`Data(contentsOf:options:.mappedIfSafe)` mmap 读取、LMDB C 桥接索引访问、Spotlight `NSMetadataQuery` 全量模糊搜索）in `Sources/iDocs/DataSources/XcodeLocalDocs.swift`
+- [ ] T026 [US3] 实现 `XcodeDocsTool` MCP 工具（`search` 模式符号查询 + `list` 模式文档集列出，回落建议）in `Sources/iDocs/Tools/XcodeDocsTool.swift`
+- [ ] T027 [US3] 在 `iDocsServer` 中注册 `XcodeDocsTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T028 [US3] 将 `XcodeLocalDocs` 集成到 `SearchDocsTool` 的三层回落逻辑（优先查询本地层）in `Sources/iDocs/Tools/SearchDocsTool.swift`
 
 **Checkpoint**: User Story 3 独立可用 — Xcode 本地文档查询离线工作
 
@@ -122,12 +122,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T028 [P] [US4] 编写 `BrowseTechnologiesTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+- [ ] T029 [P] [US4] 编写 `BrowseTechnologiesTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
 
 ### 实现
 
-- [ ] T029 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
-- [ ] T030 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T030 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
+- [ ] T031 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 4 独立可用
 
@@ -141,13 +141,13 @@
 
 ### 测试 ⚠️
 
-- [ ] T031 [P] [US5] 编写 `HIGFetcher` & `FetchHIGTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/HIGTests.swift`
+- [ ] T032 [P] [US5] 编写 `HIGFetcher` & `FetchHIGTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/HIGTests.swift`
 
 ### 实现
 
-- [ ] T032 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
-- [ ] T033 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
-- [ ] T034 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T033 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
+- [ ] T034 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
+- [ ] T035 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 5 独立可用
 
@@ -161,13 +161,13 @@
 
 ### 测试 ⚠️
 
-- [ ] T035 [P] [US6] 编写 `ExternalDocCFetcher` & `FetchExternalDocTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/ExternalDocTests.swift`
+- [ ] T036 [P] [US6] 编写 `ExternalDocCFetcher` & `FetchExternalDocTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/ExternalDocTests.swift`
 
 ### 实现
 
-- [ ] T036 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
-- [ ] T037 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
-- [ ] T038 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T037 [US6] 实现 `ExternalDocCFetcher` 数据源（第三方 DocC URL 验证、JSON 获取、复用 DocCRenderer 渲染）in `Sources/iDocs/DataSources/ExternalDocCFetcher.swift`
+- [ ] T038 [US6] 实现 `FetchExternalDocTool` MCP 工具（URL 校验，缓存，错误处理）in `Sources/iDocs/Tools/FetchExternalDocTool.swift`
+- [ ] T039 [US6] 在 `iDocsServer` 中注册 `FetchExternalDocTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 6 独立可用
 
@@ -181,12 +181,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T039 [P] [US7] 编写 `FetchVideoTranscriptTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+- [ ] T040 [P] [US7] 编写 `FetchVideoTranscriptTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
 
 ### 实现
 
-- [ ] T040 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
-- [ ] T041 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T041 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
+- [ ] T042 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 7 独立可用
 
@@ -200,12 +200,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T042 [P] [US8] 编写传输连接集成测试（Stdio 交互验证、HTTP Server 响应验证）in `Tests/iDocsTests/IntegrationTests/TransportTests.swift`
+- [ ] T043 [P] [US8] 编写传输连接集成测试（Stdio 交互验证、HTTP Server 响应验证）in `Tests/iDocsTests/IntegrationTests/TransportTests.swift`
 
 ### 实现
 
-- [ ] T043 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
-- [ ] T044 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
+- [ ] T044 [US8] 扩展 `iDocsServer` 支持命令行参数解析（`--transport stdio|http`, `--port 8080`）in `Sources/iDocs/iDocsServer.swift`
+- [ ] T045 [US8] 集成 `StatefulHTTPServerTransport`（会话管理 + SSE 流式推送）in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: 双模式连接可用
 
@@ -217,23 +217,23 @@
 
 ### 端到端测试与日志
 
-- [ ] T045 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
-- [ ] T046 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T045 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
+- [ ] T046 [P] 编写 MCP Server 端到端测试（InMemoryTransport 模式下 7 工具独立调用验证 SC-007，含离线场景断言 SC-004：已缓存功能断网可用）in `Tests/iDocsTests/IntegrationTests/ServerTests.swift`
+- [ ] T047 [P] 完善 MCP `server.log()` 日志推送（关键事件：文档发现、缓存命中/未中、API 回落、错误降级）+ 在 T045 中添加日志断言验证 SC-010 in `Sources/iDocs/iDocsServer.swift`
 
 ### 性能基准验证 (G2: SC-001/002/006/008/009)
 
-- [ ] T047 [P] 编写性能基准测试：搜索响应 ≤2s (SC-001)、本地符号定位 p95 ≤100ms (SC-002)、缓存命中 ≥10x 加速 (SC-008)、优雅关闭 ≤5s (SC-009) in `Tests/iDocsTests/IntegrationTests/BenchmarkTests.swift`
-- [ ] T048 [P] 编写 UserAgent 重试成功率测试：模拟 403/429 响应，断言自动重试成功率 ≥90% (SC-006) in `Tests/iDocsTests/ToolTests.swift`
+- [ ] T048 [P] 编写性能基准测试：搜索响应 ≤2s (SC-001)、本地符号定位 p95 ≤100ms (SC-002)、缓存命中 ≥10x 加速 (SC-008)、优雅关闭 ≤5s (SC-009) in `Tests/iDocsTests/IntegrationTests/BenchmarkTests.swift`
+- [ ] T049 [P] 编写 UserAgent 重试成功率测试：模拟 403/429 响应，断言自动重试成功率 ≥90% (SC-006) in `Tests/iDocsTests/ToolTests.swift`
 
 ### 产物验收 (G1: FR-018/SC-005)
 
-- [ ] T049 [P] 编写 Distribution Validation 脚本：`otool -L` 动态依赖扫描（断言零外部 dylib）、`ls -lh` 体积门禁 ≤20MB (SC-005)、确认 static Mach-O 产物类型 in `scripts/validate-distribution.sh`
+- [ ] T050 [P] 编写 Distribution Validation 脚本：`otool -L` 动态依赖扫描（断言零外部 dylib）、`ls -lh` 体积门禁 ≤20MB (SC-005)、确认 static Mach-O 产物类型 in `scripts/validate-distribution.sh`
 
 ### 文档与收尾
 
-- [ ] T050 [P] 创建 README.md（至少包含：项目简介、安装步骤、AI 客户端配置、7 工具列表、贡献指南）**DoD**: 覆盖 quickstart 全流程 in `README.md`
-- [ ] T051 代码清理和重构 **DoD**: 零编译警告、全量测试通过、无 `any`/`AnyObject` 残留、无重复代码块 >10 行
-- [ ] T052 运行 `quickstart.md` 完整验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试、性能基准通过、产物验收通过）
+- [ ] T051 [P] 创建 README.md（至少包含：项目简介、安装步骤、AI 客户端配置、7 工具列表、贡献指南）**DoD**: 覆盖 quickstart 全流程 in `README.md`
+- [ ] T052 代码清理和重构 **DoD**: 零编译警告、全量测试通过、无 `any`/`AnyObject` 残留、无重复代码块 >10 行
+- [ ] T053 运行 `quickstart.md` 完整验证流程（编译、MCP Inspector 连接、全部 7 工具调用测试、性能基准通过、产物验收通过）
 
 ---
 

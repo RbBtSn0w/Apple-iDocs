@@ -62,6 +62,9 @@
 | 技术目录 | 2 小时 |
 | HIG 内容 | 24 小时 |
 
+**容量策略预设**:
+- `MemoryCache` (<String, CacheEntry>)：严格的 LRU (Least Recently Used) 淘汰策略。容量上限默认 100 条目，达到上限时自动淘汰最久未被访问的条目，查找和淘汰操作要求 **O(1)** 时间复杂度。
+
 ---
 
 ### XcodeLocalDocInfo (Xcode 本地文档信息)
