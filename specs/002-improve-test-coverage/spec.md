@@ -2,7 +2,8 @@
 
 **Feature Branch**: `002-improve-test-coverage`  
 **Created**: 2026-03-13  
-**Status**: Draft  
+**Status**: Completed
+  
 **Input**: User description: "因为单元测试的覆盖率低，不满足整体质量。 需要新增技术需求完成项目重构， 支持单元测试的覆盖率。"
 
 ## Clarifications
