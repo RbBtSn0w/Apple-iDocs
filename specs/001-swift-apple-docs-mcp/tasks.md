@@ -18,7 +18,7 @@
 ## Phase 1: Setup (项目初始化)
 
 **Purpose**: 项目骨架和基础配置
-
+- [ ] T000 创建 `Awesome-iDocs-MCP` 目录, 所有涉及iDocs 项目都放在这个目录下.
 - [ ] T001 创建 `Package.swift` 声明 SPM 依赖 (`modelcontextprotocol/swift-sdk` v0.11.0+, `swift-service-lifecycle` v2.3.0+, `swift-log`) in `Package.swift`
 - [ ] T002 创建 `Project.swift` Tuist 工程描述 in `Project.swift`
 - [ ] T003 [P] 创建 `Tuist/Config.swift` Tuist 配置 in `Tuist/Config.swift`
