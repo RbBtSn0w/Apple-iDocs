@@ -29,4 +29,12 @@ struct ToolTests {
         let result = try await tool.run()
         #expect(!result.isEmpty)
     }
+    
+    @Test("FetchVideoTranscriptTool handles basic videoID")
+    func videoTranscriptBasic() async throws {
+        let tool = FetchVideoTranscriptTool()
+        let result = try await tool.run(videoID: "wwdc2024-101")
+        
+        #expect(!result.isEmpty)
+    }
 }

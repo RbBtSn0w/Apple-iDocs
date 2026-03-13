@@ -81,6 +81,16 @@ public actor iDocsServer: Service {
                         ]),
                         "required": .array([.string("url")])
                     ])
+                ),
+                Tool(
+                    name: "fetch_video_transcript",
+                    description: "Fetch the text transcript for a WWDC video",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "videoID": .string("WWDC video identifier (e.g., wwdc2024-101)")
+                        ]),
+                        "required": .array([.string("videoID")])
+                    ])
                 )
             ]
             return .init(tools: tools)
@@ -155,6 +165,18 @@ public actor iDocsServer: Service {
                     return .init(content: [.text(markdown)], isError: false)
                 } catch {
                     return .init(content: [.text("Fetch external doc failed: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "fetch_video_transcript":
+                guard let videoID = params.arguments?["videoID"]?.stringValue else {
+                    return .init(content: [.text("Missing videoID parameter")], isError: true)
+                }
+                
+                do {
+                    let markdown = try await FetchVideoTranscriptTool().run(videoID: videoID)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Fetch transcript failed: \(error.localizedDescription)")], isError: true)
                 }
                 
             default:

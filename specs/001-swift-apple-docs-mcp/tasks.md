@@ -181,12 +181,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T040 [P] [US7] 编写 `FetchVideoTranscriptTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+- [x] T040 [P] [US7] 编写 `FetchVideoTranscriptTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
 
 ### 实现
 
-- [ ] T041 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
-- [ ] T042 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
+- [x] T041 [US7] 实现 `FetchVideoTranscriptTool` MCP 工具（videoID 解析，在线抓取转录，缓存，错误处理）in `Sources/iDocs/Tools/FetchVideoTranscriptTool.swift`
+- [x] T042 [US7] 在 `iDocsServer` 中注册 `FetchVideoTranscriptTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 7 独立可用
 
