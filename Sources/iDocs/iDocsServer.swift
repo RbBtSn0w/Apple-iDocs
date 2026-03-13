@@ -61,6 +61,16 @@ public actor iDocsServer: Service {
                     name: "browse_technologies",
                     description: "Browse the catalog of Apple frameworks and technologies",
                     inputSchema: .object([:])
+                ),
+                Tool(
+                    name: "fetch_hig",
+                    description: "Fetch content from Apple's Human Interface Guidelines (HIG)",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "topic": .string("HIG topic (e.g., navigation, icons, layouts)")
+                        ]),
+                        "required": .array([.string("topic")])
+                    ])
                 )
             ]
             return .init(tools: tools)
@@ -111,6 +121,18 @@ public actor iDocsServer: Service {
                     return .init(content: [.text(markdown)], isError: false)
                 } catch {
                     return .init(content: [.text("Browse failed: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "fetch_hig":
+                guard let topic = params.arguments?["topic"]?.stringValue else {
+                    return .init(content: [.text("Missing topic parameter")], isError: true)
+                }
+                
+                do {
+                    let markdown = try await FetchHIGTool().run(topic: topic)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Fetch HIG failed: \(error.localizedDescription)")], isError: true)
                 }
                 
             default:

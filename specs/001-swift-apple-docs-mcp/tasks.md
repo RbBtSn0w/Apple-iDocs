@@ -141,13 +141,13 @@
 
 ### 测试 ⚠️
 
-- [ ] T032 [P] [US5] 编写 `HIGFetcher` & `FetchHIGTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/HIGTests.swift`
+- [x] T032 [P] [US5] 编写 `HIGFetcher` & `FetchHIGTool` 集成测试 in `Tests/iDocsTests/IntegrationTests/HIGTests.swift`
 
 ### 实现
 
-- [ ] T033 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
-- [ ] T034 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
-- [ ] T035 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
+- [x] T033 [US5] 实现 `HIGFetcher` 数据源（HIG 内容获取与解析，HTML → Markdown 转换）in `Sources/iDocs/DataSources/HIGFetcher.swift`
+- [x] T034 [US5] 实现 `FetchHIGTool` MCP 工具（主题解析，缓存 TTL 24h，错误提示）in `Sources/iDocs/Tools/FetchHIGTool.swift`
+- [x] T035 [US5] 在 `iDocsServer` 中注册 `FetchHIGTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 5 独立可用
 
