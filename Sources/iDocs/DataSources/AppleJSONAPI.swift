@@ -36,6 +36,17 @@ public actor AppleJSONAPI {
         let decoder = JSONDecoder()
         return try decoder.decode(DocCContent.self, from: data)
     }
+
+    public func fetchTechnologies() async throws -> [Technology] {
+        guard let url = URLHelpers.dataURL(for: "index") else {
+            throw iDocsError.invalidURL
+        }
+
+        let data = try await fetchWithRetry(url: url)
+        let decoder = JSONDecoder()
+        let response = try decoder.decode(TechnologiesResponse.self, from: data)
+        return response.technologies
+    }
     
     private func fetchWithRetry(url: URL, maxRetries: Int = 3) async throws -> Data {
         var lastError: Error?
@@ -73,6 +84,16 @@ public actor AppleJSONAPI {
 }
 
 // MARK: - API Response Types
+
+private struct TechnologiesResponse: Codable {
+    let technologies: [Technology]
+}
+
+public struct Technology: Codable, Sendable {
+    public let name: String
+    public let url: String
+    public let kind: String
+}
 
 private struct AppleSearchResponse: Codable {
     let results: [AppleSearchResult]

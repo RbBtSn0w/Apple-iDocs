@@ -22,4 +22,11 @@ struct ToolTests {
         
         #expect(!result.isEmpty)
     }
+    
+    @Test("BrowseTechnologiesTool lists technologies")
+    func browseTechs() async throws {
+        let tool = BrowseTechnologiesTool()
+        let result = try await tool.run()
+        #expect(!result.isEmpty)
+    }
 }

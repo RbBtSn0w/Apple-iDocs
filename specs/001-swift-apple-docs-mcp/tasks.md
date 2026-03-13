@@ -101,14 +101,14 @@
 
 ### 测试 ⚠️
 
-- [ ] T024 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取、**Spotlight 模糊检索独立验证用例 (G7)**）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
+- [x] T024 [P] [US3] 编写 `XcodeLocalDocs` 集成测试（文档发现、索引读取、符号查询、mmap 读取、**Spotlight 模糊检索独立验证用例 (G7)**）in `Tests/iDocsTests/XcodeLocalDocsTests.swift`
 
 ### 实现
 
-- [ ] T025 [US3] 实现 `XcodeLocalDocs` 数据源（`~/Library/Developer/Xcode/DocumentationCache/` 发现、`Data(contentsOf:options:.mappedIfSafe)` mmap 读取、LMDB C 桥接索引访问、Spotlight `NSMetadataQuery` 全量模糊搜索）in `Sources/iDocs/DataSources/XcodeLocalDocs.swift`
-- [ ] T026 [US3] 实现 `XcodeDocsTool` MCP 工具（`search` 模式符号查询 + `list` 模式文档集列出，回落建议）in `Sources/iDocs/Tools/XcodeDocsTool.swift`
-- [ ] T027 [US3] 在 `iDocsServer` 中注册 `XcodeDocsTool` in `Sources/iDocs/iDocsServer.swift`
-- [ ] T028 [US3] 将 `XcodeLocalDocs` 集成到 `SearchDocsTool` 的三层回落逻辑（优先查询本地层）in `Sources/iDocs/Tools/SearchDocsTool.swift`
+- [x] T025 [US3] 实现 `XcodeLocalDocs` 数据源（`~/Library/Developer/Xcode/DocumentationCache/` 发现、`Data(contentsOf:options:.mappedIfSafe)` mmap 读取、LMDB C 桥接索引访问、Spotlight `NSMetadataQuery` 全量模糊搜索）in `Sources/iDocs/DataSources/XcodeLocalDocs.swift`
+- [x] T026 [US3] 实现 `XcodeDocsTool` MCP 工具（`search` 模式符号查询 + `list` 模式文档集列出，回落建议）in `Sources/iDocs/Tools/XcodeDocsTool.swift`
+- [x] T027 [US3] 在 `iDocsServer` 中注册 `XcodeDocsTool` in `Sources/iDocs/iDocsServer.swift`
+- [x] T028 [US3] 将 `XcodeLocalDocs` 集成到 `SearchDocsTool` 的三层回落逻辑（优先查询本地层）in `Sources/iDocs/Tools/SearchDocsTool.swift`
 
 **Checkpoint**: User Story 3 独立可用 — Xcode 本地文档查询离线工作
 
@@ -122,12 +122,12 @@
 
 ### 测试 ⚠️
 
-- [ ] T029 [P] [US4] 编写 `BrowseTechnologiesTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
+- [x] T029 [P] [US4] 编写 `BrowseTechnologiesTool` 集成测试 in `Tests/iDocsTests/ToolTests.swift`
 
 ### 实现
 
-- [ ] T030 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
-- [ ] T031 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
+- [x] T030 [US4] 实现 `BrowseTechnologiesTool` MCP 工具（获取 Apple 技术目录 JSON，分类筛选，Markdown 格式化，缓存 TTL 2h）in `Sources/iDocs/Tools/BrowseTechnologiesTool.swift`
+- [x] T031 [US4] 在 `iDocsServer` 中注册 `BrowseTechnologiesTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 4 独立可用
 

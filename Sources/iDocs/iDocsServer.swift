@@ -33,7 +33,7 @@ public actor iDocsServer: Service {
                         ]),
                         "required": .array([.string("query")])
                     ])
-                )
+                ),
                 Tool(
                     name: "fetch_doc",
                     description: "Fetch full documentation content as high-quality Markdown",
@@ -43,6 +43,24 @@ public actor iDocsServer: Service {
                         ]),
                         "required": .array([.string("path")])
                     ])
+                ),
+                Tool(
+                    name: "xcode_docs",
+                    description: "Query Xcode local documentation sets and symbols",
+                    inputSchema: .object([
+                        "properties": .object([
+                            "query": .string("Symbol query for search mode"),
+                            "list": .object([
+                                "type": .string("boolean"),
+                                "description": .string("List available local documentation sets")
+                            ])
+                        ])
+                    ])
+                ),
+                Tool(
+                    name: "browse_technologies",
+                    description: "Browse the catalog of Apple frameworks and technologies",
+                    inputSchema: .object([:])
                 )
             ]
             return .init(tools: tools)
@@ -74,6 +92,25 @@ public actor iDocsServer: Service {
                     return .init(content: [.text(markdown)], isError: false)
                 } catch {
                     return .init(content: [.text("Fetch failed: \(error.localizedDescription)")], isError: true)
+                }
+                
+            case "xcode_docs":
+                let query = params.arguments?["query"]?.stringValue
+                let list = params.arguments?["list"]?.boolValue ?? false
+                
+                do {
+                    let markdown = try await XcodeDocsTool().run(query: query, list: list)
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Xcode docs query failed: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "browse_technologies":
+                do {
+                    let markdown = try await BrowseTechnologiesTool().run()
+                    return .init(content: [.text(markdown)], isError: false)
+                } catch {
+                    return .init(content: [.text("Browse failed: \(error.localizedDescription)")], isError: true)
                 }
                 
             default:

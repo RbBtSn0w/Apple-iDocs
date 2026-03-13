@@ -31,6 +31,6 @@ struct RenderingTests {
         let truncated = renderer.truncateIfNeeded(longText)
         
         #expect(truncated.count <= 150) // Including truncation message
-        #expect(truncated.contains("...[Content Truncated]..."))
+        #expect(truncated.contains("...[Content Truncated due to size limit]..."))
     }
 }
