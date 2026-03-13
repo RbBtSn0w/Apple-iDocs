@@ -5,37 +5,37 @@
 **Artifacts Analyzed**: spec.md, plan.md, tasks.md, data-model.md, contracts/, research.md, constitution.md
 
 > [!NOTE]
-> v3 修订：在 v2 基础上修正 Metrics 口径定义、SC Coverage 三级拆分、I3 条件约束方案、U1 降级为 INFO。
+> v4 修订：闭环所有源文件的修复，标记全部问题为 **Fixed**。修正了 v3 遗漏的大文档截断策略 (FR-024) 和大文件阈值定义，强化了 I3 条件约束。
 
 ---
 
 ## Findings
 
-| ID | Category | Severity | Location(s) | Summary | Recommendation |
-|----|----------|:--------:|-------------|---------|----------------|
-| G1 | Coverage Gap | **CRITICAL** | spec §FR-018, §SC-005 → tasks.md | FR-018"单一可执行文件、零运行时依赖"+ SC-005"≤20MB"无产物验收任务（依赖扫描、体积门禁、静态链接验证） | Phase 11 新增 Distribution Validation 任务 |
-| G2 | Coverage Gap | **CRITICAL** | spec §SC-001/002/006/008/009 → tasks.md | 5 个可量化 SC 无基准验证任务。T049 仅功能验证，无性能断言 | 新增性能基准测试任务，至少覆盖 SC-001/002/009 |
-| G3 | Coverage Gap | **HIGH** | spec §SC-004 → tasks.md | SC-004"离线 100% 可用"无显式验证任务（需断网环境下已缓存功能全量可用） | 新增离线功能验收任务或在 T045 端到端测试中增加离线场景 |
-| G4 | Coverage Gap | **HIGH** | spec §FR-009 → data-model, plan | LRU 容量上限和淘汰行为仅在 plan 标注"默认 100 条目"，spec 无需求定义 | 在 spec FR-009 补充容量策略需求 |
-| G5 | Coverage Gap | **HIGH** | spec §SC-003 → tasks T019 | SC-003"100% 语义结构保留"缺少验证手段 — 无 golden file 对比测试 | 在 T019 中补充预期 Markdown 输出的 golden file 对比 |
-| G6 | Coverage Gap | **MEDIUM** | spec §SC-010 → tasks T046 | T046 实现日志推送，但无验证任务断言关键事件（文档发现、缓存命中/未中、API 回落、错误降级）必须产生日志 | 在 T045 端到端测试中增加日志断言 |
-| G7 | Coverage Gap | **LOW** | spec §FR-006 → tasks T024 | FR-006 (Spotlight) 在 T024 中已显式声明，但缺少独立验证用例 | 在 T023 (XcodeLocalDocsTests) 中增加 Spotlight 专项用例 |
-| I1 | Inconsistency | **MEDIUM** | spec §FR-007 vs §US-1~US-8 | FR-007"7 个工具"但有 8 个 US。US-8 是传输层非工具，措辞易混淆 | FR-007 附注说明 US-8 是传输配置 |
-| I2 | Inconsistency | **MEDIUM** | plan §MemoryCache vs data-model §CacheEntry | plan"O(1) 查找/淘汰"，但 data-model 未明确 LRU 键类型约束 | data-model 补充键类型和容量策略 |
-| I3 | Inconsistency | **MEDIUM** | contracts §7 vs tasks | `xcode_docs` 的 `symbol` 标为 required，但 `action=list` 时无意义 | 改为条件约束：`action=search` → `symbol` required；`action=list` → `symbol` forbidden |
-| D1 | Duplication | **MEDIUM** | spec §FR-002 vs §FR-016 | "三层回落"(机制) 与"静默回落不报错"(行为) 语义重叠 | FR-002 聚焦机制；FR-016 聚焦用户行为，交叉引用 |
-| A1 | Ambiguity | **MEDIUM** | spec §FR-015 | "自动切换请求标识重试"未量化。research.md 已定义 3 次+指数退避，spec 未反映 | 将 research 决策回写 spec |
-| A2 | Ambiguity | **MEDIUM** | spec §FR-016 + Constitution §IV | "不报错"是否包含不记日志？与可观测性 MUST 潜在冲突 | 明确为"不向用户报错，MUST 记录 warning 日志" |
-| A3 | Ambiguity | **MEDIUM** | spec §FR-022 | "大文件"阈值未定义 | 定义阈值（如 >1MB 触发 mmap） |
-| A4 | Ambiguity | **MEDIUM** | spec §FR-005 | "毫秒级符号定位"不可判定，需交叉引用 SC-002 | FR-005 直接绑定 `p95 ≤ 100ms` |
-| A5 | Ambiguity | **MEDIUM** | spec §US-1 AC4 | "速度显著更快"主观不可测 | 改为"缓存命中 ≥10x 加速 (SC-008)" |
-| A6 | Ambiguity | **MEDIUM** | spec Edge Cases §5 | "文档过大"列为边界情况但无 FR 或任务 | 添加截断/摘要策略 FR |
-| U1 | Underspec | **INFO** | research.md §4 → tasks T010 | research 提到 `NSFileCoordinator` 并发文件访问，tasks 未覆盖。属追溯完整性建议，非规格级问题 | 可在 T010 实现时自行判断，不阻塞实施 |
-| U2 | Underspec | **LOW** | spec §US-8 → tasks T043/T044 | HTTP 模式会话超时、最大并发数未定义 | 在 spec 或 contracts 补充参数 |
-| U3 | Underspec | **LOW** | spec.md 第 5 行 | 状态仍为 `Draft`，已走完全流程 | 更新为 `Ready for Implementation` |
-| U4 | Underspec | **LOW** | tasks T047/T048 | "创建 README"和"代码清理"缺少 DoD | 补充完成判定标准 |
-| D2 | Duplication | **LOW** | spec §US-3 AC4 vs §SC-002 | "毫秒级"与"100ms"同一能力措辞不一致 | 统一量化表述 |
-| D3 | Duplication | **LOW** | contracts §1 vs spec §FR-001 | 通配符支持重复描述 | 保持一致即可 |
+| ID | Category | Severity | Location(s) | Summary | Recommendation | Status |
+|----|----------|:--------:|-------------|---------|----------------|:------:|
+| G1 | Coverage Gap | **CRITICAL** | spec §FR-018, §SC-005 → tasks.md | FR-018/SC-005 无产物验收任务 | Phase 11 新增 Distribution Validation 任务 | ✅ Fixed |
+| G2 | Coverage Gap | **CRITICAL** | spec §SC-001/002/006/008/009 → tasks.md | 5 个可量化 SC 无基准验证任务 | 新增性能基准测试任务 | ✅ Fixed |
+| G3 | Coverage Gap | **HIGH** | spec §SC-004 → tasks.md | SC-004"离线 100% 可用"无验证任务 | 在 T045 端到端测试中增加离线场景 | ✅ Fixed |
+| G4 | Coverage Gap | **HIGH** | spec §FR-009 → data-model, plan | LRU 容量和淘汰行为 spec 无定义 | 在 spec FR-009 补充容量策略需求 | ✅ Fixed |
+| G5 | Coverage Gap | **HIGH** | spec §SC-003 → tasks T019 | SC-003"100% 结构保留"缺 golden file | 在 T019 中补充 golden file 对比 | ✅ Fixed |
+| G6 | Coverage Gap | **MEDIUM** | spec §SC-010 → tasks T046 | T046 缺验证断言 | 在 T045 中增加日志断言 | ✅ Fixed |
+| G7 | Coverage Gap | **LOW** | spec §FR-006 → tasks T024 | FR-006 在 T024 缺独立验证用例 | T023 增加 Spotlight 专项用例 | ✅ Fixed |
+| I1 | Inconsistency | **MEDIUM** | spec §FR-007 vs §US-1~US-8 | 7 工具 vs 8 US 措辞易混淆 | FR-007 附注说明 US-8 是传输配置 | ✅ Fixed |
+| I2 | Inconsistency | **MEDIUM** | plan §MemoryCache vs data-model | data-model 未明确 LRU 键类型约束 | data-model 补充键类型和容量策略 | ✅ Fixed |
+| I3 | Inconsistency | **MEDIUM** | contracts §7 vs tasks | `xcode_docs` 的 `symbol` 无条件约束 | `action=search` → required；`list` → forbidden | ✅ Fixed |
+| D1 | Duplication | **MEDIUM** | spec §FR-002 vs §FR-016 | 回落机制与行为语义重叠 | 明确行为，交叉引用机制 | ✅ Fixed |
+| A1 | Ambiguity | **MEDIUM** | spec §FR-015 | "自动重试"未量化 | research 决策回写 spec (最大 3 次/退避) | ✅ Fixed |
+| A2 | Ambiguity | **MEDIUM** | spec §FR-016 | "不报错"是否包含记日志不明 | 明确"不向用户报错，MUST 记录 warning 日志" | ✅ Fixed |
+| A3 | Ambiguity | **MEDIUM** | spec §FR-022 | "大文件"阈值未定义 | 定义阈值（文件 >5MB） | ✅ Fixed |
+| A4 | Ambiguity | **MEDIUM** | spec §FR-005 | "毫秒级符号定位"不可判定 | FR-005 直接绑定 `p95 ≤ 100ms` | ✅ Fixed |
+| A5 | Ambiguity | **MEDIUM** | spec §US-1 AC4 | "速度显著更快"主观不可测 | 改为"缓存命中 ≥10x 加速 (SC-008)" | ✅ Fixed |
+| A6 | Ambiguity | **MEDIUM** | spec Edge Cases §5 | "文档过大"超上下文无策略 | 增加 FR-024 截断策略，增 T021 实现 | ✅ Fixed |
+| U1 | Underspec | **INFO** | research.md §4 → tasks T010 | `NSFileCoordinator` tasks 未覆盖 | 属追溯完整性建议，非规格级问题 | ⏭️ Ignored |
+| U2 | Underspec | **LOW** | spec §US-8 → tasks T043/T044 | HTTP 模式并发数未定义 | 补充 HTTP Server 参数 | ✅ Fixed |
+| U3 | Underspec | **LOW** | spec.md 第 5 行 | 状态仍为 `Draft` | 更新为 `Ready for Implementation` | ✅ Fixed |
+| U4 | Underspec | **LOW** | tasks T047/T048 | "创建 README"缺少 DoD | 补充完成判定标准 | ✅ Fixed |
+| D2 | Duplication | **LOW** | spec §US-3 AC4 vs §SC-002 | "毫秒级"与"100ms"措辞不一致 | 统一量化表述 | ✅ Fixed |
+| D3 | Duplication | **LOW** | contracts §1 vs spec §FR-001 | 通配符支持重复描述 | 保持一致即可 | ✅ Fixed |
 
 ---
 

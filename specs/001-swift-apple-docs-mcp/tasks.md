@@ -85,8 +85,9 @@
 ### 实现
 
 - [ ] T020 [US2] 实现 `DocCRenderer`（DocC JSON → Markdown，覆盖 declarations/parameters/properties/content/tables/aside/codeListing/images/relationship/topic/seeAlso，递归深度保护 50 层 content + 20 层 inline）in `Sources/iDocs/Rendering/DocCRenderer.swift`
-- [ ] T021 [US2] 实现 `FetchDocTool` MCP 工具（路径解析，本地缓存优先 → 在线获取，调用 DocCRenderer 渲染，缓存结果）in `Sources/iDocs/Tools/FetchDocTool.swift`
-- [ ] T022 [US2] 在 `iDocsServer` 中注册 `FetchDocTool` in `Sources/iDocs/iDocsServer.swift`
+- [ ] T021 [US2] 实现大文档截断策略（FR-024：体积 >100KB 时按优先级截断代码清单/示例/参考，保留核心声明与参数）in `Sources/iDocs/Rendering/DocCRenderer.swift`
+- [ ] T022 [US2] 实现 `FetchDocTool` MCP 工具（路径解析，本地缓存优先 → 在线获取，调用 DocCRenderer 渲染，缓存结果）in `Sources/iDocs/Tools/FetchDocTool.swift`
+- [ ] T023 [US2] 在 `iDocsServer` 中注册 `FetchDocTool` in `Sources/iDocs/iDocsServer.swift`
 
 **Checkpoint**: User Story 2 独立可用 — 文档获取工具返回高质量 Markdown
 
