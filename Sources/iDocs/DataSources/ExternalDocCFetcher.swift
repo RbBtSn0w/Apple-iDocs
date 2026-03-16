@@ -3,9 +3,11 @@ import Logging
 
 public actor ExternalDocCFetcher {
     private let logger = Logger(label: "com.snow.idocs-external-doc-fetcher")
-    private let session = URLSession.shared
+    private let session: any NetworkSession
     
-    public init() {}
+    public init(session: any NetworkSession = URLSession.shared) {
+        self.session = session
+    }
     
     public func fetch(url: URL) async throws -> DocCContent {
         logger.info("Fetching external DocC content from: \(url.absoluteString)")

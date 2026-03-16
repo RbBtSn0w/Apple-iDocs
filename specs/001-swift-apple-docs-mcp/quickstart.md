@@ -90,9 +90,16 @@ npx @modelcontextprotocol/inspector /path/to/iDocs
 # 全量测试
 swift test
 
-# 仅集成测试
+# 启用集成测试（环境变量方式）
+IDOCS_INTEGRATION_TESTS=1 swift test
+
+# 仅集成测试（过滤器方式）
 swift test --filter IntegrationTests
 ```
+
+说明：
+- 默认测试不访问外部网络
+- 使用 `swift test --filter IntegrationTests` 时视为集成模式
 
 ## 常见问题
 

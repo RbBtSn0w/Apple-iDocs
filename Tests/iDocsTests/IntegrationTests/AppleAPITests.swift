@@ -8,8 +8,14 @@ struct AppleAPITests {
     @Test("Search URL construction")
     func searchURL() {
         let query = "SwiftUI"
-        let url = URLHelpers.dataURL(for: "search?q=\(query)")
-        #expect(url?.absoluteString == "https://developer.apple.com/tutorials/data/search?q=SwiftUI.json")
+        let url = URLHelpers.searchURL(query: query)
+        #expect(url?.absoluteString == "https://developer.apple.com/tutorials/data/search?q=SwiftUI")
+    }
+
+    @Test("Technologies URL construction")
+    func technologiesURL() {
+        let url = URLHelpers.technologiesURL()
+        #expect(url?.absoluteString == "https://developer.apple.com/tutorials/data/documentation/technologies.json")
     }
     
     @Test("Parse Search Result JSON")

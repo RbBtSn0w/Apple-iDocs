@@ -10,7 +10,7 @@ public actor AppleJSONAPI {
     }
     
     public func search(query: String) async throws -> [SearchResult] {
-        guard let url = URLHelpers.dataURL(for: "search?q=\(query)") else {
+        guard let url = URLHelpers.searchURL(query: query) else {
             return []
         }
         
@@ -40,7 +40,7 @@ public actor AppleJSONAPI {
     }
 
     public func fetchTechnologies() async throws -> [Technology] {
-        guard let url = URLHelpers.dataURL(for: "index") else {
+        guard let url = URLHelpers.technologiesURL() else {
             throw iDocsError.invalidURL
         }
 

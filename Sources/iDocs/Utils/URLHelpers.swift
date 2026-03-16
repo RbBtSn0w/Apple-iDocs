@@ -2,6 +2,16 @@ import Foundation
 
 public struct URLHelpers {
     public static let appleDocBaseURL = URL(string: "https://developer.apple.com")!
+
+    public static func searchURL(query: String) -> URL? {
+        var components = URLComponents(string: "https://developer.apple.com/tutorials/data/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        return components?.url
+    }
+
+    public static func technologiesURL() -> URL? {
+        URL(string: "https://developer.apple.com/tutorials/data/documentation/technologies.json")
+    }
     
     public static func dataURL(for path: String) -> URL? {
         let cleanPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

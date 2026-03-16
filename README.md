@@ -51,6 +51,28 @@ Useful for integration with Claude Desktop or Cursor.
 ./iDocs --http --port 8080
 ```
 
+## Testing
+
+Default tests (offline, no external network):
+
+```bash
+tuist test iDocs
+```
+
+Integration tests (explicitly enabled):
+
+```bash
+IDOCS_INTEGRATION_TESTS=1 tuist test iDocs
+```
+
+```bash
+swift test --filter IntegrationTests
+```
+
+Notes:
+- Default tests do not access external networks
+- Integration tests validate live endpoints and may fail if services are unavailable
+
 ## MCP Tools
 
 - `search_docs(query)`: Search documentation.

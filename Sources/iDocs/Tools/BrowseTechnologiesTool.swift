@@ -4,9 +4,11 @@ import MCP
 
 public struct BrowseTechnologiesTool {
     private let logger = Logger(label: "com.snow.idocs-browse-tech")
-    private let api = AppleJSONAPI()
+    private let api: AppleJSONAPI
     
-    public init() {}
+    public init(api: AppleJSONAPI = AppleJSONAPI()) {
+        self.api = api
+    }
     
     public func run() async throws -> String {
         logger.info("Browsing Apple technologies catalog...")
