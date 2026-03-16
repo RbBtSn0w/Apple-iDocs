@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-tuist-migration`  
 **Created**: 2026-03-16  
-**Status**: Draft  
+**Status**: Completed  
 **Input**: User description: "将项目的管理完整的迁移到tuist的管理模式上。"
 
 ## Clarifications
