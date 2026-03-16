@@ -136,7 +136,7 @@ Tests/
 
 - Finalize `DocumentationService`, models, and error types (see `contracts/` and `data-model.md`).
 - Implement version handshake (`coreVersion` + Adapter major check).
-- Implement `MockDocumentationAdapter` or `InMemoryAdapter` for CLI tests.
+- Create `iDocsAdapterTests` and add contract tests (config injection, error mapping, async-only API shape).
 
 ### Phase 2: Refactor CLI to Adapter
 
@@ -144,13 +144,19 @@ Tests/
 - Switch to `AsyncParsableCommand`.
 - Ensure config/logger injection is the only way to affect runtime behavior.
 
-### Phase 3: Common Layer Cleanup and Packaging
+### Phase 3: Future App Readiness and Packaging
 
-- Remove any stray imports of CLI/App frameworks from Common.
-- Ensure Common can be built as framework/xcframework for App targets.
+- Ensure Common supports sandbox-safe cache paths via injected configuration (no global writes by default).
+- Remove any stray imports of CLI/App frameworks from Common and public interfaces.
+- Ensure Common/Adapter can be built as framework/xcframework for App targets.
 - Keep CLI linkage flexible (static or dynamic).
 
-### Phase 4: Verification and Gates
+### Phase 4: Mock Adapter and Isolated Testing
+
+- Implement `MockDocumentationAdapter` or `InMemoryAdapter` for CLI/Application tests.
+- Ensure Application-layer tests can run fully offline (no network, no disk required beyond temp).
+
+### Phase 5: Verification and Gates
 
 - Enforce SC-005..SC-009 in CI (dependency, access, async-only, sandbox readiness, version gate).
 - Run unit tests for Common and Adapter; run CLI tests using mock adapters.

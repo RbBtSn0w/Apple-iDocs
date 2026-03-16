@@ -11,6 +11,7 @@ This document defines the core data structures used in the `iDocsKit` (Common) a
   - `locale: Locale`: The target language/locale for documentation.
   - `timeout: TimeInterval`: Network timeout for remote requests.
   - `apiBaseURL: URL`: Base URL for Apple documentation API (default: official).
+  - `enableFileLocking: Bool`: Defaults to false. When true, the Common layer uses advisory file locks for disk cache writes (intended only for explicitly shared-cache setups, e.g., App Groups).
 - **Rationale**: Decouples the Common layer from environment-specific configuration.
 
 ## 2. Core Entities
