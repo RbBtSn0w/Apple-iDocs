@@ -1,5 +1,5 @@
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public var virtualFiles: [String: Data] = [:]

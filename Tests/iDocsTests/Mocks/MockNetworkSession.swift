@@ -1,5 +1,5 @@
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
     public var stubbedData: Data?

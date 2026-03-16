@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 @Suite("Apple JSON API Mock Tests")
 struct AppleAPIMockTests {

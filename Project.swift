@@ -1,19 +1,45 @@
 import ProjectDescription
 
+let settings: Settings = .settings(
+    base: [
+        "MACOSX_DEPLOYMENT_TARGET": "13.0",
+        "SWIFT_VERSION": "6.0",
+        "ENABLE_TESTABILITY": "YES"
+    ],
+    configurations: [
+        .debug(name: .debug),
+        .release(name: .release)
+    ]
+)
+
 let project = Project(
     name: "iDocs",
+    settings: settings,
     targets: [
         .target(
-            name: "iDocs",
+            name: "iDocsKit",
             destinations: .macOS,
-            product: .executable,
-            bundleId: "com.snow.idocs",
+            product: .staticLibrary,
+            bundleId: "com.snow.idocs.kit",
             deploymentTargets: .macOS("13.0"),
-            sources: ["Sources/iDocs/**"],
+            sources: [
+                "Sources/iDocs/**"
+            ],
             dependencies: [
                 .external(name: "MCP"),
                 .external(name: "ServiceLifecycle"),
                 .external(name: "Logging")
+            ]
+        ),
+        .target(
+            name: "iDocs",
+            destinations: .macOS,
+            product: .commandLineTool,
+            bundleId: "com.snow.idocs",
+            deploymentTargets: .macOS("13.0"),
+            sources: ["Sources/iDocs/iDocsServer.swift"],
+            dependencies: [
+                .target(name: "iDocsKit")
             ]
         ),
         .target(
@@ -24,7 +50,7 @@ let project = Project(
             deploymentTargets: .macOS("13.0"),
             sources: ["Tests/iDocsTests/**"],
             dependencies: [
-                .target(name: "iDocs")
+                .target(name: "iDocsKit")
             ]
         )
     ]

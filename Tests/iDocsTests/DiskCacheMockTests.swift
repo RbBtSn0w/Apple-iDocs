@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 @Suite("DiskCache Mock Tests")
 struct DiskCacheMockTests {

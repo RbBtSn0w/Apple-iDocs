@@ -18,14 +18,25 @@ iDocs is a high-performance Model Context Protocol (MCP) server written in Swift
 
 ### Prerequisites
 - macOS 13.0+
-- Xcode 15.0+ / Swift 6.0+
+- Xcode 15.0+
+- [Tuist](https://tuist.io): `curl -Ls https://install.tuist.io | bash`
 
-### Build from Source
-```bash
-swift build -c release
-```
+### Setup and Build
+1. Clone the repository.
+2. Resolve dependencies:
+   ```bash
+   tuist install
+   ```
+3. Generate project:
+   ```bash
+   tuist generate
+   ```
+4. Build:
+   ```bash
+   tuist build iDocs
+   ```
 
-The binary will be located at `.build/release/iDocs`.
+The binary will be located in the build directory.
 
 ## Usage
 

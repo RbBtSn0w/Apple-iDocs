@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 @Suite("External DocC Tests")
 struct ExternalDocTests {

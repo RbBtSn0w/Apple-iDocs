@@ -2,6 +2,7 @@ import Foundation
 import MCP
 import ServiceLifecycle
 import Logging
+import iDocsKit
 
 public enum TransportMode: String {
     case stdio

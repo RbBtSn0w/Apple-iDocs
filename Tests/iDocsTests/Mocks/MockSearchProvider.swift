@@ -1,5 +1,5 @@
 import Foundation
-@testable import iDocs
+@testable import iDocsKit
 
 public final class MockSearchProvider: SearchProvider, @unchecked Sendable {
     public var mockResults: [URL] = []

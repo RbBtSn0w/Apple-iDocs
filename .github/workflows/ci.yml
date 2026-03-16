@@ -1,0 +1,25 @@
+name: iDocs CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Tuist
+        run: curl -Ls https://install.tuist.io | bash
+        
+      - name: Tuist Install
+        run: tuist install
+        
+      - name: Tuist Build
+        run: tuist build iDocs
+        
+      - name: Tuist Test
+        run: tuist test iDocs

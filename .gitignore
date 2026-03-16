@@ -1,37 +1,58 @@
-# Swift
+# --- Swift & SPM ---
 .build/
 /Packages
-/*.xcodeproj
-/*.xcworkspace
 /Package.resolved
+*.swiftmodule
+*.swiftdoc
+*.swiftinterface
 
-# Xcode
+# --- Xcode ---
 DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.xcresult
 *.hmap
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.moved-aside
+*.swp
+*.lock
+/xcuserdata/
 
-# Tuist
+# --- Tuist ---
+# Ignore generated Xcode projects and workspaces
+# (Keep manifests like Project.swift and Tuist.swift)
 /Derived/
 /.tuist/
 /graph.dot
+/.build-tuist/
 
-# macOS
+# --- macOS ---
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# IDEs
+# --- IDEs ---
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# iDocs Cache (Local Development)
+# --- iDocs Specific ---
+# Ignore local development cache
 ~/Library/Caches/iDocs/
 
-apple-doc-mcp/*
-apple-docs-mcp/*
-sosumi.ai/*
+# Ignore large data directories if they are not part of the core repo
+apple-doc-mcp/
+apple-docs-mcp/
+sosumi.ai/
 
-
-# Test Coverage
+# --- Test & Coverage ---
 coverage_report/
-.xcresult
+.xcresult/
+*.profraw
