@@ -30,7 +30,7 @@ public actor iDocsServer: Service {
         )
     }
     
-    private func setupHandlers() async {
+    func setupHandlers() async {
         // List available tools
         await server.withMethodHandler(ListTools.self) { _ in
             let tools = [
@@ -137,7 +137,7 @@ public actor iDocsServer: Service {
         }
     }
     
-    private func handleToolCall(name: String, arguments: [String: Value]?) async -> CallTool.Result {
+    func handleToolCall(name: String, arguments: [String: Value]?) async -> CallTool.Result {
         switch name {
         case "search_docs", "search_documentation":
             guard let query = arguments?["query"]?.stringValue else {
@@ -204,7 +204,7 @@ public actor iDocsServer: Service {
         }
     }
     
-    private func runTool(_ block: () async throws -> String) async -> CallTool.Result {
+    func runTool(_ block: () async throws -> String) async -> CallTool.Result {
         do {
             let result = try await block()
             return .init(content: [.text(result)], isError: false)
@@ -213,7 +213,7 @@ public actor iDocsServer: Service {
         }
     }
     
-    private nonisolated func formatSearchResults(_ results: [SearchResult]) -> String {
+    nonisolated func formatSearchResults(_ results: [SearchResult]) -> String {
         if results.isEmpty {
             return "No matching documentation found."
         }

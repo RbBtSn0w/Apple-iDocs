@@ -3,9 +3,11 @@ import Logging
 
 public actor HIGFetcher {
     private let logger = Logger(label: "com.snow.idocs-hig-fetcher")
-    private let api = AppleJSONAPI()
+    private let api: AppleJSONAPI
     
-    public init() {}
+    public init(api: AppleJSONAPI = AppleJSONAPI()) {
+        self.api = api
+    }
     
     public func fetch(topic: String) async throws -> String {
         logger.info("Fetching HIG topic: \(topic)")

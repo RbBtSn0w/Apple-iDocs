@@ -4,9 +4,11 @@ import MCP
 
 public struct XcodeDocsTool {
     private let logger = Logger(label: "com.snow.idocs-xcode-tool")
-    private let dataSource = XcodeLocalDocs()
+    private let dataSource: XcodeLocalDocs
     
-    public init() {}
+    public init(dataSource: XcodeLocalDocs = XcodeLocalDocs()) {
+        self.dataSource = dataSource
+    }
     
     public func run(query: String? = nil, list: Bool = false) async throws -> String {
         if list {
