@@ -44,7 +44,7 @@ Use the helper script to run build/test/run quietly from terminal:
 
 ```bash
 ./scripts/tuist-silent.sh build iDocs
-./scripts/tuist-silent.sh run iDocs --help
+./scripts/tuist-silent.sh run idocs --help
 ./scripts/tuist-silent.sh test
 ./scripts/tuist-silent.sh test-all
 ```
@@ -65,12 +65,12 @@ Notes:
 ### Stdio Mode (Default)
 Useful for integration with Claude Desktop or Cursor.
 ```bash
-./iDocs
+./idocs
 ```
 
 ### HTTP Mode
 ```bash
-./iDocs --http --port 8080
+./idocs --http --port 8080
 ```
 
 ## Testing
@@ -113,7 +113,7 @@ Add the following to your MCP settings:
 {
   "mcpServers": {
     "idocs": {
-      "command": "/path/to/iDocs",
+      "command": "/path/to/idocs",
       "args": []
     }
   }

@@ -40,9 +40,9 @@ CI workflow:
 ## CLI Commands (AsyncParsableCommand)
 
 ```bash
-iDocs search "SwiftUI"
-iDocs fetch "/documentation/swiftui/view"
-iDocs list --category Frameworks
+idocs search "SwiftUI"
+idocs fetch "/documentation/swiftui/view"
+idocs list --category Frameworks
 ```
 
 Start MCP serving mode explicitly:
@@ -66,7 +66,7 @@ Use quiet terminal-only commands (no Xcode IDE interaction):
 
 ```bash
 ./scripts/tuist-silent.sh build iDocs
-./scripts/tuist-silent.sh run iDocs --help
+./scripts/tuist-silent.sh run idocs --help
 ./scripts/tuist-silent.sh test
 ./scripts/tuist-silent.sh test-all
 ```

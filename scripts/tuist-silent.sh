@@ -13,12 +13,12 @@ Usage:
   ./scripts/tuist-silent.sh test-all
 
 Defaults:
-  scheme = iDocs
+  scheme = idocs
   test target = iDocsTests
 
 Examples:
   ./scripts/tuist-silent.sh build
-  ./scripts/tuist-silent.sh run iDocs --help
+  ./scripts/tuist-silent.sh run idocs --help
   ./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
   ./scripts/tuist-silent.sh test
   ./scripts/tuist-silent.sh test iDocsMCPTests
@@ -31,6 +31,21 @@ latest_binary() {
   find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug/$name" -type f 2>/dev/null | head -n 1
 }
 
+resolve_target() {
+  local input="$1"
+  case "$input" in
+    idocs|iDocs)
+      echo "iDocs:idocs"
+      ;;
+    iDocsMCP)
+      echo "iDocsMCP:iDocsMCP"
+      ;;
+    *)
+      echo "$input:$input"
+      ;;
+  esac
+}
+
 build_quiet() {
   local target_scheme="$1"
   tuist generate >/dev/null
@@ -38,18 +53,20 @@ build_quiet() {
 }
 
 cmd="${1:-}"
-scheme="${2:-iDocs}"
+scheme="${2:-idocs}"
 
 case "$cmd" in
   build)
-    build_quiet "$scheme"
+    IFS=':' read -r target_scheme _ <<<"$(resolve_target "$scheme")"
+    build_quiet "$target_scheme"
     ;;
   run)
     shift || true
-    scheme="${1:-iDocs}"
+    scheme="${1:-idocs}"
     shift || true
-    build_quiet "$scheme" >/dev/null
-    bin="$(latest_binary "$scheme")"
+    IFS=':' read -r target_scheme binary_name <<<"$(resolve_target "$scheme")"
+    build_quiet "$target_scheme" >/dev/null
+    bin="$(latest_binary "$binary_name")"
     if [[ -z "$bin" ]]; then
       echo "Error: built binary not found for scheme '$scheme'" >&2
       exit 1

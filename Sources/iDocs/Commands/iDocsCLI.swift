@@ -4,7 +4,7 @@ import ArgumentParser
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 public struct iDocsCLI: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
-        commandName: "iDocs",
+        commandName: "idocs",
         abstract: "iDocs CLI",
         subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self]
     )

@@ -90,6 +90,7 @@ let project = Project(
             ],
             settings: .settings(
                 base: [
+                    "PRODUCT_NAME": "idocs",
                     "LD_RUNPATH_SEARCH_PATHS": [
                         "$(inherited)",
                         "@executable_path",
