@@ -6,35 +6,51 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public var stubbedError: Error?
     
     public init(virtualFiles: [String: Data] = [:], stubbedError: Error? = nil) {
-        self.virtualFiles = virtualFiles
+        self.virtualFiles = Dictionary(
+            uniqueKeysWithValues: virtualFiles.map { (Self.canonicalPath($0.key), $0.value) }
+        )
         self.stubbedError = stubbedError
     }
     
     public func contentsOfDirectory(at url: URL, includingPropertiesForKeys keys: [URLResourceKey]?, options: FileManager.DirectoryEnumerationOptions) throws -> [URL] {
         if let error = stubbedError { throw error }
         
-        let path = url.path
-        let filtered = virtualFiles.keys.filter { $0.hasPrefix(path) && $0 != path }
-        return filtered.map { URL(fileURLWithPath: $0) }
+        let path = Self.canonicalPath(url.path)
+        let filtered = virtualFiles.keys.filter {
+            let candidate = Self.canonicalPath($0)
+            return candidate.hasPrefix(path) && candidate != path
+        }
+        return filtered.map { item in
+            if item.hasSuffix("/") {
+                return URL(fileURLWithPath: item, isDirectory: true)
+            }
+            return URL(fileURLWithPath: item)
+        }
     }
     
     public func fileExists(atPath path: String) -> Bool {
-        return virtualFiles[path] != nil
+        let canonical = Self.canonicalPath(path)
+        return virtualFiles.keys.contains { Self.canonicalPath($0) == canonical }
     }
     
     public func removeItem(at url: URL) throws {
         if let error = stubbedError { throw error }
-        virtualFiles.removeValue(forKey: url.path)
+        let canonical = Self.canonicalPath(url.path)
+        if let key = virtualFiles.keys.first(where: { Self.canonicalPath($0) == canonical }) {
+            virtualFiles.removeValue(forKey: key)
+        }
     }
     
     public func write(_ data: Data, to url: URL) throws {
         if let error = stubbedError { throw error }
-        virtualFiles[url.path] = data
+        virtualFiles[Self.canonicalPath(url.path)] = data
     }
     
     public func read(from url: URL) throws -> Data {
         if let error = stubbedError { throw error }
-        guard let data = virtualFiles[url.path] else {
+        let canonical = Self.canonicalPath(url.path)
+        guard let key = virtualFiles.keys.first(where: { Self.canonicalPath($0) == canonical }),
+              let data = virtualFiles[key] else {
             throw MockError.fileNotFound
         }
         return data
@@ -43,5 +59,13 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public func reset() {
         virtualFiles.removeAll()
         stubbedError = nil
+    }
+
+    private static func canonicalPath(_ path: String) -> String {
+        var result = path
+        while result.contains("//") {
+            result = result.replacingOccurrences(of: "//", with: "/")
+        }
+        return result
     }
 }

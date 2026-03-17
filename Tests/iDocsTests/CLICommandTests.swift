@@ -1,0 +1,90 @@
+import Testing
+import Foundation
+import iDocsAdapter
+@testable import iDocsApp
+
+@Suite("CLI Command Tests")
+struct CLICommandTests {
+    final class OutputCapture: @unchecked Sendable {
+        var stdout: [String] = []
+        var stderr: [String] = []
+    }
+
+    @Test("CLI search delegates through injected mock adapter only")
+    func searchDelegatesToMockAdapter() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                searchResults: [SearchResult(id: "/documentation/swiftui/view", title: "View", snippet: "UI", technology: "swiftui")]
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-cli-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(query: "SwiftUI")
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        #expect(capture.stdout.joined(separator: "\n").contains("View"))
+        #expect(capture.stdout.joined(separator: "\n").contains("swiftui"))
+    }
+
+    @Test("CLI outputs standardized DocumentationError mapping")
+    func standardizedErrorOutput() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(errorToThrow: .networkError(message: "connection lost"))
+        }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(query: "SwiftUI")
+
+        #expect(code == 1)
+        #expect(capture.stderr.joined(separator: "\n").contains("Error [NETWORK]"))
+    }
+
+    @Test("CLI reports version mismatch clearly")
+    func versionMismatchReporting() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            throw DocumentationError.incompatibleVersion(adapter: "2.0.0", core: "1.0.0")
+        }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(query: "SwiftUI")
+
+        #expect(code == 1)
+        #expect(capture.stderr.joined(separator: "\n").contains("VERSION_MISMATCH"))
+        #expect(capture.stderr.joined(separator: "\n").contains("2.0.0"))
+        #expect(capture.stderr.joined(separator: "\n").contains("1.0.0"))
+    }
+}

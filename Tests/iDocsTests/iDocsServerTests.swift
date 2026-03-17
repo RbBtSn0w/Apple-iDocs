@@ -1,7 +1,8 @@
 import Testing
 import Foundation
 import MCP
-@testable import iDocsKit
+import iDocsAdapter
+@testable import iDocsApp
 
 @Suite("iDocsServer Tests")
 struct iDocsServerTests {
@@ -15,11 +16,11 @@ struct iDocsServerTests {
     @Test("formatSearchResults includes result details")
     func formatSearchResultsNonEmpty() async {
         let server = iDocsServer()
-        let results = [SearchResult(title: "View", abstract: "UI", path: "/documentation/swiftui/view", kind: .protocol, source: .remote)]
+        let results = [SearchResult(id: "/documentation/swiftui/view", title: "View", snippet: "UI", technology: "swiftui")]
         let output = await server.formatSearchResults(results)
         #expect(output.contains("View"))
         #expect(output.contains("/documentation/swiftui/view"))
-        #expect(output.contains("remote"))
+        #expect(output.contains("swiftui"))
     }
 
     @Test("handleToolCall reports missing parameters")
