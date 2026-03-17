@@ -3,7 +3,8 @@
 ## Setup
 1.  **Generate Project**: `tuist install && tuist generate`
 2.  **Verify Targets**:
-    *   `iDocsKit`: The Common/Adapter framework.
+    *   `iDocsKit`: The Common framework.
+    *   `iDocsAdapter`: The Adapter framework.
     *   `iDocs`: The CLI application.
 
 ## Developing for the Common Layer (`iDocsKit`)
@@ -22,4 +23,37 @@ Use `MockDocumentationAdapter` to simulate scenarios in the Application layer:
 let mockAdapter = MockDocumentationAdapter(mockResults: [...])
 let cli = iDocs(service: mockAdapter)
 try await cli.run(["search", "SwiftUI"])
+```
+
+## Architecture Gate (SC-005..SC-009)
+Run the gate locally before pushing:
+
+```bash
+./scripts/arch-gate.sh
+```
+
+CI workflow:
+- `.github/workflows/dependency-gate.yml` runs the same gate script on push and pull requests.
+
+## CLI Commands (AsyncParsableCommand)
+
+```bash
+iDocs search "SwiftUI"
+iDocs fetch "/documentation/swiftui/view"
+iDocs list --category Frameworks
+```
+
+Start MCP serving mode explicitly:
+
+```bash
+iDocs serve
+iDocs serve --http --port 8080
+```
+
+## Build Framework Artifacts
+
+Build distributable XCFrameworks for App integration:
+
+```bash
+./scripts/build-xcframework.sh
 ```

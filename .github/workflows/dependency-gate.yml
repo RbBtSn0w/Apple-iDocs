@@ -1,0 +1,13 @@
+name: Architecture Gate
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  arch-gate:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run architecture gate checks
+        run: ./scripts/arch-gate.sh
