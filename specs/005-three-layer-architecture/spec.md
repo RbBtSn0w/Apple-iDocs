@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-three-layer-architecture`  
 **Created**: 2026-03-16  
-**Status**: Draft  
+**Status**: completed  
 **Input**: 系统必须采用三层架构（应用层/公共层/适配层）：CLI、App 分别作为应用层入口；公共层仅包含核心能力且不依赖任何接入方式；适配层 以协议+实现方式将不同应用层与公共层对接，从而实现接入方式与核心能力的解耦与可复用。当前主要选用 CLI 方式提供服务，未来支持 App 的 UI 交互方式提供入口查询能力。
 
 ## Clarifications
