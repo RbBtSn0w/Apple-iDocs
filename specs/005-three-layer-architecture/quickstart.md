@@ -20,9 +20,11 @@
 ## Testing with Mocks
 Use `MockDocumentationAdapter` to simulate scenarios in the Application layer:
 ```swift
-let mockAdapter = MockDocumentationAdapter(mockResults: [...])
-let cli = iDocs(service: mockAdapter)
-try await cli.run(["search", "SwiftUI"])
+CLIEnvironment.serviceFactory = {
+    MockDocumentationAdapter(searchResults: [...])
+}
+let code = await CLIExecutor.runSearch(query: "SwiftUI")
+assert(code == 0)
 ```
 
 ## Architecture Gate (SC-005..SC-009)
@@ -35,7 +37,7 @@ Run the gate locally before pushing:
 CI workflow:
 - `.github/workflows/dependency-gate.yml` runs the same gate script on push and pull requests.
 
-## CLI Commands (AsyncParsableCommand)
+## CLI Commands
 
 ```bash
 iDocs search "SwiftUI"
