@@ -1,5 +1,4 @@
 import Foundation
-import Logging
 import iDocsAdapter
 
 public enum CLIEnvironment {
@@ -9,10 +8,6 @@ public enum CLIEnvironment {
 
     nonisolated(unsafe) public static var configFactory: () -> DocumentationConfig = {
         DocumentationConfig.cliDefault()
-    }
-
-    nonisolated(unsafe) public static var loggerFactory: () -> Logger = {
-        Logger(label: "com.snow.idocs-cli")
     }
 
     nonisolated(unsafe) public static var writeStdout: @Sendable (String) -> Void = { message in

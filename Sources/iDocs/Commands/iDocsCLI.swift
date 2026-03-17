@@ -21,36 +21,10 @@ public struct iDocsCLI: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "iDocs",
         abstract: "iDocs CLI",
-        subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self, ServeCommand.self]
+        subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self]
     )
 
     public init() {}
-}
-
-public struct ServeCommand: ParsableCommand {
-    public static let configuration = CommandConfiguration(
-        commandName: "serve",
-        abstract: "Start MCP server"
-    )
-
-    @Flag(name: .long, help: "Run MCP server in HTTP mode")
-    var http: Bool = false
-
-    @Option(name: .long, help: "HTTP port when serving")
-    var port: Int = 8080
-
-    public init() {}
-
-    public mutating func run() throws {
-        let useHTTP = http
-        let chosenPort = port
-        let code = blockingWait {
-            await CLIExecutor.runServe(mode: useHTTP ? .http : .stdio, port: chosenPort)
-        }
-        if code != 0 {
-            throw ExitCode(code)
-        }
-    }
 }
 
 public struct SearchCommand: ParsableCommand {

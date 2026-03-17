@@ -46,8 +46,8 @@ iDocs list --category Frameworks
 Start MCP serving mode explicitly:
 
 ```bash
-iDocs serve
-iDocs serve --http --port 8080
+iDocsMCP
+iDocsMCP --http --port 8080
 ```
 
 ## Build Framework Artifacts

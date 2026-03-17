@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import MCP
-@testable import iDocsApp
+@testable import iDocsMCPApp
 
 @Suite("Transport Tests")
 struct TransportTests {

@@ -1,6 +1,4 @@
 import Foundation
-import ServiceLifecycle
-import Logging
 import iDocsAdapter
 
 public enum CLIExecutor {
@@ -72,34 +70,6 @@ public enum CLIExecutor {
             return 0
         } catch {
             CLIEnvironment.writeStderr(CLIErrorPresenter.message(for: error))
-            return 1
-        }
-    }
-
-    @discardableResult
-    public static func runServe(mode: TransportMode, port: Int) async -> Int32 {
-        let appLogger = CLIEnvironment.loggerFactory()
-        let adapter: any DocumentationService
-        do {
-            adapter = try CLIEnvironment.serviceFactory()
-        } catch {
-            CLIEnvironment.writeStderr(CLIErrorPresenter.message(for: error))
-            return 1
-        }
-
-        let config = CLIEnvironment.configFactory()
-        let server = iDocsServer(mode: mode, port: port, adapter: adapter, config: config, logger: appLogger)
-        let serviceGroup = ServiceGroup(
-            services: [server],
-            gracefulShutdownSignals: [.sigterm, .sigint],
-            logger: appLogger
-        )
-
-        do {
-            try await serviceGroup.run()
-            return 0
-        } catch {
-            CLIEnvironment.writeStderr("Error [INTERNAL]: \(error.localizedDescription)")
             return 1
         }
     }

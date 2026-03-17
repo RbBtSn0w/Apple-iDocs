@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import MCP
 import iDocsAdapter
-@testable import iDocsApp
+@testable import iDocsMCPApp
 
 @Suite("iDocsServer Tests")
 struct iDocsServerTests {
