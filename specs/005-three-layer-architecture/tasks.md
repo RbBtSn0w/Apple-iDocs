@@ -22,7 +22,7 @@
 - [x] T010 [US1] Remove CLI and ArgumentParser framework dependencies from `Sources/iDocsKit/`
 - [x] T011 [US1] Implement `DefaultDocumentationAdapter` conforming to `DocumentationService` in `Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift`
 - [x] T012 [US1] Implement CLI bootstrap and adapter/config injection via `CLIEnvironment` in `Sources/iDocs/Main.swift` and `Sources/iDocs/Commands/`
-- [ ] T013 [P] [US1] Migrate `search`, `fetch`, `list` CLI commands to `AsyncParsableCommand` and Adapter API in `Sources/iDocs/Commands/` (currently `ParsableCommand + async bridge` due ArgumentParser runtime compatibility in current Tuist setup)
+- [x] T013 [P] [US1] Migrate `search`, `fetch`, `list` CLI commands to `AsyncParsableCommand` and Adapter API in `Sources/iDocs/Commands/`
 - [x] T014 [P] [US1] Implement user-friendly `DocumentationError` handling and output mapping in `Sources/iDocs/Commands/`
 - [x] T015 [US1] Enforce runtime version compatibility in the Adapter init/startup (FR-014), fail fast on incompatible major versions, and surface a clear error to CLI/App
 - [x] T025 [Test-First] Add CLI tests that use `MockDocumentationAdapter` to validate: adapter-only access, standardized error output, and version mismatch reporting

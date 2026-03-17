@@ -1,23 +1,8 @@
 import Foundation
 import ArgumentParser
 
-private final class WaitBox: @unchecked Sendable {
-    var code: Int32 = 1
-    let semaphore = DispatchSemaphore(value: 0)
-}
-
-@inline(__always)
-private func blockingWait(_ operation: @escaping @Sendable () async -> Int32) -> Int32 {
-    let box = WaitBox()
-    Task {
-        box.code = await operation()
-        box.semaphore.signal()
-    }
-    box.semaphore.wait()
-    return box.code
-}
-
-public struct iDocsCLI: ParsableCommand {
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public struct iDocsCLI: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "iDocs",
         abstract: "iDocs CLI",
@@ -27,7 +12,8 @@ public struct iDocsCLI: ParsableCommand {
     public init() {}
 }
 
-public struct SearchCommand: ParsableCommand {
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public struct SearchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "search",
         abstract: "Search documentation"
@@ -38,18 +24,16 @@ public struct SearchCommand: ParsableCommand {
 
     public init() {}
 
-    public mutating func run() throws {
-        let term = query
-        let code = blockingWait {
-            await CLIExecutor.runSearch(query: term)
-        }
+    public mutating func run() async throws {
+        let code = await CLIExecutor.runSearch(query: query)
         if code != 0 {
             throw ExitCode(code)
         }
     }
 }
 
-public struct FetchCommand: ParsableCommand {
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public struct FetchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "fetch",
         abstract: "Fetch documentation content"
@@ -60,18 +44,16 @@ public struct FetchCommand: ParsableCommand {
 
     public init() {}
 
-    public mutating func run() throws {
-        let identifier = id
-        let code = blockingWait {
-            await CLIExecutor.runFetch(id: identifier)
-        }
+    public mutating func run() async throws {
+        let code = await CLIExecutor.runFetch(id: id)
         if code != 0 {
             throw ExitCode(code)
         }
     }
 }
 
-public struct ListCommand: ParsableCommand {
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public struct ListCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List technologies"
@@ -82,11 +64,8 @@ public struct ListCommand: ParsableCommand {
 
     public init() {}
 
-    public mutating func run() throws {
-        let filter = category
-        let code = blockingWait {
-            await CLIExecutor.runList(category: filter)
-        }
+    public mutating func run() async throws {
+        let code = await CLIExecutor.runList(category: category)
         if code != 0 {
             throw ExitCode(code)
         }

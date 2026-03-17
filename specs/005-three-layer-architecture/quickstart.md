@@ -37,7 +37,7 @@ Run the gate locally before pushing:
 CI workflow:
 - `.github/workflows/dependency-gate.yml` runs the same gate script on push and pull requests.
 
-## CLI Commands
+## CLI Commands (AsyncParsableCommand)
 
 ```bash
 iDocs search "SwiftUI"
