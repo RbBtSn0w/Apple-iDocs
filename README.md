@@ -38,6 +38,28 @@ iDocs is a high-performance Model Context Protocol (MCP) server written in Swift
 
 The binary will be located in the build directory.
 
+### Silent CLI Workflow (No Xcode IDE)
+
+Use the helper script to run build/test/run quietly from terminal:
+
+```bash
+./scripts/tuist-silent.sh build iDocs
+./scripts/tuist-silent.sh run iDocs --help
+./scripts/tuist-silent.sh test
+./scripts/tuist-silent.sh test-all
+```
+
+For MCP runtime:
+
+```bash
+./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
+```
+
+Notes:
+- This workflow uses `tuist xcodebuild ... -quiet` under the hood.
+- It does not require opening Xcode IDE.
+- Run output from your app/test still appears, while build noise is minimized.
+
 ## Usage
 
 ### Stdio Mode (Default)

@@ -59,3 +59,20 @@ Build distributable XCFrameworks for App integration:
 ```bash
 ./scripts/build-xcframework.sh
 ```
+
+## Silent Run/Test (Recommended)
+
+Use quiet terminal-only commands (no Xcode IDE interaction):
+
+```bash
+./scripts/tuist-silent.sh build iDocs
+./scripts/tuist-silent.sh run iDocs --help
+./scripts/tuist-silent.sh test
+./scripts/tuist-silent.sh test-all
+```
+
+Run MCP independently:
+
+```bash
+./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
+```
