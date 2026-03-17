@@ -74,9 +74,18 @@ let project = Project(
             sources: ["Sources/iDocs/Main.swift"],
             dependencies: [
                 .target(name: "iDocsApp"),
-                .target(name: "iDocsAdapter"),
-                .external(name: "Logging")
-            ]
+                .target(name: "iDocsAdapter")
+            ],
+            settings: .settings(
+                base: [
+                    "LD_RUNPATH_SEARCH_PATHS": [
+                        "$(inherited)",
+                        "@executable_path",
+                        "@loader_path",
+                        "@executable_path/Frameworks"
+                    ]
+                ]
+            )
         ),
         .target(
             name: "iDocsTests",

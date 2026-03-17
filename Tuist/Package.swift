@@ -8,7 +8,7 @@ import PackageDescription
         productTypes: [
             "MCP": .staticFramework,
             "ServiceLifecycle": .staticFramework,
-            "Logging": .staticFramework,
+            "Logging": .framework,
             "ArgumentParser": .staticFramework
         ]
     )
