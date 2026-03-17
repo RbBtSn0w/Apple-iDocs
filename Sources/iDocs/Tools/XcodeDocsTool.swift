@@ -1,6 +1,5 @@
 import Foundation
 import Logging
-import MCP
 
 public struct XcodeDocsTool {
     private let logger = Logger(label: "com.snow.idocs-xcode-tool")

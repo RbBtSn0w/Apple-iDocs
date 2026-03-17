@@ -1,6 +1,5 @@
 import Foundation
 import Logging
-import MCP
 
 public struct FetchExternalDocTool {
     private let logger = Logger(label: "com.snow.idocs-fetch-external")

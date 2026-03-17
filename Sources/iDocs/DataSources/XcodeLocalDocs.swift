@@ -28,7 +28,7 @@ public struct XcodeLocalDocs {
         for url in contents where url.hasDirectoryPath {
             // Directory names are typically like "iOS 18.0" or contain platform info
             let name = url.lastPathComponent
-            let modificationDate = try url.resourceValues(forKeys: [URLResourceKey.contentModificationDateKey]).contentModificationDate ?? Date()
+            let modificationDate = (try? url.resourceValues(forKeys: [URLResourceKey.contentModificationDateKey]).contentModificationDate) ?? Date()
             
             sdks.append(XcodeLocalDocInfo(
                 sdkVersion: name,
@@ -58,8 +58,13 @@ public struct XcodeLocalDocs {
             if fileManager.fileExists(atPath: docPath.path) {
                 logger.info("Found local documentation at \(docPath.path)")
                 
-                // Use mmap via Data(contentsOf:options:)
-                let data = try Data(contentsOf: docPath, options: .mappedIfSafe)
+                // Keep mmap behavior for real FileManager, but honor injected FileSystem for tests/mocks.
+                let data: Data
+                if fileManager is FileManager {
+                    data = try Data(contentsOf: docPath, options: .mappedIfSafe)
+                } else {
+                    data = try fileManager.read(from: docPath)
+                }
                 return try JSONDecoder().decode(DocCContent.self, from: data)
             }
         }

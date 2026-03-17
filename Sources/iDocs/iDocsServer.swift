@@ -2,9 +2,10 @@ import Foundation
 import MCP
 import ServiceLifecycle
 import Logging
+import iDocsAdapter
 import iDocsKit
 
-public enum TransportMode: String {
+public enum TransportMode: String, Sendable {
     case stdio
     case http
 }
@@ -14,11 +15,25 @@ public actor iDocsServer: Service {
     private let logger: Logger
     private let mode: TransportMode
     private let port: Int
+    private let adapter: any DocumentationService
+    private let config: DocumentationConfig
     
-    public init(mode: TransportMode = .stdio, port: Int = 8080) {
+    public init(
+        mode: TransportMode = .stdio,
+        port: Int = 8080,
+        adapter: (any DocumentationService)? = nil,
+        config: DocumentationConfig = .cliDefault(),
+        logger: Logger = Logger(label: "com.snow.idocs-server")
+    ) {
+        let resolvedAdapter = adapter ?? (try! DefaultDocumentationAdapter(
+            logger: StderrDocumentationLogger(underlying: logger)
+        ))
+
         self.mode = mode
         self.port = port
-        self.logger = Logger(label: "com.snow.idocs-server")
+        self.logger = logger
+        self.config = config
+        self.adapter = resolvedAdapter
         self.server = Server(
             name: "iDocs",
             version: "1.0.0",
@@ -144,10 +159,7 @@ public actor iDocsServer: Service {
                 return .init(content: [.text("Missing query parameter")], isError: true)
             }
             return await runTool {
-                let results = try await SearchDocsTool(
-                    api: AppleJSONAPI(session: URLSession.shared),
-                    xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider())
-                ).run(query: query)
+                let results = try await adapter.search(query: query, config: config)
                 return formatSearchResults(results)
             }
             
@@ -156,11 +168,8 @@ public actor iDocsServer: Service {
                 return .init(content: [.text("Missing path parameter")], isError: true)
             }
             return await runTool {
-                return try await FetchDocTool(
-                    api: AppleJSONAPI(session: URLSession.shared),
-                    xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider()),
-                    diskCache: DiskCache(name: "docs", fileManager: FileManager.default)
-                ).run(path: path)
+                let content = try await adapter.fetch(id: path, config: config)
+                return content.body
             }
             
         case "xcode_docs":
@@ -172,7 +181,8 @@ public actor iDocsServer: Service {
 
         case "browse_technologies", "list_technologies":
             return await runTool {
-                return try await BrowseTechnologiesTool().run()
+                let technologies = try await adapter.listTechnologies(config: config)
+                return formatTechnologies(technologies)
             }
 
         case "fetch_hig":
@@ -213,19 +223,36 @@ public actor iDocsServer: Service {
         }
     }
     
-    nonisolated func formatSearchResults(_ results: [SearchResult]) -> String {
+    nonisolated func formatSearchResults(_ results: [iDocsAdapter.SearchResult]) -> String {
         if results.isEmpty {
             return "No matching documentation found."
         }
         
         var output = "### Apple Documentation Search Results\n\n"
         for result in results {
-            output += "#### \(result.title) (\(result.kind.rawValue))\n"
-            if let abstract = result.abstract {
-                output += "\(abstract)\n"
+            output += "#### \(result.title)\n"
+            if let snippet = result.snippet {
+                output += "\(snippet)\n"
             }
-            output += "- Path: `\(result.path)`\n"
-            output += "- Source: \(result.source.rawValue)\n\n"
+            output += "- ID: `\(result.id)`\n"
+            output += "- Technology: \(result.technology)\n\n"
+        }
+        return output
+    }
+
+    nonisolated func formatTechnologies(_ technologies: [iDocsAdapter.Technology]) -> String {
+        if technologies.isEmpty {
+            return "No technologies found in the catalog."
+        }
+
+        var output = "### Apple Technologies Catalog\n\n"
+        for tech in technologies {
+            output += "- **\(tech.name)**"
+            if let category = tech.category {
+                output += " (\(category))"
+            }
+            output += "\n"
+            output += "  - ID: `\(tech.id)`\n"
         }
         return output
     }
@@ -266,22 +293,32 @@ public actor iDocsServer: Service {
     }
 }
 
-@main
-struct Main {
-    static func main() async {
-        let (mode, port) = iDocsServer.parseArgs(ProcessInfo.processInfo.arguments)
-        
-        let server = iDocsServer(mode: mode, port: port)
-        let serviceGroup = ServiceGroup(
-            services: [server],
-            gracefulShutdownSignals: [.sigterm, .sigint],
-            logger: Logger(label: "com.snow.idocs-main")
-        )
-        
-        do {
-            try await serviceGroup.run()
-        } catch {
-            print("Server error: \(error)")
+public struct StderrDocumentationLogger: DocumentationLogger, @unchecked Sendable {
+    let underlying: Logger
+
+    public init(underlying: Logger) {
+        self.underlying = underlying
+    }
+
+    public func log(level: DocumentationLogLevel, message: String, context: [String : String]?) {
+        switch level {
+        case .debug:
+            underlying.debug("\(message) \(contextDescription(context))")
+        case .info:
+            underlying.info("\(message) \(contextDescription(context))")
+        case .warning:
+            underlying.warning("\(message) \(contextDescription(context))")
+        case .error:
+            underlying.error("\(message) \(contextDescription(context))")
         }
+    }
+
+    private func contextDescription(_ context: [String: String]?) -> String {
+        guard let context, !context.isEmpty else { return "" }
+        let parts = context.keys.sorted().compactMap { key -> String? in
+            guard let value = context[key] else { return nil }
+            return "\(key)=\(value)"
+        }
+        return "[\(parts.joined(separator: ", "))]"
     }
 }

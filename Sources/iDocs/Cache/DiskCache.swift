@@ -1,14 +1,26 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 
 public struct DiskCache {
     private let cacheDirectory: URL
     private let fileManager: any FileSystem
+    private let enableFileLocking: Bool
     
-    public init(name: String, fileManager: any FileSystem = FileManager.default) {
+    public init(name: String, fileManager: any FileSystem = FileManager.default, enableFileLocking: Bool = false) {
         self.fileManager = fileManager
+        self.enableFileLocking = enableFileLocking
         let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         self.cacheDirectory = cachesURL.appendingPathComponent("iDocs").appendingPathComponent(name)
         
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+    }
+
+    public init(directory: URL, fileManager: any FileSystem = FileManager.default, enableFileLocking: Bool = false) {
+        self.fileManager = fileManager
+        self.enableFileLocking = enableFileLocking
+        self.cacheDirectory = directory
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
     
@@ -36,7 +48,9 @@ public struct DiskCache {
         let wrapper = DiskCacheWrapper(data: value, expiresAt: expiresAt)
         
         let data = try JSONEncoder().encode(wrapper)
-        try fileManager.write(data, to: fileURL)
+        try withOptionalFileLock(for: fileURL) {
+            try fileManager.write(data, to: fileURL)
+        }
     }
     
     public func remove(_ key: String) async throws {
@@ -51,6 +65,30 @@ public struct DiskCache {
         for url in contents {
             try fileManager.removeItem(at: url)
         }
+    }
+}
+
+private extension DiskCache {
+    func withOptionalFileLock(for fileURL: URL, _ body: () throws -> Void) throws {
+        guard enableFileLocking else {
+            try body()
+            return
+        }
+
+#if canImport(Darwin)
+        let lockURL = fileURL.appendingPathExtension("lock")
+        let fd = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            throw NSError(domain: "DiskCache", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to open lock file."])
+        }
+        defer { close(fd) }
+
+        guard flock(fd, LOCK_EX) == 0 else {
+            throw NSError(domain: "DiskCache", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unable to acquire file lock."])
+        }
+        defer { _ = flock(fd, LOCK_UN) }
+#endif
+        try body()
     }
 }
 
