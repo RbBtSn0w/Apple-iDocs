@@ -12,7 +12,7 @@
 - [ ] CHK001 - Are explicit acceptance requirements defined for all three layers (Application, Adapter, Common) rather than only high-level role descriptions? [Completeness, Spec §FR-001..FR-004]
 - [ ] CHK002 - Does the spec define mandatory behavior when injected configuration is missing, partial, or malformed at startup? [Gap, Spec §FR-003]
 - [ ] CHK003 - Are contract-level requirements specified for all user-visible operations (`search`, `fetch`, `list`) including inputs, outputs, and failure semantics? [Completeness, Spec §Key Entities; Contracts §adapter-protocol]
-- [ ] CHK004 - Are requirements explicit about what "remove MCP-only dependencies from default build graph" includes and excludes? [Clarity, Tasks §T003]
+- [ ] CHK004 - Are requirements explicit about what "remove MCP service targets/dependencies/runtime code" includes and excludes? [Clarity, Tasks §T003]
 
 ## Requirement Clarity
 

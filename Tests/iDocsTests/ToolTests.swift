@@ -63,12 +63,4 @@ struct ToolTests {
         #expect(techs.count == 1)
         #expect(techs.first?.name == "SwiftUI")
     }
-    
-    @Test("FetchVideoTranscriptTool handles basic videoID")
-    func videoTranscriptBasic() async throws {
-        let tool = FetchVideoTranscriptTool()
-        let result = try await tool.run(videoID: "wwdc2024-101")
-        
-        #expect(!result.isEmpty)
-    }
 }

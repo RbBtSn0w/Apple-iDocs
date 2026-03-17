@@ -19,9 +19,7 @@ Defaults:
 Examples:
   ./scripts/tuist-silent.sh build
   ./scripts/tuist-silent.sh run idocs --help
-  ./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
   ./scripts/tuist-silent.sh test
-  ./scripts/tuist-silent.sh test iDocsMCPTests
   ./scripts/tuist-silent.sh test-all
 EOF
 }
@@ -36,9 +34,6 @@ resolve_target() {
   case "$input" in
     idocs|iDocs)
       echo "iDocs:idocs"
-      ;;
-    iDocsMCP)
-      echo "iDocsMCP:iDocsMCP"
       ;;
     *)
       echo "$input:$input"
@@ -79,11 +74,8 @@ case "$cmd" in
       iDocsTests)
         test_scheme="iDocs"
         ;;
-      iDocsMCPTests)
-        test_scheme="iDocsMCP"
-        ;;
       *)
-        echo "Error: unsupported test target '$test_target' (supported: iDocsTests, iDocsMCPTests)" >&2
+        echo "Error: unsupported test target '$test_target' (supported: iDocsTests)" >&2
         exit 1
         ;;
     esac
@@ -97,7 +89,6 @@ case "$cmd" in
     ;;
   test-all)
     "$0" test iDocsTests
-    "$0" test iDocsMCPTests
     ;;
   -h|--help|help)
     usage

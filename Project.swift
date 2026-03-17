@@ -61,23 +61,6 @@ let project = Project(
             ]
         ),
         .target(
-            name: "iDocsMCPApp",
-            destinations: .macOS,
-            product: .staticLibrary,
-            bundleId: "com.snow.idocs.mcpapp",
-            deploymentTargets: .macOS("13.0"),
-            sources: [
-                "Sources/iDocs/iDocsServer.swift"
-            ],
-            dependencies: [
-                .target(name: "iDocsAdapter"),
-                .target(name: "iDocsKit"),
-                .external(name: "MCP"),
-                .external(name: "ServiceLifecycle"),
-                .external(name: "Logging")
-            ]
-        ),
-        .target(
             name: "iDocs",
             destinations: .macOS,
             product: .commandLineTool,
@@ -91,30 +74,6 @@ let project = Project(
             settings: .settings(
                 base: [
                     "PRODUCT_NAME": "idocs",
-                    "LD_RUNPATH_SEARCH_PATHS": [
-                        "$(inherited)",
-                        "@executable_path",
-                        "@loader_path",
-                        "@executable_path/Frameworks"
-                    ]
-                ]
-            )
-        ),
-        .target(
-            name: "iDocsMCP",
-            destinations: .macOS,
-            product: .commandLineTool,
-            bundleId: "com.snow.idocs.mcp",
-            deploymentTargets: .macOS("13.0"),
-            sources: ["Sources/iDocsMCP/**"],
-            dependencies: [
-                .target(name: "iDocsMCPApp"),
-                .target(name: "iDocsAdapter"),
-                .external(name: "ServiceLifecycle"),
-                .external(name: "Logging")
-            ],
-            settings: .settings(
-                base: [
                     "LD_RUNPATH_SEARCH_PATHS": [
                         "$(inherited)",
                         "@executable_path",
@@ -146,20 +105,6 @@ let project = Project(
             sources: ["Tests/iDocsAdapterTests/**"],
             dependencies: [
                 .target(name: "iDocsAdapter")
-            ]
-        ),
-        .target(
-            name: "iDocsMCPTests",
-            destinations: .macOS,
-            product: .unitTests,
-            bundleId: "com.snow.idocsMCPTests",
-            deploymentTargets: .macOS("13.0"),
-            sources: ["Tests/iDocsMCPTests/**"],
-            dependencies: [
-                .target(name: "iDocsMCP"),
-                .target(name: "iDocsMCPApp"),
-                .target(name: "iDocsAdapter"),
-                .external(name: "MCP")
             ]
         )
     ]

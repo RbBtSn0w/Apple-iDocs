@@ -3,7 +3,7 @@
 ## Phase 0: Setup
 - [x] T001 Define `iDocsKit`, `iDocsAdapter`, and `iDocs` targets with correct dependencies in `Project.swift`
 - [x] T002 Implement automated Gate checks (SC-005..SC-009) as a script (e.g., `scripts/arch-gate.sh`) and wire it into CI if available (e.g., `.github/workflows/dependency-gate.yml`)
-- [x] T003 Remove MCP-only targets and dependencies from the default build graph (CLI + future App only)
+- [x] T003 Remove MCP service targets, dependencies, and runtime code from the project (CLI + future App only)
 
 ## Phase 1: Foundational
 - [x] T004 [P] Implement `DocumentationConfig` model in `Sources/iDocsAdapter/Models/DocumentationConfig.swift`

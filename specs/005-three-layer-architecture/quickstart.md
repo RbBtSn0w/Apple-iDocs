@@ -45,13 +45,6 @@ idocs fetch "/documentation/swiftui/view"
 idocs list --category Frameworks
 ```
 
-Start MCP serving mode explicitly:
-
-```bash
-iDocsMCP
-iDocsMCP --http --port 8080
-```
-
 ## Build Framework Artifacts
 
 Build distributable XCFrameworks for App integration:
@@ -69,10 +62,4 @@ Use quiet terminal-only commands (no Xcode IDE interaction):
 ./scripts/tuist-silent.sh run idocs --help
 ./scripts/tuist-silent.sh test
 ./scripts/tuist-silent.sh test-all
-```
-
-Run MCP independently:
-
-```bash
-./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
 ```

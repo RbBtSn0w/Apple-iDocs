@@ -1,6 +1,6 @@
-# iDocs: Swift-Native Apple Documentation MCP Server
+# iDocs: Swift-Native Apple Documentation CLI
 
-iDocs is a high-performance Model Context Protocol (MCP) server written in Swift, designed to provide AI agents with seamless access to Apple's official documentation, HIG, and WWDC transcripts.
+iDocs is a high-performance Swift CLI for querying Apple's documentation, rendering Markdown output, and listing technology catalogs.
 
 ## Features
 
@@ -8,10 +8,6 @@ iDocs is a high-performance Model Context Protocol (MCP) server written in Swift
 - **Fetch Doc**: Get high-quality Markdown content for any documentation path.
 - **Xcode Local Docs**: Access documentation already downloaded by Xcode (supports offline mode).
 - **Browse Technologies**: Explore Apple's framework and technology catalog.
-- **HIG Access**: Fetch Human Interface Guidelines content.
-- **External DocC**: Fetch documentation from third-party Swift-DocC sites.
-- **WWDC Transcripts**: Access video transcripts for WWDC sessions.
-- **Dual Transport**: Supports both `stdio` (IDE integration) and `http` (distributed use) modes.
 - **Intelligent Caching**: Layered memory and disk caching for maximum performance.
 
 ## Installation
@@ -49,12 +45,6 @@ Use the helper script to run build/test/run quietly from terminal:
 ./scripts/tuist-silent.sh test-all
 ```
 
-For MCP runtime:
-
-```bash
-./scripts/tuist-silent.sh run iDocsMCP --http --port 8080
-```
-
 Notes:
 - This workflow uses `tuist xcodebuild ... -quiet` under the hood.
 - It does not require opening Xcode IDE.
@@ -62,15 +52,16 @@ Notes:
 
 ## Usage
 
-### Stdio Mode (Default)
-Useful for integration with Claude Desktop or Cursor.
+### CLI
 ```bash
 ./idocs
 ```
 
-### HTTP Mode
+### Subcommands
 ```bash
-./idocs --http --port 8080
+./idocs search "SwiftUI"
+./idocs fetch "/documentation/swiftui/view"
+./idocs list
 ```
 
 ## Testing
@@ -94,31 +85,6 @@ swift test --filter IntegrationTests
 Notes:
 - Default tests do not access external networks
 - Integration tests validate live endpoints and may fail if services are unavailable
-
-## MCP Tools
-
-- `search_docs(query)`: Search documentation.
-- `fetch_doc(path)`: Fetch documentation content.
-- `xcode_docs(query, list)`: Query local Xcode documentation.
-- `browse_technologies()`: List all technologies.
-- `fetch_hig(topic)`: Get HIG content.
-- `fetch_external_doc(url)`: Get third-party DocC content.
-- `fetch_video_transcript(videoID)`: Get WWDC transcripts.
-
-## Configuration for AI Clients
-
-Add the following to your MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "idocs": {
-      "command": "/path/to/idocs",
-      "args": []
-    }
-  }
-}
-```
 
 ## License
 MIT
