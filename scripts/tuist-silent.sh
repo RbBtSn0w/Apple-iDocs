@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+DERIVED_DATA_PATH="${IDOCS_DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex}"
 
 tuist_safe() {
   local tmp
@@ -49,12 +50,26 @@ run_xcodebuild_silent() {
   local tmp
   tmp="$(mktemp)"
 
-  if xcodebuild "$@" >"$tmp" 2>&1; then
+  if xcodebuild -derivedDataPath "$DERIVED_DATA_PATH" "$@" >"$tmp" 2>&1; then
     if ! rg -n "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
       tail -n 20 "$tmp"
     fi
     rm -f "$tmp"
     return 0
+  fi
+
+  if rg -n "Trying to load an unsigned library|code signature .* not valid for use in process|The bundle .* couldn’t be loaded" "$tmp" >/dev/null 2>&1; then
+    rm -rf \
+      "$DERIVED_DATA_PATH/Build/Products/Debug/iDocsTests.xctest" \
+      "$DERIVED_DATA_PATH/Build/Intermediates.noindex/iDocs.build/Debug/iDocsTests.build"
+
+    if xcodebuild -derivedDataPath "$DERIVED_DATA_PATH" "$@" >"$tmp" 2>&1; then
+      if ! rg -n "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
+        tail -n 20 "$tmp"
+      fi
+      rm -f "$tmp"
+      return 0
+    fi
   fi
 
   echo "xcodebuild failed; recent output:" >&2
@@ -85,6 +100,10 @@ EOF
 
 latest_binary() {
   local name="$1"
+  if [[ -f "$DERIVED_DATA_PATH/Build/Products/Debug/$name" ]]; then
+    echo "$DERIVED_DATA_PATH/Build/Products/Debug/$name"
+    return 0
+  fi
   find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug/$name" -type f 2>/dev/null | head -n 1
 }
 
@@ -143,11 +162,13 @@ case "$cmd" in
         ;;
     esac
     ensure_workspace
+    rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
     run_xcodebuild_silent \
       test \
       -workspace iDocs.xcworkspace \
       -scheme "$test_scheme" \
       -destination "platform=macOS,arch=arm64" \
+      -parallel-testing-enabled NO \
       -only-testing:"$test_target"
     ;;
   test-all)

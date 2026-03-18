@@ -11,6 +11,7 @@ DESTINATION="${IDOCS_DESTINATION:-platform=macOS,arch=arm64}"
 TEST_TARGET="${IDOCS_TEST_TARGET:-iDocsTests}"
 RESULT_BUNDLE="${IDOCS_COVERAGE_RESULT_BUNDLE:-/tmp/idocs-coverage.xcresult}"
 LOG_FILE="${IDOCS_COVERAGE_LOG:-/tmp/idocs-coverage.log}"
+DERIVED_DATA_PATH="${IDOCS_COVERAGE_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex-coverage}"
 
 if [[ ! -d "$WORKSPACE" ]]; then
   echo "Workspace missing: $WORKSPACE. Trying 'tuist generate'..."
@@ -18,12 +19,15 @@ if [[ ! -d "$WORKSPACE" ]]; then
 fi
 
 rm -rf "$RESULT_BUNDLE"
+rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
 
 if ! xcodebuild test \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
   -workspace "$WORKSPACE" \
   -scheme "$SCHEME" \
   -destination "$DESTINATION" \
   -only-testing:"$TEST_TARGET" \
+  -parallel-testing-enabled NO \
   -enableCodeCoverage YES \
   -resultBundlePath "$RESULT_BUNDLE" >"$LOG_FILE" 2>&1; then
   echo "Coverage run failed. Recent output:"
