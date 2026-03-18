@@ -23,3 +23,17 @@ jobs:
         
       - name: Tuist Test
         run: tuist test iDocs
+
+  e2e-cli:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tuist
+        run: curl -Ls https://install.tuist.io | bash
+
+      - name: Install Node dependencies for npm wrapper
+        run: npm --prefix npm install
+
+      - name: Run iDocs CLI E2E
+        run: ./scripts/e2e-cli.sh

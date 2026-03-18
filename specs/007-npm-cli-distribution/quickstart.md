@@ -14,6 +14,12 @@ npm --prefix npm link
 idocs --help
 ```
 
+Or run unified E2E validation:
+
+```bash
+./scripts/e2e-cli.sh
+```
+
 ## 3) npm package smoke check
 
 ```bash

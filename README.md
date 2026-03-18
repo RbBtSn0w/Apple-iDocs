@@ -73,6 +73,12 @@ IDOCS_LOCAL_BINARY="$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/
 "$TMP_DIR/node_modules/.bin/idocs" --help
 ```
 
+Unified E2E validation (link + pack paths):
+
+```bash
+./scripts/e2e-cli.sh
+```
+
 Release packaging for GitHub Releases:
 
 ```bash
@@ -142,6 +148,7 @@ Notes:
 ./scripts/arch-gate.sh
 ./scripts/spec-trace-gate.sh
 ./scripts/coverage-gate.sh 60
+./scripts/e2e-cli.sh
 ```
 
 Notes:

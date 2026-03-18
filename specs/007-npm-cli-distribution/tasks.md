@@ -18,5 +18,7 @@
 
 ## Phase 4 - Validation
 
-- [ ] T008 Run local `npm link` validation for `idocs --help`
-- [ ] T009 Run `npm pack` + local install smoke test
+- [x] T008 Run local `npm link` validation for `idocs --help`
+- [x] T009 Run `npm pack` + local install smoke test
+- [x] T010 Add unified E2E CLI validation script in `scripts/e2e-cli.sh`
+- [x] T011 Define E2E contract and structured assertion criteria in `specs/007-npm-cli-distribution/contracts/e2e-interface.md`
