@@ -78,6 +78,24 @@ struct ToolTests {
         #expect(techs.first?.name == "SwiftUI")
     }
 
+    @Test("AppleJSONAPI parses modern technologies payload")
+    func parseModernTechnologiesPayload() async throws {
+        let session = MockNetworkSession()
+        if let techURL = URLHelpers.technologiesURL() {
+            session.setResponse(
+                for: techURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: techURL)
+            )
+        }
+
+        let api = AppleJSONAPI(session: session)
+        let techs = try await api.fetchTechnologies()
+        #expect(techs.count == 1)
+        #expect(techs.first?.name == "SwiftUI")
+        #expect(techs.first?.url == "/documentation/swiftui")
+    }
+
     @Test("SearchDocsTool falls back to sosumi when apple remote misses")
     func searchToolFallsBackToSosumi() async throws {
         let api = makeMockAPI(queries: ["NoLocalHit"])

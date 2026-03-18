@@ -71,9 +71,7 @@ public actor AppleJSONAPI {
         }
 
         let data = try await fetchWithRetry(url: url)
-        let decoder = JSONDecoder()
-        let response = try decoder.decode(TechnologiesResponse.self, from: data)
-        return response.technologies
+        return try parseTechnologies(from: data)
     }
     
     private func fetchWithRetry(url: URL, maxRetries: Int = 3) async throws -> Data {
@@ -174,12 +172,77 @@ public actor AppleJSONAPI {
         score -= Double(title.count) * 0.01
         return score
     }
+
+    private func parseTechnologies(from data: Data) throws -> [Technology] {
+        let decoder = JSONDecoder()
+
+        if let legacy = try? decoder.decode(TechnologiesResponse.self, from: data) {
+            return legacy.technologies
+        }
+
+        let modern = try decoder.decode(TechnologyCatalogResponse.self, from: data)
+        var results: [Technology] = []
+
+        for section in modern.sections ?? [] {
+            for group in section.groups ?? [] {
+                for item in group.technologies ?? [] {
+                    guard let name = item.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !name.isEmpty else {
+                        continue
+                    }
+
+                    let path = item.url
+                        ?? item.destination?.identifier.flatMap(pathFromDocIdentifier)
+                        ?? "/documentation/\(name)"
+
+                    let category = item.kind
+                        ?? item.tags?.first
+                        ?? "technology"
+
+                    results.append(Technology(name: name, url: path, kind: category))
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func pathFromDocIdentifier(_ identifier: String) -> String? {
+        guard let markerRange = identifier.range(of: "/documentation/") else {
+            return nil
+        }
+        return String(identifier[markerRange.lowerBound...])
+    }
 }
 
 // MARK: - API Response Types
 
 private struct TechnologiesResponse: Codable {
     let technologies: [Technology]
+}
+
+private struct TechnologyCatalogResponse: Codable {
+    let sections: [TechnologySection]?
+}
+
+private struct TechnologySection: Codable {
+    let groups: [TechnologyGroup]?
+}
+
+private struct TechnologyGroup: Codable {
+    let technologies: [TechnologyItem]?
+}
+
+private struct TechnologyItem: Codable {
+    let title: String?
+    let tags: [String]?
+    let kind: String?
+    let url: String?
+    let destination: TechnologyDestination?
+}
+
+private struct TechnologyDestination: Codable {
+    let identifier: String?
 }
 
 public struct Technology: Codable, Sendable {

@@ -35,6 +35,31 @@ enum MockPayloads {
     }
     """.data(using: .utf8)!
 
+    static let technologiesModernJSON = """
+    {
+      "schemaVersion": { "major": 0, "minor": 3, "patch": 0 },
+      "sections": [
+        {
+          "kind": "technologies",
+          "groups": [
+            {
+              "technologies": [
+                {
+                  "title": "SwiftUI",
+                  "tags": ["Frameworks", "UI"],
+                  "destination": {
+                    "type": "reference",
+                    "identifier": "doc://com.apple.documentation/documentation/swiftui"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    """.data(using: .utf8)!
+
     static let sosumiSearchJSON = """
     {
         "query": "View",
