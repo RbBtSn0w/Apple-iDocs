@@ -10,11 +10,6 @@ struct AppleAPIMockTests {
         let mockSession = MockNetworkSession()
         let api = AppleJSONAPI(session: mockSession)
         
-        // Setup mock to fail twice then succeed
-        let successData = """
-        { "results": [] }
-        """.data(using: .utf8)!
-        let successResponse = HTTPURLResponse(url: URL(string: "https://apple.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         let errorResponse = HTTPURLResponse(url: URL(string: "https://apple.com")!, statusCode: 403, httpVersion: nil, headerFields: nil)!
         
         // Since AppleJSONAPI uses a loop, we can't easily stub sequence in this simple mock

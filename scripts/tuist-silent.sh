@@ -4,6 +4,65 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+tuist_safe() {
+  local tmp
+  tmp="$(mktemp)"
+
+  if "$@" >"$tmp" 2>&1; then
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  if rg -n "recent-paths.json" "$tmp" >/dev/null 2>&1; then
+    rm -f "$HOME/.local/state/tuist/recent-paths.json"
+    mkdir -p "$HOME/.local/state/tuist"
+    touch "$HOME/.local/state/tuist/recent-paths.json"
+    sleep 1
+
+    if "$@" >"$tmp" 2>&1; then
+      cat "$tmp"
+      rm -f "$tmp"
+      return 0
+    fi
+  fi
+
+  cat "$tmp" >&2
+  rm -f "$tmp"
+  return 1
+}
+
+ensure_workspace() {
+  if [[ -d "iDocs.xcworkspace" ]]; then
+    return 0
+  fi
+
+  if tuist_safe tuist generate >/dev/null; then
+    return 0
+  fi
+
+  echo "Error: iDocs.xcworkspace is missing and 'tuist generate' failed." >&2
+  return 1
+}
+
+run_xcodebuild_silent() {
+  local tmp
+  tmp="$(mktemp)"
+
+  if xcodebuild "$@" >"$tmp" 2>&1; then
+    if ! rg -n "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
+      tail -n 20 "$tmp"
+    fi
+    rm -f "$tmp"
+    return 0
+  fi
+
+  echo "xcodebuild failed; recent output:" >&2
+  tail -n 120 "$tmp" >&2
+  rm -f "$tmp"
+  return 1
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -43,8 +102,12 @@ resolve_target() {
 
 build_quiet() {
   local target_scheme="$1"
-  tuist generate >/dev/null
-  tuist xcodebuild build -workspace iDocs.xcworkspace -scheme "$target_scheme" -quiet
+  ensure_workspace
+  run_xcodebuild_silent \
+    build \
+    -workspace iDocs.xcworkspace \
+    -scheme "$target_scheme" \
+    -destination "platform=macOS,arch=arm64"
 }
 
 cmd="${1:-}"
@@ -79,13 +142,13 @@ case "$cmd" in
         exit 1
         ;;
     esac
-    tuist generate >/dev/null
-    tuist xcodebuild test \
+    ensure_workspace
+    run_xcodebuild_silent \
+      test \
       -workspace iDocs.xcworkspace \
       -scheme "$test_scheme" \
-      -destination "platform=macOS" \
-      -only-testing:"$test_target" \
-      -quiet
+      -destination "platform=macOS,arch=arm64" \
+      -only-testing:"$test_target"
     ;;
   test-all)
     "$0" test iDocsTests

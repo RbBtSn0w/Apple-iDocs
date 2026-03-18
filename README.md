@@ -47,9 +47,10 @@ Use the helper script to run build/test/run quietly from terminal:
 ```
 
 Notes:
-- This workflow uses `tuist xcodebuild ... -quiet` under the hood.
+- This workflow wraps `xcodebuild` directly and prints only summary lines on success.
+- If `iDocs.xcworkspace` is missing, it attempts `tuist generate` automatically.
 - It does not require opening Xcode IDE.
-- Run output from your app/test still appears, while build noise is minimized.
+- On failures, it prints recent logs for quick diagnostics.
 
 ## Usage
 

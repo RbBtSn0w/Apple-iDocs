@@ -56,11 +56,25 @@ struct AppleSearchResponse: Codable {
 
 struct AppleSearchResult: Codable {
     let title: String
-    let type: String
+    let type: String?
+    let kindValue: String?
     let url: String
-    let abstract: String?
+    let abstract: [InlineText]?
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case type
+        case kindValue = "kind"
+        case url
+        case abstract
+    }
     
     var kind: DocumentKind {
-        return DocumentKind(rawValue: type) ?? .overview
+        return DocumentKind(rawValue: kindValue ?? type ?? "") ?? .overview
     }
+}
+
+struct InlineText: Codable {
+    let type: String?
+    let text: String?
 }

@@ -4,9 +4,11 @@
 
 ```bash
 tuist install
-tuist generate
 ./scripts/tuist-silent.sh build iDocs
 ```
+
+Note:
+- `tuist-silent.sh` will auto-run `tuist generate` only when `iDocs.xcworkspace` is missing.
 
 ## 2) Basic CLI Contract Check
 

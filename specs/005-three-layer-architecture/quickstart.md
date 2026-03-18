@@ -63,3 +63,7 @@ Use quiet terminal-only commands (no Xcode IDE interaction):
 ./scripts/tuist-silent.sh test
 ./scripts/tuist-silent.sh test-all
 ```
+
+Notes:
+- The script runs `xcodebuild` in a low-noise mode (summary on success, tail logs on failure).
+- `tuist generate` is only invoked when `iDocs.xcworkspace` is missing.

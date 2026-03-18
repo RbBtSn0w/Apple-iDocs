@@ -2,7 +2,6 @@ import ProjectDescription
 
 let settings: Settings = .settings(
     base: [
-        "MACOSX_DEPLOYMENT_TARGET": "13.0",
         "SWIFT_VERSION": "6.0",
         "ENABLE_TESTABILITY": "YES"
     ],
@@ -88,7 +87,7 @@ let project = Project(
             destinations: .macOS,
             product: .unitTests,
             bundleId: "com.snow.idocsTests",
-            deploymentTargets: .macOS("13.0"),
+            deploymentTargets: .macOS("14.0"),
             sources: ["Tests/iDocsTests/**"],
             dependencies: [
                 .target(name: "iDocsKit"),
@@ -101,7 +100,7 @@ let project = Project(
             destinations: .macOS,
             product: .unitTests,
             bundleId: "com.snow.idocsAdapterTests",
-            deploymentTargets: .macOS("13.0"),
+            deploymentTargets: .macOS("14.0"),
             sources: ["Tests/iDocsAdapterTests/**"],
             dependencies: [
                 .target(name: "iDocsAdapter")
