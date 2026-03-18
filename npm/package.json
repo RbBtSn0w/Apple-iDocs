@@ -1,0 +1,30 @@
+{
+  "name": "idocs-cli",
+  "version": "0.1.0",
+  "description": "npm distribution wrapper for the iDocs Swift CLI",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "idocs": "./bin/idocs.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "README.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "scripts": {
+    "postinstall": "node ./scripts/postinstall.mjs",
+    "fetch-binary": "node ./scripts/postinstall.mjs --force",
+    "link-local": "node ./scripts/link-local.mjs",
+    "smoke": "idocs --help"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

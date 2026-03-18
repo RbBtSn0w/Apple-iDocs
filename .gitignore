@@ -58,3 +58,8 @@ coverage_report/
 *.profraw
 .deriveddata/
 .deriveddata-coverage/
+npm/*.tgz
+dist/release/
+npm/lib/
+npm/dist/*
+!npm/dist/.gitkeep

@@ -35,6 +35,50 @@ iDocs is a high-performance Swift CLI for querying Apple's documentation, render
 
 The binary will be located in the build directory.
 
+### npm Distribution (macOS arm64)
+
+Global install:
+
+```bash
+npm install -g idocs-cli
+idocs --help
+```
+
+The npm wrapper downloads `idocs-darwin-arm64.tar.gz` from GitHub Releases during `postinstall`.
+You can override the download base URL:
+
+```bash
+export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"
+npm install -g idocs-cli
+```
+
+Local registration for development:
+
+```bash
+./scripts/tuist-silent.sh build iDocs
+npm --prefix npm run link-local
+npm --prefix npm link
+idocs --help
+```
+
+Local tgz smoke test:
+
+```bash
+(cd npm && npm pack)
+TMP_DIR="$(mktemp -d)"
+npm --prefix "$TMP_DIR" init -y
+npm --prefix "$TMP_DIR" i "$(pwd)/npm/idocs-cli-0.1.0.tgz"
+IDOCS_LOCAL_BINARY="$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs" \
+  npm --prefix "$TMP_DIR/node_modules/idocs-cli" run link-local
+"$TMP_DIR/node_modules/.bin/idocs" --help
+```
+
+Release packaging for GitHub Releases:
+
+```bash
+./scripts/release-package.sh
+```
+
 ### Silent CLI Workflow (No Xcode IDE)
 
 Use the helper script to run build/test/run quietly from terminal:
