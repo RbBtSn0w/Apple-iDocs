@@ -56,3 +56,5 @@ sosumi.ai/
 coverage_report/
 .xcresult/
 *.profraw
+.deriveddata/
+.deriveddata-coverage/
