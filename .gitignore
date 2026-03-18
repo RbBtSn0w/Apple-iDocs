@@ -63,3 +63,4 @@ dist/release/
 npm/lib/
 npm/dist/*
 !npm/dist/.gitkeep
+npm/bin/idocs
