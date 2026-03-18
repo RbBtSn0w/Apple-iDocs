@@ -41,7 +41,7 @@ public actor AppleJSONAPI {
                 abstract: abstract,
                 path: url,
                 kind: documentKind(kind: reference.kind, role: reference.role, type: reference.type),
-                source: .remote,
+                source: .apple,
                 relevance: score
             )
         }

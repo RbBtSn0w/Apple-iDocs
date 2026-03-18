@@ -27,7 +27,7 @@ struct CLICommandTests {
 
         CLIEnvironment.serviceFactory = {
             MockDocumentationAdapter(
-                searchResults: [SearchResult(id: "/documentation/swiftui/view", title: "View", snippet: "UI", technology: "swiftui")]
+                searchResults: [SearchResult(id: "/documentation/swiftui/view", title: "View", snippet: "UI", technology: "swiftui", source: .local)]
             )
         }
         CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-cli-tests") }
@@ -40,6 +40,7 @@ struct CLICommandTests {
         #expect(capture.stderr.isEmpty)
         #expect(capture.stdout.joined(separator: "\n").contains("View"))
         #expect(capture.stdout.joined(separator: "\n").contains("swiftui"))
+        #expect(capture.stdout.joined(separator: "\n").contains("source: local"))
     }
 
     @Test("CLI outputs standardized DocumentationError mapping")
@@ -86,5 +87,54 @@ struct CLICommandTests {
         #expect(capture.stderr.joined(separator: "\n").contains("VERSION_MISMATCH"))
         #expect(capture.stderr.joined(separator: "\n").contains("2.0.0"))
         #expect(capture.stderr.joined(separator: "\n").contains("1.0.0"))
+    }
+
+    @Test("CLI fetch prints source marker when metadata contains source")
+    func fetchSourceMarker() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                documentByID: [
+                    "/documentation/swiftui/view": DocumentationContent(
+                        title: "View",
+                        body: "# View",
+                        metadata: ["source": "apple"],
+                        url: URL(string: "https://developer.apple.com/documentation/swiftui/view")!
+                    )
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runFetch(id: "/documentation/swiftui/view")
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        #expect(capture.stdout.joined(separator: "\n").contains("[source: apple]"))
+    }
+
+    @Test("CLI contract docs include search and fetch commands")
+    func contractDocsContainCommands() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let contract = root
+            .appendingPathComponent("specs")
+            .appendingPathComponent("006-cli-multisource-docs")
+            .appendingPathComponent("contracts")
+            .appendingPathComponent("cli-interface.md")
+        let content = try String(contentsOf: contract)
+
+        #expect(content.contains("`idocs search <query>`"))
+        #expect(content.contains("`idocs fetch <id>`"))
     }
 }

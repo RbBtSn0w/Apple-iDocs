@@ -42,13 +42,53 @@ public struct XcodeLocalDocs {
     }
     
     public func search(query: String) async throws -> [SearchResult] {
-        // Phase 5 implementation: Simplified local search
-        // Future: Integration with LMDB index or Spotlight
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
         let sdks = try await listAvailableSDKs()
-        logger.info("Searching \(sdks.count) local SDK documentations for: \(query)")
-        
-        // This is a placeholder for actual local index searching
-        return []
+        logger.info("Searching \(sdks.count) local SDK documentations for: \(trimmed)")
+
+        var results: [SearchResult] = []
+
+        // Preferred path: delegate lookup to injected search provider (Spotlight/Mock/etc.)
+        if let urls = try? await searchProvider.search(query: trimmed), !urls.isEmpty {
+            results.append(contentsOf: urls.prefix(50).map { fileURL in
+                let fileName = fileURL.deletingPathExtension().lastPathComponent
+                return SearchResult(
+                    title: fileName,
+                    abstract: "Matched in local Xcode documentation index.",
+                    path: "/documentation/\(fileName)",
+                    kind: .overview,
+                    source: .local
+                )
+            })
+        }
+
+        // Fallback path: lightweight scan under local documentation roots.
+        if results.isEmpty {
+            let needle = trimmed.lowercased()
+            for sdk in sdks {
+                let docsDir = sdk.cachePath.appendingPathComponent("documentation")
+                guard fileManager.fileExists(atPath: docsDir.path) else { continue }
+                let entries = (try? fileManager.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil, options: [])) ?? []
+                for entry in entries where entry.hasDirectoryPath {
+                    let module = entry.lastPathComponent
+                    guard module.lowercased().contains(needle) else { continue }
+                    results.append(
+                        SearchResult(
+                            title: module,
+                            abstract: "Matched module name in local Xcode documentation.",
+                            path: "/documentation/\(module)",
+                            kind: .framework,
+                            source: .local
+                        )
+                    )
+                    if results.count >= 50 { return results }
+                }
+            }
+        }
+
+        return results
     }
     
     public func fetchDoc(path: String) async throws -> DocCContent? {

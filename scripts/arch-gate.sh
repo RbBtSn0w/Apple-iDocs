@@ -75,6 +75,22 @@ else
   pass "T017 Cross-platform Interface Audit"
 fi
 
+# Capability guard: source observability for search/fetch.
+if ! rg -n 'public let source: RetrievalSource\?' Sources/iDocsAdapter/Models/CoreEntities.swift >/dev/null 2>&1; then
+  fail "Capability Gate: adapter search result source metadata missing"
+elif ! rg -n '"source"\s*:\s*output\.source\.rawValue' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+  fail "Capability Gate: fetch source metadata mapping missing"
+else
+  pass "Capability Gate: source observability"
+fi
+
+# Capability guard: dual remote fallback primitive exists.
+if [[ ! -f "Sources/iDocs/DataSources/SosumiAPI.swift" ]]; then
+  fail "Capability Gate: sosumi datasource missing"
+else
+  pass "Capability Gate: sosumi datasource present"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
   echo "\nArchitecture gate failed with $failures issue(s)."
   exit 1

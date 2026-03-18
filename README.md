@@ -9,6 +9,7 @@ iDocs is a high-performance Swift CLI for querying Apple's documentation, render
 - **Xcode Local Docs**: Access documentation already downloaded by Xcode (supports offline mode).
 - **Browse Technologies**: Explore Apple's framework and technology catalog.
 - **Intelligent Caching**: Layered memory and disk caching for maximum performance.
+- **Deterministic Source Chain**: `cache -> local(Xcode) -> apple -> sosumi` for `search`/`fetch`.
 
 ## Installation
 
@@ -54,15 +55,19 @@ Notes:
 
 ### CLI
 ```bash
-./idocs
+./scripts/tuist-silent.sh run idocs --help
 ```
 
 ### Subcommands
 ```bash
-./idocs search "SwiftUI"
-./idocs fetch "/documentation/swiftui/view"
-./idocs list
+./scripts/tuist-silent.sh run idocs search "SwiftUI"
+./scripts/tuist-silent.sh run idocs fetch "/documentation/swiftui/view"
+./scripts/tuist-silent.sh run idocs list
 ```
+
+Notes:
+- Search output includes source markers like `{source: apple}`.
+- Fetch output includes a source header like `[source: local|apple|sosumi|cache]`.
 
 ## Testing
 

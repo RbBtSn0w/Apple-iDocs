@@ -41,4 +41,34 @@ struct NetworkToolTests {
             #expect(true)
         }
     }
+
+    @Test("Fallback diagnostics: apple failure then sosumi success")
+    func fallbackDiagnostics() async throws {
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: "FallbackCase"))
+        appleSession.setResponse(
+            for: appleURL,
+            data: Data(),
+            response: MockPayloads.httpResponse(url: appleURL, statusCode: 404)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: "FallbackCase"))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.sosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let results = try await tool.run(query: "FallbackCase")
+        #expect(!results.isEmpty)
+        #expect(results.first?.source == .sosumi)
+    }
 }

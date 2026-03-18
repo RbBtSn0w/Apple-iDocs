@@ -48,4 +48,22 @@ struct DocumentationServiceContractTests {
         #expect(fetch.title == "/documentation/swiftui/view")
         #expect(list.isEmpty)
     }
+
+    @Test("SearchResult source field is preserved through adapter contract")
+    func searchResultSourceRoundTrip() async throws {
+        let expected = SearchResult(
+            id: "/documentation/swiftui/view",
+            title: "View",
+            snippet: "A view",
+            technology: "swiftui",
+            source: .sosumi
+        )
+
+        let service = MockDocumentationAdapter(searchResults: [expected])
+        let config = DocumentationConfig(cachePath: "/tmp")
+        let results = try await service.search(query: "View", config: config)
+
+        #expect(results.count == 1)
+        #expect(results[0].source == .sosumi)
+    }
 }

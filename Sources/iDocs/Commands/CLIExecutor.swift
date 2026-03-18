@@ -16,7 +16,8 @@ public enum CLIExecutor {
 
             var lines: [String] = ["### Apple Documentation Search Results", ""]
             for item in results {
-                lines.append("- \(item.title) [\(item.technology)]")
+                let source = item.source?.rawValue ?? "unknown"
+                lines.append("- \(item.title) [\(item.technology)] {source: \(source)}")
                 lines.append("  - ID: \(item.id)")
                 if let snippet = item.snippet {
                     lines.append("  - Snippet: \(snippet)")
@@ -36,7 +37,11 @@ public enum CLIExecutor {
             let adapter = try CLIEnvironment.serviceFactory()
             let config = CLIEnvironment.configFactory()
             let content = try await adapter.fetch(id: id, config: config)
-            CLIEnvironment.writeStdout(content.body)
+            if let source = content.metadata["source"] {
+                CLIEnvironment.writeStdout("[source: \(source)]\n\(content.body)")
+            } else {
+                CLIEnvironment.writeStdout(content.body)
+            }
             return 0
         } catch {
             CLIEnvironment.writeStderr(CLIErrorPresenter.message(for: error))

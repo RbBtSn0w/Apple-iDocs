@@ -25,11 +25,22 @@ struct XcodeLocalDocsMockTests {
         let mockSearch = MockSearchProvider()
         let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch)
         
-        let mockURL = URL(fileURLWithPath: "/tmp/test.json")
+        let mockURL = URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/swiftui/view.json")
         mockSearch.mockResults = [mockURL]
         
-        // search currently returns [] as it's not fully implemented with searchProvider yet
         let results = try await docs.search(query: "test")
-        #expect(results.isEmpty) 
+        #expect(results.count == 1)
+        #expect(results.first?.source == .local)
+    }
+
+    @Test("Search returns empty when no local match")
+    func testSearchMiss() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch)
+
+        mockSearch.mockResults = []
+        let results = try await docs.search(query: "missing-symbol")
+        #expect(results.isEmpty)
     }
 }

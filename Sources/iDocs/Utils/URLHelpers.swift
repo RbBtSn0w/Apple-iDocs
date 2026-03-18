@@ -2,6 +2,7 @@ import Foundation
 
 public struct URLHelpers {
     public static let appleDocBaseURL = URL(string: "https://developer.apple.com")!
+    public static let sosumiBaseURL = URL(string: "https://sosumi.ai")!
 
     public static func searchURL(query: String) -> URL? {
         var components = URLComponents(string: "https://developer.apple.com/tutorials/data/documentation.json")
@@ -11,6 +12,17 @@ public struct URLHelpers {
 
     public static func technologiesURL() -> URL? {
         URL(string: "https://developer.apple.com/tutorials/data/documentation/technologies.json")
+    }
+
+    public static func sosumiSearchURL(query: String) -> URL? {
+        var components = URLComponents(url: sosumiBaseURL.appendingPathComponent("search"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        return components?.url
+    }
+
+    public static func sosumiFetchURL(for path: String) -> URL? {
+        let normalizedPath = normalizePath(path)
+        return URL(string: normalizedPath, relativeTo: sosumiBaseURL)?.absoluteURL
     }
     
     public static func dataURL(for path: String) -> URL? {

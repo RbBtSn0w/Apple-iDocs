@@ -5,6 +5,8 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
     public var stubbedData: Data?
     public var stubbedResponse: URLResponse?
     public var stubbedError: Error?
+    public private(set) var requestCount: Int = 0
+    public private(set) var requestedURLs: [URL] = []
     private var urlResponses: [URL: (Data, URLResponse)] = [:]
     
     public init(stubbedData: Data? = nil, stubbedResponse: URLResponse? = nil, stubbedError: Error? = nil) {
@@ -14,6 +16,11 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
     }
     
     public func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        requestCount += 1
+        if let url = request.url {
+            requestedURLs.append(url)
+        }
+
         if let error = stubbedError {
             throw error
         }
@@ -33,6 +40,8 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
         stubbedData = nil
         stubbedResponse = nil
         stubbedError = nil
+        requestCount = 0
+        requestedURLs.removeAll()
         urlResponses.removeAll()
     }
 

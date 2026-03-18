@@ -1,5 +1,12 @@
 import Foundation
 
+public enum RetrievalSource: String, Sendable, Equatable {
+    case cache
+    case local
+    case apple
+    case sosumi
+}
+
 public struct DocumentationContent: Sendable, Equatable {
     public let title: String
     public let body: String
@@ -19,12 +26,14 @@ public struct SearchResult: Sendable, Equatable {
     public let title: String
     public let snippet: String?
     public let technology: String
+    public let source: RetrievalSource?
 
-    public init(id: String, title: String, snippet: String?, technology: String) {
+    public init(id: String, title: String, snippet: String?, technology: String, source: RetrievalSource? = nil) {
         self.id = id
         self.title = title
         self.snippet = snippet
         self.technology = technology
+        self.source = source
     }
 }
 

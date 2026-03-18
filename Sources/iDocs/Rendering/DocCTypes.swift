@@ -15,9 +15,10 @@ public enum SourceLanguage: String, Codable, Sendable {
 }
 
 public enum DataSource: String, Codable, Sendable {
-    case xcode       // Xcode 本地文档
-    case diskCache   // 磁盘缓存
-    case remote      // 远程 API
+    case cache       // 内存或磁盘缓存命中
+    case local       // Xcode 本地文档命中
+    case apple       // Apple 官方远程源
+    case sosumi      // sosumi 远程源
 }
 
 // MARK: - Core Entities

@@ -38,9 +38,10 @@ struct FetchDocToolTests {
         let diskCache = DiskCache(name: "docs-test-local", fileManager: mockFS)
         let api = AppleJSONAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout))
         let tool = FetchDocTool(api: api, xcodeDocs: xcodeDocs, diskCache: diskCache)
-        let markdown = try await tool.run(path: path)
+        let output = try await tool.runDetailed(path: path)
 
-        #expect(markdown.contains("# Local"))
+        #expect(output.source == .local)
+        #expect(output.markdown.contains("# Local"))
     }
 
     @Test("FetchDocTool fetches from remote API when cache and local miss")
@@ -59,5 +60,29 @@ struct FetchDocToolTests {
         let markdown = try await tool.run(path: "/documentation/swiftui/view")
 
         #expect(markdown.contains("# Remote"))
+    }
+
+    @Test("FetchDocTool falls back to sosumi markdown when apple remote fails")
+    func sosumiFallback() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-sosumi", fileManager: mockFS)
+
+        let apple = AppleJSONAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout))
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: "/documentation/swiftui/view"))
+        let markdown = "# Sosumi View\n\nRendered markdown fallback."
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data(markdown.utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+        let sosumi = SosumiAPI(session: sosumiSession)
+
+        let tool = FetchDocTool(api: apple, sosumiAPI: sosumi, xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider()), diskCache: diskCache)
+        let output = try await tool.runDetailed(path: "/documentation/swiftui/view")
+
+        #expect(output.source == .sosumi)
+        #expect(output.markdown.contains("# Sosumi View"))
     }
 }

@@ -19,11 +19,23 @@ struct ToolTests {
         }
         return AppleJSONAPI(session: session)
     }
+
+    private func makeMockSosumiAPI(queries: [String]) -> SosumiAPI {
+        let session = MockNetworkSession()
+        for query in queries {
+            if let url = URLHelpers.sosumiSearchURL(query: query) {
+                let response = MockPayloads.httpResponse(url: url)
+                session.setResponse(for: url, data: MockPayloads.sosumiSearchJSON, response: response)
+            }
+        }
+        return SosumiAPI(session: session)
+    }
     
     @Test("SearchDocsTool handles basic query")
     func searchToolBasic() async throws {
         let api = makeMockAPI(queries: ["View"])
-        let tool = SearchDocsTool(api: api, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
+        let sosumi = makeMockSosumiAPI(queries: ["View"])
+        let tool = SearchDocsTool(api: api, sosumiAPI: sosumi, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
         let result = try await tool.run(query: "View")
         
         #expect(!result.isEmpty)
@@ -33,10 +45,12 @@ struct ToolTests {
     @Test("SearchDocsTool handles wildcards")
     func searchToolWildcard() async throws {
         let api = makeMockAPI(queries: ["NS*Controller"])
-        let tool = SearchDocsTool(api: api, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
+        let sosumi = makeMockSosumiAPI(queries: ["NS*Controller"])
+        let tool = SearchDocsTool(api: api, sosumiAPI: sosumi, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
         let result = try await tool.run(query: "NS*Controller")
         
         #expect(!result.isEmpty)
+        #expect(result.first?.source == .sosumi || result.first?.source == .apple)
     }
     
     @Test("BrowseTechnologiesTool lists technologies")
@@ -62,5 +76,43 @@ struct ToolTests {
         let techs = try await api.fetchTechnologies()
         #expect(techs.count == 1)
         #expect(techs.first?.name == "SwiftUI")
+    }
+
+    @Test("SearchDocsTool falls back to sosumi when apple remote misses")
+    func searchToolFallsBackToSosumi() async throws {
+        let api = makeMockAPI(queries: ["NoLocalHit"])
+        let sosumi = makeMockSosumiAPI(queries: ["NoLocalHit"])
+        let tool = SearchDocsTool(api: api, sosumiAPI: sosumi, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
+
+        let result = try await tool.run(query: "NoLocalHit")
+        #expect(!result.isEmpty)
+        #expect(result.first?.source == .sosumi)
+    }
+
+    @Test("SearchDocsTool prefers local results over remote")
+    func searchToolPrefersLocal() async throws {
+        let apiSession = MockNetworkSession(stubbedError: MockError.networkTimeout)
+        let apple = AppleJSONAPI(session: apiSession)
+        let sosumiSession = MockNetworkSession(stubbedError: MockError.networkTimeout)
+        let sosumi = SosumiAPI(session: sosumiSession)
+
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider(
+            mockResults: [URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/swiftui/view.json")]
+        )
+        let xcodeDocs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch)
+
+        let tool = SearchDocsTool(
+            api: apple,
+            sosumiAPI: sosumi,
+            xcodeDocs: xcodeDocs,
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let result = try await tool.run(query: "View")
+        #expect(!result.isEmpty)
+        #expect(result.first?.source == .local)
+        #expect(apiSession.requestCount == 0)
+        #expect(sosumiSession.requestCount == 0)
     }
 }

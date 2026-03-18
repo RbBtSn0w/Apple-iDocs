@@ -35,6 +35,20 @@ enum MockPayloads {
     }
     """.data(using: .utf8)!
 
+    static let sosumiSearchJSON = """
+    {
+        "query": "View",
+        "results": [
+            {
+                "title": "View",
+                "url": "https://developer.apple.com/documentation/swiftui/view",
+                "description": "A type that represents part of your user interface.",
+                "type": "documentation"
+            }
+        ]
+    }
+    """.data(using: .utf8)!
+
     static let externalDocCJSON = """
     {
         "identifier": "doc://com.example/documentation/example",

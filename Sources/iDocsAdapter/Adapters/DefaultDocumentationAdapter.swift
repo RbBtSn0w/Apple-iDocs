@@ -18,6 +18,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         do {
             let results = try await SearchDocsTool(
                 api: AppleJSONAPI(),
+                sosumiAPI: SosumiAPI(),
                 xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider())
             ).run(query: query)
 
@@ -26,7 +27,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     id: $0.path,
                     title: $0.title,
                     snippet: $0.abstract,
-                    technology: technologyName(from: $0.path)
+                    technology: technologyName(from: $0.path),
+                    source: mapSource($0.source)
                 )
             }
         } catch {
@@ -43,16 +45,20 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 fileManager: FileManager.default,
                 enableFileLocking: config.enableFileLocking
             )
-            let body = try await FetchDocTool(
+            let output = try await FetchDocTool(
                 api: AppleJSONAPI(),
+                sosumiAPI: SosumiAPI(),
                 xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider()),
                 diskCache: diskCache
-            ).run(path: id)
+            ).runDetailed(path: id)
 
             return DocumentationContent(
-                title: titleFromBody(body, fallback: id),
-                body: body,
-                metadata: ["locale": config.locale.identifier],
+                title: titleFromBody(output, fallback: id),
+                body: output.markdown,
+                metadata: [
+                    "locale": config.locale.identifier,
+                    "source": output.source.rawValue
+                ],
                 url: URLHelpers.webURL(for: id) ?? URL(string: "https://developer.apple.com\(id)")!
             )
         } catch {
@@ -120,13 +126,26 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         return "unknown"
     }
 
-    private func titleFromBody(_ body: String, fallback: String) -> String {
-        for line in body.split(separator: "\n") {
+    private func titleFromBody(_ content: FetchDocResult, fallback: String) -> String {
+        for line in content.markdown.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("#") {
                 return trimmed.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
             }
         }
         return fallback
+    }
+
+    private func mapSource(_ source: DataSource) -> RetrievalSource {
+        switch source {
+        case .cache:
+            return .cache
+        case .local:
+            return .local
+        case .apple:
+            return .apple
+        case .sosumi:
+            return .sosumi
+        }
     }
 }
