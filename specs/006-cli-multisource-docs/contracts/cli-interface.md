@@ -12,6 +12,11 @@
 - Success output returns body content and includes source in metadata/context output.
 - Failure output uses standardized error categories.
 
+### `idocs list [--category <category>]`
+- Lists technology catalog entries from the adapter contract.
+- Supports optional category filtering.
+- Failure output uses standardized error categories.
+
 ## Error Contract
 
 CLI error categories remain stable:

@@ -91,6 +91,13 @@ else
   pass "Capability Gate: sosumi datasource present"
 fi
 
+# Requirement/Success-Criteria traceability matrix gate.
+if ./scripts/spec-trace-gate.sh >/dev/null 2>&1; then
+  pass "Traceability Gate: FR/SC mapped to automated checks"
+else
+  fail "Traceability Gate: FR/SC mapping is incomplete or invalid"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
   echo "\nArchitecture gate failed with $failures issue(s)."
   exit 1

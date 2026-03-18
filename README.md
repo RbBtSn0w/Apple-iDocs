@@ -75,7 +75,7 @@ Notes:
 Default tests (offline, no external network):
 
 ```bash
-tuist test iDocs
+./scripts/tuist-silent.sh test
 ```
 
 Integration tests (explicitly enabled):
@@ -91,6 +91,18 @@ swift test --filter IntegrationTests
 Notes:
 - Default tests do not access external networks
 - Integration tests validate live endpoints and may fail if services are unavailable
+
+## Quality Gates
+
+```bash
+./scripts/arch-gate.sh
+./scripts/spec-trace-gate.sh
+./scripts/coverage-gate.sh 60
+```
+
+Notes:
+- `spec-trace-gate.sh` verifies every `FR-*`/`SC-*` in `spec.md` has a mapped automated check.
+- `coverage-gate.sh` runs `xcodebuild` with coverage and evaluates average line coverage for `iDocsKit`, `iDocsAdapter`, and `iDocsApp`.
 
 ## License
 MIT

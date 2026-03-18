@@ -124,6 +124,61 @@ struct CLICommandTests {
         #expect(capture.stdout.joined(separator: "\n").contains("[source: apple]"))
     }
 
+    @Test("CLI list prints technologies and supports category filtering")
+    func listTechnologiesAndFilter() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                technologies: [
+                    Technology(name: "SwiftUI", id: "/documentation/swiftui", category: "framework"),
+                    Technology(name: "CloudKit", id: "/documentation/cloudkit", category: "service")
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runList(category: "framework")
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let output = capture.stdout.joined(separator: "\n")
+        #expect(output.contains("SwiftUI"))
+        #expect(!output.contains("CloudKit"))
+    }
+
+    @Test("CLI list returns standardized error mapping")
+    func listStandardizedErrorOutput() async {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(errorToThrow: .networkError(message: "list failed"))
+        }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runList(category: nil)
+
+        #expect(code == 1)
+        #expect(capture.stderr.joined(separator: "\n").contains("Error [NETWORK]"))
+    }
+
     @Test("CLI contract docs include search and fetch commands")
     func contractDocsContainCommands() throws {
         let fm = FileManager.default
@@ -155,5 +210,6 @@ struct CLICommandTests {
 
         #expect(content.contains("`idocs search <query>`"))
         #expect(content.contains("`idocs fetch <id>`"))
+        #expect(content.contains("`idocs list"))
     }
 }
