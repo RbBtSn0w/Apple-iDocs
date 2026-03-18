@@ -9,7 +9,7 @@ struct AppleAPITests {
     func searchURL() {
         let query = "SwiftUI"
         let url = URLHelpers.searchURL(query: query)
-        #expect(url?.absoluteString == "https://developer.apple.com/tutorials/data/search?q=SwiftUI")
+        #expect(url?.absoluteString == "https://developer.apple.com/tutorials/data/documentation.json?q=SwiftUI")
     }
 
     @Test("Technologies URL construction")
@@ -22,30 +22,36 @@ struct AppleAPITests {
     func parseSearch() throws {
         let json = """
         {
-            "results": [
-                {
+            "references": {
+                "doc://com.apple.documentation/documentation/SwiftUI/View": {
                     "title": "View",
-                    "type": "protocol",
+                    "kind": "protocol",
                     "url": "/documentation/swiftui/view",
-                    "abstract": "A type that represents part of your user interface."
+                    "abstract": [
+                        {
+                            "type": "text",
+                            "text": "A type that represents part of your user interface."
+                        }
+                    ]
                 }
-            ]
+            }
         }
         """.data(using: .utf8)!
         
         let decoder = JSONDecoder()
         let response = try decoder.decode(AppleSearchResponse.self, from: json)
         
-        #expect(response.results.count == 1)
-        #expect(response.results[0].title == "View")
-        #expect(response.results[0].kind == .protocol)
+        #expect(response.references.count == 1)
+        let first = response.references.values.first
+        #expect(first?.title == "View")
+        #expect(first?.kind == .protocol)
     }
 }
 
 // MARK: - Mock Types for Testing
 
 struct AppleSearchResponse: Codable {
-    let results: [AppleSearchResult]
+    let references: [String: AppleSearchResult]
 }
 
 struct AppleSearchResult: Codable {

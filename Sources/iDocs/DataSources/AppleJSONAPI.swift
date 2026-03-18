@@ -10,23 +10,49 @@ public actor AppleJSONAPI {
     }
     
     public func search(query: String) async throws -> [SearchResult] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else {
+            return []
+        }
+
         guard let url = URLHelpers.searchURL(query: query) else {
             return []
         }
         
         let data = try await fetchWithRetry(url: url)
         let decoder = JSONDecoder()
-        let response = try decoder.decode(AppleSearchResponse.self, from: data)
-        
-        return response.results.map { result in
-            SearchResult(
-                title: result.title,
-                abstract: result.abstract,
-                path: result.url,
-                kind: DocumentKind(rawValue: result.type) ?? .overview,
-                source: .remote
+        let response = try decoder.decode(DocumentationIndexResponse.self, from: data)
+
+        return response.references.values.compactMap { reference in
+            guard let title = reference.title,
+                  let url = reference.url else {
+                return nil
+            }
+
+            let abstract = reference.abstractText
+            let haystack = "\(title) \(abstract ?? "") \(url)".lowercased()
+            guard haystack.contains(normalizedQuery) else {
+                return nil
+            }
+
+            let score = relevanceScore(for: normalizedQuery, title: title, abstract: abstract, path: url)
+            return SearchResult(
+                title: title,
+                abstract: abstract,
+                path: url,
+                kind: documentKind(kind: reference.kind, role: reference.role, type: reference.type),
+                source: .remote,
+                relevance: score
             )
         }
+        .sorted {
+            let left = $0.relevance ?? 0
+            let right = $1.relevance ?? 0
+            if left == right { return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            return left > right
+        }
+        .prefix(50)
+        .map { $0 }
     }
     
     public func fetchDoc(path: String) async throws -> DocCContent {
@@ -83,6 +109,71 @@ public actor AppleJSONAPI {
         
         throw lastError ?? iDocsError.maxRetriesReached
     }
+
+    private func documentKind(kind: String?, role: String?, type: String?) -> DocumentKind {
+        let value = (kind ?? role ?? type ?? "").lowercased()
+        switch value {
+        case "framework", "module":
+            return .framework
+        case "class":
+            return .class
+        case "struct", "structure":
+            return .structure
+        case "protocol":
+            return .protocol
+        case "enum", "enumeration":
+            return .enumeration
+        case "function":
+            return .function
+        case "property":
+            return .property
+        case "typealias":
+            return .typealias
+        case "associatedtype":
+            return .associatedtype
+        case "operator":
+            return .operator
+        case "macro":
+            return .macro
+        case "variable":
+            return .variable
+        case "initializer", "init":
+            return .initializer
+        case "instancetype", "instancemethod":
+            return .instanceMethod
+        case "typemethod":
+            return .typeMethod
+        case "instanceproperty":
+            return .instanceProperty
+        case "typeproperty":
+            return .typeProperty
+        case "article":
+            return .article
+        case "sample code", "samplecode", "sample-code":
+            return .sampleCode
+        default:
+            return .overview
+        }
+    }
+
+    private func relevanceScore(for query: String, title: String, abstract: String?, path: String) -> Double {
+        let q = query.lowercased()
+        let t = title.lowercased()
+        let a = (abstract ?? "").lowercased()
+        let p = path.lowercased()
+        var score = 0.0
+
+        if t == q { score += 120 }
+        if t.hasPrefix(q) { score += 80 }
+        if t.contains(q) { score += 40 }
+        if p.contains("/\(q)") || p.hasSuffix("/\(q)") { score += 30 }
+        if p.contains(q) { score += 20 }
+        if a.contains(q) { score += 10 }
+
+        // Slightly prefer shorter titles for the same token match.
+        score -= Double(title.count) * 0.01
+        return score
+    }
 }
 
 // MARK: - API Response Types
@@ -97,15 +188,29 @@ public struct Technology: Codable, Sendable {
     public let kind: String
 }
 
-private struct AppleSearchResponse: Codable {
-    let results: [AppleSearchResult]
+private struct DocumentationIndexResponse: Codable {
+    let references: [String: DocumentationReference]
 }
 
-private struct AppleSearchResult: Codable {
-    let title: String
-    let type: String
-    let url: String
-    let abstract: String?
+private struct DocumentationReference: Codable {
+    let title: String?
+    let type: String?
+    let role: String?
+    let kind: String?
+    let url: String?
+    let abstract: [InlineText]?
+
+    var abstractText: String? {
+        let text = abstract?
+            .compactMap { $0.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return text?.isEmpty == false ? text : nil
+    }
+}
+
+private struct InlineText: Codable {
+    let text: String?
 }
 
 // MARK: - Custom Errors

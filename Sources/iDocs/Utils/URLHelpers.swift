@@ -4,7 +4,7 @@ public struct URLHelpers {
     public static let appleDocBaseURL = URL(string: "https://developer.apple.com")!
 
     public static func searchURL(query: String) -> URL? {
-        var components = URLComponents(string: "https://developer.apple.com/tutorials/data/search")
+        var components = URLComponents(string: "https://developer.apple.com/tutorials/data/documentation.json")
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
         return components?.url
     }

@@ -3,14 +3,23 @@ import Foundation
 enum MockPayloads {
     static let searchJSON = """
     {
-        "results": [
-            {
+        "references": {
+            "doc://com.apple.documentation/documentation/SwiftUI/View": {
                 "title": "View",
-                "type": "protocol",
+                "kind": "protocol",
                 "url": "/documentation/swiftui/view",
-                "abstract": "A type that represents part of your user interface."
+                "abstract": [
+                    {
+                        "type": "text",
+                        "text": "A type that represents part of your user interface."
+                    }
+                ]
+            },
+            "example-image.png": {
+                "type": "image",
+                "identifier": "example-image.png"
             }
-        ]
+        }
     }
     """.data(using: .utf8)!
 
