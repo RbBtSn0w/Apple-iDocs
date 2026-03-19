@@ -33,11 +33,12 @@
 - [ ] T005 [P] Add benchmark fixture helpers in `Tests/iDocsTests/TestSupport/BenchmarkFixtures.swift`
 - [ ] T006 [P] Add evaluation record schema tests in `Tests/iDocsTests/IntegrationTests/BenchmarkRecordSchemaTests.swift`
 - [ ] T007 [P] Add scoring rubric tests in `Tests/iDocsTests/IntegrationTests/BenchmarkRubricTests.swift`
-- [ ] T008 Implement benchmark record models in `Sources/iDocs/Commands/BenchmarkRecordModels.swift`
-- [ ] T009 Implement benchmark rubric models in `Sources/iDocs/Commands/BenchmarkRubricModels.swift`
-- [ ] T010 Implement benchmark common helpers in `scripts/benchmark/common.sh`
-- [ ] T011 Implement environment reset runner in `scripts/benchmark/reset-target-state.sh`
-- [ ] T012 Implement record aggregation tool in `scripts/benchmark/aggregate-results.swift`
+- [ ] T008 [P] Add golden dataset and tokenizer contract tests in `Tests/iDocsTests/IntegrationTests/BenchmarkGoldenDatasetTests.swift`
+- [ ] T009 Implement benchmark record models in `Sources/iDocs/Commands/BenchmarkRecordModels.swift`
+- [ ] T010 Implement benchmark rubric models in `Sources/iDocs/Commands/BenchmarkRubricModels.swift`
+- [ ] T011 Implement benchmark common helpers in `scripts/benchmark/common.sh`
+- [ ] T012 Implement environment reset runner in `scripts/benchmark/reset-target-state.sh`
+- [ ] T013 Implement record aggregation tool in `scripts/benchmark/aggregate-results.swift`
 
 **Checkpoint**: Foundation ready - benchmark target access, task execution, scoring, and rerun flows can be implemented independently
 
@@ -51,14 +52,14 @@
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T013 [P] [US1] Add target availability tests in `Tests/iDocsTests/IntegrationTests/BenchmarkTargetAvailabilityTests.swift`
+- [ ] T014 [P] [US1] Add target availability tests in `Tests/iDocsTests/IntegrationTests/BenchmarkTargetAvailabilityTests.swift`
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Implement project-local MCP bootstrap script in `scripts/benchmark/bootstrap-project-mcp.sh`
-- [ ] T015 [US1] Implement minimum target probe runner in `scripts/benchmark/probe-targets.sh`
-- [ ] T016 [US1] Store target probe fixtures in `specs/008-mcp-service-benchmark/fixtures/minimum-probes.json`
-- [ ] T017 [US1] Document project-local target setup flow in `specs/008-mcp-service-benchmark/quickstart.md`
+- [ ] T015 [US1] Implement project-local MCP bootstrap script in `scripts/benchmark/bootstrap-project-mcp.sh`
+- [ ] T016 [US1] Implement minimum target probe runner in `scripts/benchmark/probe-targets.sh`
+- [ ] T017 [US1] Store target probe fixtures in `specs/008-mcp-service-benchmark/fixtures/minimum-probes.json`
+- [ ] T018 [US1] Document project-local target setup flow in `specs/008-mcp-service-benchmark/quickstart.md`
 
 **Checkpoint**: User Story 1 is functional when the repository can validate four targets without global MCP changes
 
@@ -72,17 +73,20 @@
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T018 [P] [US2] Add shared scenario execution tests in `Tests/iDocsTests/IntegrationTests/BenchmarkSharedScenarioTests.swift`
-- [ ] T019 [P] [US2] Add cold-warm isolation tests in `Tests/iDocsTests/IntegrationTests/BenchmarkIsolationTests.swift`
+- [ ] T019 [P] [US2] Add shared scenario execution tests in `Tests/iDocsTests/IntegrationTests/BenchmarkSharedScenarioTests.swift`
+- [ ] T020 [P] [US2] Add cold-warm isolation tests in `Tests/iDocsTests/IntegrationTests/BenchmarkIsolationTests.swift`
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Define shared and extended task matrix in `specs/008-mcp-service-benchmark/fixtures/task-matrix.json`
-- [ ] T021 [US2] Implement shared scenario runner in `scripts/benchmark/run-shared-scenarios.sh`
-- [ ] T022 [US2] Implement cold and warm sample orchestrator in `scripts/benchmark/run-samples.sh`
-- [ ] T023 [US2] Implement raw evidence capture pipeline in `scripts/benchmark/capture-evidence.sh`
-- [ ] T024 [US2] Extend aggregation logic for `Avg Token per Call`, `Total Token per Task`, and `call_count` in `scripts/benchmark/aggregate-results.swift`
-- [ ] T025 [US2] Update evaluation record schema examples in `specs/008-mcp-service-benchmark/contracts/evaluation-record-schema.md`
+- [ ] T021 [P] [US2] Define shared and extended task matrix in `specs/008-mcp-service-benchmark/fixtures/task-matrix.json`
+- [ ] T022 [P] [US2] Create frozen golden dataset for shared tasks in `specs/008-mcp-service-benchmark/fixtures/golden-dataset.json`
+- [ ] T023 [P] [US2] Create tokenizer specification fixture in `specs/008-mcp-service-benchmark/fixtures/tokenizer-spec.json`
+- [ ] T024 [P] [US2] Create driver profile fixture in `specs/008-mcp-service-benchmark/fixtures/driver-profile.json`
+- [ ] T025 [US2] Implement shared scenario runner in `scripts/benchmark/run-shared-scenarios.sh`
+- [ ] T026 [US2] Implement cold and warm sample orchestrator in `scripts/benchmark/run-samples.sh`
+- [ ] T027 [US2] Implement raw evidence capture pipeline in `scripts/benchmark/capture-evidence.sh`
+- [ ] T028 [US2] Extend aggregation logic for `Avg Token per Call`, `Total Token per Task`, `call_count`, `overfetch_flag`, and version skew markers in `scripts/benchmark/aggregate-results.swift`
+- [ ] T029 [US2] Update evaluation record schema examples in `specs/008-mcp-service-benchmark/contracts/evaluation-record-schema.md`
 
 **Checkpoint**: User Story 2 is functional when a shared task can run across all four targets and produce traceable benchmark records
 
@@ -96,16 +100,17 @@
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T026 [P] [US3] Add benchmark scoring tests in `Tests/iDocsTests/IntegrationTests/BenchmarkScoringTests.swift`
-- [ ] T027 [P] [US3] Add format readiness grading tests in `Tests/iDocsTests/IntegrationTests/BenchmarkFormatReadinessTests.swift`
+- [ ] T030 [P] [US3] Add benchmark scoring tests in `Tests/iDocsTests/IntegrationTests/BenchmarkScoringTests.swift`
+- [ ] T031 [P] [US3] Add format readiness grading tests in `Tests/iDocsTests/IntegrationTests/BenchmarkFormatReadinessTests.swift`
 
 ### Implementation for User Story 3
 
-- [ ] T028 [P] [US3] Create scoring checklist fixtures in `specs/008-mcp-service-benchmark/fixtures/scoring-checklists.json`
-- [ ] T029 [P] [US3] Implement scoring engine in `scripts/benchmark/score-results.swift`
-- [ ] T030 [P] [US3] Implement format readiness evaluator in `scripts/benchmark/evaluate-format-readiness.swift`
-- [ ] T031 [US3] Implement benchmark report renderer with `Agent Format Readiness` section in `scripts/benchmark/render-report.swift`
-- [ ] T032 [US3] Update scoring rubric contract with checklist and diagnosability mapping examples in `specs/008-mcp-service-benchmark/contracts/scoring-rubric.md`
+- [ ] T032 [P] [US3] Create scoring checklist fixtures in `specs/008-mcp-service-benchmark/fixtures/scoring-checklists.json`
+- [ ] T033 [P] [US3] Implement scoring engine in `scripts/benchmark/score-results.swift`
+- [ ] T034 [P] [US3] Implement format readiness evaluator in `scripts/benchmark/evaluate-format-readiness.swift`
+- [ ] T035 [US3] Implement over-fetching penalty rules in `scripts/benchmark/score-results.swift`
+- [ ] T036 [US3] Implement benchmark report renderer with `Agent Format Readiness` section in `scripts/benchmark/render-report.swift`
+- [ ] T037 [US3] Update scoring rubric contract with checklist, over-fetching, and diagnosability mapping examples in `specs/008-mcp-service-benchmark/contracts/scoring-rubric.md`
 
 **Checkpoint**: User Story 3 is functional when a completed run can be scored and summarized into a report without free-form evaluator judgment
 
@@ -119,14 +124,15 @@
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T033 [P] [US4] Add rerun comparison tests in `Tests/iDocsTests/IntegrationTests/BenchmarkRepeatabilityTests.swift`
+- [ ] T038 [P] [US4] Add rerun comparison tests in `Tests/iDocsTests/IntegrationTests/BenchmarkRepeatabilityTests.swift`
 
 ### Implementation for User Story 4
 
-- [ ] T034 [P] [US4] Create run manifest template in `specs/008-mcp-service-benchmark/fixtures/run-manifest.json`
-- [ ] T035 [US4] Implement rerun comparison script in `scripts/benchmark/compare-runs.sh`
-- [ ] T036 [US4] Implement benchmark entrypoint pipeline in `scripts/benchmark/run-008-benchmark.sh`
-- [ ] T037 [US4] Update repeatability and rerun instructions in `specs/008-mcp-service-benchmark/quickstart.md`
+- [ ] T039 [P] [US4] Create run manifest template in `specs/008-mcp-service-benchmark/fixtures/run-manifest.json`
+- [ ] T040 [P] [US4] Create truth baseline fixture in `specs/008-mcp-service-benchmark/fixtures/truth-baseline.json`
+- [ ] T041 [US4] Implement rerun comparison script in `scripts/benchmark/compare-runs.sh`
+- [ ] T042 [US4] Implement benchmark entrypoint pipeline in `scripts/benchmark/run-008-benchmark.sh`
+- [ ] T043 [US4] Update repeatability, driver pinning, and truth baseline instructions in `specs/008-mcp-service-benchmark/quickstart.md`
 
 **Checkpoint**: User Story 4 is functional when a second run can be compared against a baseline with the same schema and rubric
 
@@ -136,9 +142,9 @@
 
 **Purpose**: 收尾、合同同步、全流程验证
 
-- [ ] T038 [P] Add operator checklist and troubleshooting notes in `specs/008-mcp-service-benchmark/quickstart.md`
-- [ ] T039 Normalize target interface examples and failure semantics in `specs/008-mcp-service-benchmark/contracts/target-interface.md`
-- [ ] T040 Run full quickstart validation and capture expected outputs in `specs/008-mcp-service-benchmark/quickstart.md`
+- [ ] T044 [P] Add operator checklist and troubleshooting notes in `specs/008-mcp-service-benchmark/quickstart.md`
+- [ ] T045 Normalize target interface examples and failure semantics in `specs/008-mcp-service-benchmark/contracts/target-interface.md`
+- [ ] T046 Run full quickstart validation and capture expected outputs in `specs/008-mcp-service-benchmark/quickstart.md`
 
 ---
 

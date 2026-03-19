@@ -17,7 +17,7 @@
 
 ## Accuracy Rubric
 
-按 atomic claims 命中率评分。每条任务必须先拆成可核对事实，例如：
+按 atomic claims 命中率评分。每条任务必须在 benchmark 执行前由 Golden Dataset 预生成可核对事实，例如：
 - API 名称
 - 签名
 - 参数说明
@@ -31,7 +31,7 @@
 - `missing`
 - `unverifiable`
 
-准确性分数来自 `correct / (correct + incorrect + missing)` 的映射，不允许纯主观印象分。
+准确性分数来自冻结后的 claims 命中情况，不允许评测时重写 claim 粒度或分母。
 
 ## Completeness Rubric
 
@@ -45,6 +45,12 @@
 
 完整性分数来自命中率映射，不允许只用自由文本描述。
 
+## Golden Dataset Rule
+
+- Atomic Claims 和 Required Slots 必须在任务执行前冻结
+- 评测者只能勾选 `correct / incorrect / missing / unverifiable`
+- 不允许在评测阶段新增 claims、拆分 claims 或合并 slots
+
 ## Efficiency Rubric
 
 主指标：
@@ -53,6 +59,8 @@
 - `duration_ms`
 
 同等任务下，优先比较整任务总成本，而不是单次返回大小。
+
+若某目标发生 over-fetching 或 unsolicited information，且显著增加整任务调用成本、上下文成本或后续清洗成本，则必须在效率或成本维度中扣分，而不是仅在格式维度扣分。
 
 ## Stability Rubric
 
@@ -114,3 +122,4 @@
 - 不可观测项说明
 
 不得把“格式分高”解释为“内容更准确”或“功能更完整”。
+不得把 over-fetching 风险仅视为格式问题而完全排除在主评分之外。

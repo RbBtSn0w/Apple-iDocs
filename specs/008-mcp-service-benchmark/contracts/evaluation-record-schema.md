@@ -24,6 +24,10 @@
 | `avg_token_per_call` | No | 单次调用平均 token |
 | `total_token_per_task` | No | 完成整任务的累计 token |
 | `token_observability` | Yes | `full` / `partial` / `none` |
+| `tokenizer_spec` | Yes | 用于估算 token 的统一 tokenizer 规范，默认 `cl100k_base` |
+| `driver_profile` | Yes | 本轮执行使用的受控 Driver 配置 |
+| `truth_baseline` | Yes | 参考真值对应的 Xcode / SDK / 文档版本锚点 |
+| `overfetch_flag` | Yes | 是否发生过度召回或无请求噪音 |
 | `error_category` | No | 失败分类 |
 | `evidence_refs` | Yes | 证据引用列表 |
 | `accuracy_verdict` | Yes | 准确性结论 |
@@ -71,6 +75,15 @@
 - `p90_duration_ms`
 - `p99_duration_ms` 或 `insufficient_sample`
 - `stddev_duration_ms`
+
+## Golden Dataset Contract
+
+每条 `scenario_id` 都必须绑定冻结后的标准答案结构：
+- `atomic_claims`
+- `required_slots`
+- `truth_baseline`
+
+评测阶段只能对上述结构进行勾选，不得临时修改。
 
 ## Traceability Rules
 

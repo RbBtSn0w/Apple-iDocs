@@ -67,3 +67,43 @@
 - **Alternatives considered**:
   - 按每个服务单独写接口合同：重复且不利于统一比较。
   - 只写 spec 不写合同：后续实现易发生字段漂移和评分口径漂移。
+
+## 9. Golden Dataset 预生成
+
+- **Decision**: 在执行任何 benchmark 前，先为至少 12 条任务预生成并冻结 Golden Dataset，包含 Atomic Claims、Required Slots、参考来源和版本锚点；评测阶段只允许按清单勾选 `correct / incorrect / missing / unverifiable`，不允许临场定义事实粒度。
+- **Rationale**: 如果 Atomic Claims 是在拿到结果后才由评测者临时抽取，分母会随评测者理解改变，导致准确性与完整性分数失去横向可比性。
+- **Alternatives considered**:
+  - 边评边抽取 claims：操作灵活，但不可复测。
+  - 只冻结参考链接不冻结 claims：仍会留下事实粒度漂移问题。
+
+## 10. Driver 架构
+
+- **Decision**: benchmark 使用受控 Driver，而不是自由对话的实时 Agent。默认采用 `record-replay` 驱动；若需要模型参与路径决策，只允许使用固定提示模板、`temperature=0`、固定输入和可回放上下文的受控 Agent。
+- **Rationale**: 如果直接用真实 LLM 做 Driver，同一任务的 tool call 数和路径会随模型波动，污染成本、效率和稳定性测量。
+- **Alternatives considered**:
+  - 完全自由的实时 LLM：最像真实 Agent，但噪音过大。
+  - 纯手写单步脚本：可控，但不能覆盖多轮工具发现和补救路径。
+
+## 11. Tokenizer 统一
+
+- **Decision**: 对所有不可观测 token 统一使用 `cl100k_base` 作为归一化标尺，并在所有记录和报告中声明该 tokenizer 名称与版本。
+- **Rationale**: 不同模型词表对同一 Markdown/JSON 的分词差异很大；若不统一 tokenizer，估算 token 结果无法比较。
+- **Alternatives considered**:
+  - 各目标按各自模型词表估算：失去统一度量基线。
+  - 只记录字符数：不能反映真实上下文成本。
+
+## 12. Over-fetching 的评分归属
+
+- **Decision**: 过度召回、无请求噪音和无用大段内容不仅在格式可消费性中扣分，也必须影响主评分中的效率或成本，必要时影响任务完成性判断。
+- **Rationale**: 如果某目标返回正确答案但附带大量无关内容，只在格式分扣分会低估它对 Agent 上下文窗口和执行路径的破坏。
+- **Alternatives considered**:
+  - 仅在格式维度扣分：主总分仍可能虚高。
+  - 直接按准确性扣分：会混淆“内容真假”和“内容适配性”。
+
+## 13. 参考真值版本锚定
+
+- **Decision**: 每轮评测都记录 Truth Baseline，包括 Xcode 版本、SDK 版本、官方文档抓取时间或版本锚点；当某目标返回更新或更旧的数据时，先标记为版本偏差，再判断是否影响能力评分。
+- **Rationale**: 本地 DocC 缓存、在线官网和第三方服务的数据新鲜度可能不同；若不锁版本，会把数据源更新差异误判成工具能力缺陷。
+- **Alternatives considered**:
+  - 一律以最新官网为唯一真值：会系统性惩罚离线归档类目标。
+  - 完全忽略版本差异：会让结果不可解释。

@@ -32,9 +32,11 @@
   - `expectedEvidenceType: official-page | official-docc | execution-behavior`
   - `applicableTargets: [ServiceTarget.id]`
   - `requiredChecklist: [String]`
+  - `goldenDatasetId: GoldenDataset.id`
 - **Validation**:
   - `shared` 任务必须适用于全部 4 个目标
   - `extended` 任务必须声明为何不纳入基础总分
+  - 必须在执行前绑定已冻结的 `GoldenDataset`
 
 ### EvaluationRun
 - **Purpose**: 记录某一轮完整评测。
@@ -44,10 +46,14 @@
   - `operator: String`
   - `environment: String`
   - `baselineVersionSet: [String: String]`
+  - `driverProfileId: DriverProfile.id`
+  - `truthBaselineId: TruthBaseline.id`
+  - `tokenizerSpecId: TokenizerSpecification.id`
   - `notes: String?`
 - **Validation**:
   - `runId` 唯一
   - `environment` 必须包含网络/缓存/平台前提摘要
+  - 必须声明 Driver、真值版本锚点和 tokenizer 规范
 
 ### TaskExecution
 - **Purpose**: 单个目标在单条任务上的一次执行样本。
@@ -66,6 +72,8 @@
   - `avgTokenPerCall: Int?`
   - `totalTokenPerTask: Int?`
   - `tokenObservability: full | partial | none`
+  - `overfetchFlag: Bool`
+  - `overfetchNotes: String?`
   - `errorCategory: String?`
   - `retryable: Bool?`
   - `evidenceRefs: [ReferenceEvidence.id]`
@@ -86,6 +94,72 @@
 - **Validation**:
   - `official-page` 与 `official-docc` 必须可指向权威来源
   - `raw-output` 必须能映射回对应 `TaskExecution`
+
+### GoldenDataset
+- **Purpose**: 冻结每条任务的标准答案结构，避免评测时临场生成事实粒度。
+- **Fields**:
+  - `id: String`
+  - `scenarioId: TestScenario.id`
+  - `atomicClaimIds: [AtomicClaim.id]`
+  - `requiredSlots: [RequiredSlot.id]`
+  - `truthBaselineId: TruthBaseline.id`
+- **Validation**:
+  - 必须在任务执行前冻结
+  - 不允许在评测阶段新增 claim 或 slot
+
+### AtomicClaim
+- **Purpose**: 定义准确性评分的原子事实。
+- **Fields**:
+  - `id: String`
+  - `scenarioId: TestScenario.id`
+  - `statement: String`
+  - `weight: Int`
+  - `evidenceLocator: String`
+- **Validation**:
+  - 事实粒度必须固定
+  - `weight` 默认为统一值，除非合同显式声明差异
+
+### RequiredSlot
+- **Purpose**: 定义完整性评分所需槽位。
+- **Fields**:
+  - `id: String`
+  - `scenarioId: TestScenario.id`
+  - `name: String`
+  - `required: Bool`
+  - `evidenceLocator: String`
+
+### DriverProfile
+- **Purpose**: 描述 benchmark 的受控执行器。
+- **Fields**:
+  - `id: String`
+  - `driverType: scripted | record-replay | controlled-agent`
+  - `promptTemplate: String?`
+  - `temperature: String?`
+  - `replaySource: String?`
+  - `callPathPolicy: String`
+- **Validation**:
+  - 不能使用未固定配置的自由实时 Agent
+  - 默认类型为 `record-replay`，除非合同明确声明受控 Agent 配置
+
+### TokenizerSpecification
+- **Purpose**: 定义统一 token 估算标尺。
+- **Fields**:
+  - `id: String`
+  - `name: String`
+  - `version: String`
+  - `normalizationBoundary: output-only | full-call`
+- **Validation**:
+  - 每轮评测只能绑定一个 tokenizer 规范
+  - 默认 `name = cl100k_base`
+
+### TruthBaseline
+- **Purpose**: 锚定参考真值对应的文档/SDK 版本。
+- **Fields**:
+  - `id: String`
+  - `xcodeVersion: String?`
+  - `sdkVersion: String?`
+  - `officialDocsCapturedAt: DateTime?`
+  - `notes: String?`
 
 ### RubricScore
 - **Purpose**: 记录总评分模型中的维度得分。
@@ -155,6 +229,6 @@
 1. 执行环境重置
 2. 启动目标并发送任务输入
 3. 记录原始输出、调用次数和 token 边界
-4. 绑定官方证据
-5. 计算准确性/完整性/诊断性/格式评分
+4. 根据 Golden Dataset 绑定官方证据与版本锚点
+5. 计算准确性/完整性/诊断性/格式评分，并标记是否发生 over-fetching
 6. 汇总到比较报告

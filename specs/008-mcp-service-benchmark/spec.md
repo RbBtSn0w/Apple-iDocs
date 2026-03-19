@@ -12,6 +12,7 @@
 - Q: 12 条基础测试任务应如何定义，才能保证四个目标的评分公平？ → A: 基础总分只比较四个目标都应具备的共通能力，专属能力单列展示，不计入基础总分。
 - Q: 数据格式对比应如何定义才更符合 AI agent 使用场景？ → A: 数据格式对比统一定义为 AI agent 的输出可消费性评估，不按 Markdown、JSON、纯文本做表面分类，而按结构可提取性、信息密度、任务适配度、噪声控制和可引用性进行任务内评分。
 - Q: 如何提高性能、质量和诊断指标的统计科学性与可重复性？ → A: 性能与稳定性采用至少 10 次自动化样本并输出 P50/P90/P99 与标准差；准确性和完整性采用客观检查清单评分；Token 成本按单次调用与整任务累计双边界记录；可诊断性采用明确定级 rubric；冷启动前必须执行缓存与进程隔离步骤。
+- Q: 如何避免原子事实、Driver、Tokenizer、过度召回和参考真值版本差异破坏 benchmark 的可比性？ → A: 在执行前冻结 Golden Dataset（Atomic Claims 与 Required Slots）、使用受控 Driver、统一单一 Tokenizer、对 over-fetching 施加主评分惩罚，并在每轮评测中锚定参考真值对应的 SDK/文档版本。
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -87,6 +88,9 @@
 - 某个目标返回更完整内容但包含大量导航、front matter 或重复信息时，如何避免“长输出”被误判为“更适合 agent”？
 - 当测试按固定顺序执行时，如何避免前序任务留下的进程态、磁盘缓存或 DNS 缓存给后序目标带来不公平优势？
 - 当某个目标需要多次 tool call 才完成一条任务时，如何避免只看单次输出 token 而低估整任务上下文成本？
+- 当不同评估者对同一官方文档提取出不同粒度的 atomic claims 时，如何避免准确性分母漂移？
+- 当真实 LLM 作为 Driver 产生不同 tool call 路径时，如何避免 Driver 波动污染 benchmark 结果？
+- 当本地 Xcode 文档与在线官方文档版本不一致时，如何区分“工具缺陷”和“数据源版本差异”？
 
 ## Requirements *(mandatory)*
 
@@ -128,6 +132,11 @@
 - **FR-034**: 系统 MUST 为可诊断性定义固定 rubric，至少覆盖静默失败或超时、通用错误、具体错误原因、具体原因加操作建议四个等级
 - **FR-035**: 系统 MUST 在每个冷启动样本前执行环境重置步骤，至少包括目标进程重启、项目级缓存清理和必要的状态隔离说明
 - **FR-036**: 系统 MUST 产出独立的《度量标准与评分细则》工件，用于冻结检查清单、统计口径、诊断 rubric 和格式评分解释，确保跨评估者复测的一致性
+- **FR-037**: 系统 MUST 在执行任何 benchmark 前，为每条测试任务预先冻结 Golden Dataset，至少包含 Atomic Claims、Required Slots 和官方参考来源，不允许评测者在对比时临场扩展或重写分母
+- **FR-038**: 系统 MUST 明确定义 benchmark Driver，并使用受控执行器复现固定调用路径；默认 Driver 为可回放的 `record-replay` 或 `temperature=0` 的受控 Agent，不得把自由波动的实时 Agent 直接当作 benchmark Driver
+- **FR-039**: 系统 MUST 统一使用 `cl100k_base` 作为估算标尺计算所有不可观测 token，并在记录与报告中声明该 Tokenizer 名称与版本
+- **FR-040**: 系统 MUST 将 over-fetching 或 unsolicited information 对 Agent 造成的上下文膨胀纳入主评分惩罚，不能只在并列的格式评分中扣分
+- **FR-041**: 系统 MUST 在每个 `EvaluationRun` 中锚定参考真值对应的 Xcode / SDK / 官方文档版本；当目标返回更新或更旧版本的数据时，报告必须将其标记为版本差异而非默认计入工具能力缺陷
 
 ### Key Entities *(include if feature involves data)*
 
@@ -138,6 +147,10 @@
 - **扩展能力任务 (Extended-Capability Task)**: 仅部分目标具备的专属能力测试任务，用于单列展示扩展优势，不计入基础总分
 - **评估指标 (Evaluation Metric)**: 用于比较四个目标表现的标准字段，如速度、准确性、完整性、稳定性和成本可观测性
 - **评分细则 (Scoring Rubric)**: 将准确性、完整性、可诊断性和格式可消费性转化为可核对分值的规则集合
+- **Golden Dataset**: 在 benchmark 执行前预生成并冻结的标准答案集合，包含每条任务的 Atomic Claims、Required Slots 和参考真值定位信息
+- **Driver Profile**: 定义 benchmark 调用由哪类执行器驱动、其固定提示、温度、回放输入和调用路径约束
+- **Tokenizer Specification**: 定义估算 token 时唯一允许使用的 tokenizer 名称、版本和归一化边界
+- **Truth Baseline**: 记录每轮评测采用的 Xcode、SDK 和官方文档版本锚点，用于解释离线归档与在线数据差异
 - **格式可消费性评估 (Format Readiness Evaluation)**: 面向 AI agent 的输出可消费性评分，衡量结构可提取性、信息密度、任务适配度、噪声控制和可引用性
 - **参考答案 (Reference Evidence)**: 用于判断返回内容是否正确、充分和可用的基准资料
 - **客观记录 (Evidence Record)**: 每次运行保留的原始事实数据，用于支撑评分、结论和后续复核
@@ -155,6 +168,9 @@
 - 格式评估服务于 AI agent 选型，不服务于通用文档阅读体验排名；输出更完整并不天然代表更适合 agent。
 - 格式评分以完成任务的可消费性为准，不以底层返回是不是 JSON、Markdown 或纯文本直接加分。
 - 准确性、完整性和可诊断性必须通过冻结后的评分细则计算，评估者只负责按证据勾选，不负责临场定义标准。
+- Atomic Claims 和 Required Slots 必须在任务执行前被冻结成 Golden Dataset；评测阶段只能勾选命中情况，不能重写事实粒度。
+- token 估算必须统一使用 `cl100k_base`；不同模型词表差异不得直接混入跨目标成本比较。
+- 若某目标返回与真值基线不同版本的数据，必须先归类为版本偏差，再判断是否影响能力评分。
 
 ## Success Criteria *(mandatory)*
 
@@ -172,3 +188,6 @@
 - **SC-010**: 对每个目标在每类共享能力任务上的性能结果都能输出 P50、P90、P99 和标准差，且样本量不少于 10
 - **SC-011**: 所有可诊断性分数都能映射到预定义 rubric 等级，评审记录中不存在无法解释的自由打分
 - **SC-012**: 在重复执行相同任务时，缓存重置与状态隔离步骤被完整记录，且冷启动样本可与热启动样本明确区分
+- **SC-013**: 100% 的共享任务在执行前都已生成并冻结 Golden Dataset，评审记录中不存在临场新增或修改的 Atomic Claims
+- **SC-014**: 100% 的 token 估算都声明同一 Tokenizer 规范，且报告能区分真实 token、统一估算 token 与不可观测项
+- **SC-015**: 100% 的 benchmark 运行都声明 Driver Profile 和 Truth Baseline，复测时能够复用同一 Driver 与版本锚点
