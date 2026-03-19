@@ -2,7 +2,7 @@
 
 **Feature Branch**: `007-npm-cli-distribution`  
 **Created**: 2026-03-18  
-**Status**: Draft  
+**Status**: completed  
 **Input**: "Provide npm-managed distribution and local registration flow for the Swift-based `idocs` CLI."
 
 ## User Scenarios & Testing

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `006-cli-multisource-docs`  
 **Created**: 2026-03-18  
-**Status**: Draft  
+**Status**: completed  
 **Input**: User description: "iDocs has migrated from MCP interaction to CLI. Keep capability goals, complete local Xcode doc access, and add sosumi.ai as an additional remote source under a deterministic retrieval chain."
 
 ## User Scenarios & Testing *(mandatory)*
