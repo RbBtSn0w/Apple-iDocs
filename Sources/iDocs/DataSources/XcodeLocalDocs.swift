@@ -129,6 +129,27 @@ public struct XcodeLocalDocs {
             }
         }
 
+        // Fallback path for modern Xcode caches:
+        // scan DeveloperDocumentation.index store files and recover
+        // /documentation/... identifiers directly from index payloads.
+        if results.isEmpty {
+            let indexResults = try searchDeveloperDocumentationIndexes(query: trimmed, limit: 50)
+            if !indexResults.isEmpty {
+                logger.info("Recovered \(indexResults.count) matches from DeveloperDocumentation.index for: \(trimmed)")
+                results = indexResults
+            }
+        }
+
+        // Composite-query fallback:
+        // if query is like "SwiftUI View", resolve likely module token first.
+        if results.isEmpty, let moduleHint = extractModuleHint(from: trimmed) {
+            let hinted = searchIndexStores(query: moduleHint, sdks: sdks)
+            if !hinted.isEmpty {
+                logger.info("Recovered \(hinted.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
+                results = hinted
+            }
+        }
+
         return results
     }
     
@@ -237,6 +258,18 @@ public struct XcodeLocalDocs {
         }
         return query.count >= 3 && uppercaseCount >= 2
     }
+
+    private func extractModuleHint(from query: String) -> String? {
+        let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        for token in tokens {
+            guard token.count >= 3 else { continue }
+            guard let first = token.first, first.isUppercase else { continue }
+            if isLikelyModuleQuery(token) {
+                return token
+            }
+        }
+        return nil
+    }
     
     private func guessPlatform(from name: String) -> String {
         if name.contains("iOS") { return "iOS" }
@@ -245,6 +278,176 @@ public struct XcodeLocalDocs {
         if name.contains("tvOS") { return "tvOS" }
         if name.contains("visionOS") { return "visionOS" }
         return "Unknown"
+    }
+
+    private func searchDeveloperDocumentationIndexes(query: String, limit: Int) throws -> [SearchResult] {
+        let tokens = tokenize(query: query)
+        guard !tokens.isEmpty else { return [] }
+
+        let indexRoots = findDeveloperIndexRoots(maxDepth: 6)
+        guard !indexRoots.isEmpty else { return [] }
+
+        var ranked: [(path: String, score: Double)] = []
+        var seen = Set<String>()
+
+        for root in indexRoots {
+            let storeDB = root
+                .appendingPathComponent("NSFileProtectionCompleteUntilFirstUserAuthentication")
+                .appendingPathComponent("index.spotlightV3")
+                .appendingPathComponent("store.db")
+            guard fileManager.fileExists(atPath: storeDB.path) else { continue }
+
+            for path in extractDocumentationPaths(from: storeDB) {
+                if seen.contains(path) { continue }
+                let score = scoreForPath(path, tokens: tokens)
+                guard score > 0 else { continue }
+                seen.insert(path)
+                ranked.append((path, score))
+            }
+        }
+
+        return ranked
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score { return lhs.path < rhs.path }
+                return lhs.score > rhs.score
+            }
+            .prefix(limit)
+            .map { item in
+                let title = titleFromPath(item.path)
+                return SearchResult(
+                    title: title,
+                    abstract: "Matched in local Xcode documentation index.",
+                    path: item.path,
+                    kind: item.path.split(separator: "/").count <= 3 ? .framework : .overview,
+                    source: .local,
+                    relevance: item.score
+                )
+            }
+    }
+
+    private func findDeveloperIndexRoots(maxDepth: Int) -> [URL] {
+        var results: [URL] = []
+        var queue: [(url: URL, depth: Int)] = [(cacheDirectory, 0)]
+        var head = 0
+
+        while head < queue.count {
+            let current = queue[head]
+            head += 1
+            if current.depth > maxDepth { continue }
+
+            let children = (try? fileManager.contentsOfDirectory(
+                at: current.url,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []
+
+            for child in children where child.hasDirectoryPath {
+                if child.lastPathComponent == "DeveloperDocumentation.index" {
+                    results.append(child)
+                    continue
+                }
+                if current.depth < maxDepth {
+                    queue.append((child, current.depth + 1))
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func extractDocumentationPaths(from url: URL) -> [String] {
+        let data: Data
+        do {
+            if fileManager is FileManager {
+                data = try Data(contentsOf: url, options: .mappedIfSafe)
+            } else {
+                data = try fileManager.read(from: url)
+            }
+        } catch {
+            return []
+        }
+
+        let prefix = Array("/documentation/".utf8)
+        var matches = Set<String>()
+        let maxPathLength = 240
+
+        data.withUnsafeBytes { rawBuffer in
+            let bytes = rawBuffer.bindMemory(to: UInt8.self)
+            guard bytes.count > prefix.count else { return }
+
+            var i = 0
+            while i + prefix.count < bytes.count {
+                var found = true
+                for j in 0..<prefix.count where bytes[i + j] != prefix[j] {
+                    found = false
+                    break
+                }
+                if !found {
+                    i += 1
+                    continue
+                }
+
+                var end = i + prefix.count
+                while end < bytes.count && end - i < maxPathLength && isPathByte(bytes[end]) {
+                    end += 1
+                }
+
+                let length = end - i
+                if length > prefix.count + 1,
+                   let base = bytes.baseAddress {
+                    let candidate = Data(bytes: base.advanced(by: i), count: length)
+                    if let path = String(data: candidate, encoding: .utf8),
+                       path.hasPrefix("/documentation/") {
+                        matches.insert(path)
+                    }
+                }
+                i = end
+            }
+        }
+
+        return Array(matches)
+    }
+
+    private func isPathByte(_ byte: UInt8) -> Bool {
+        switch byte {
+        case 48...57, 65...90, 97...122, 45, 46, 47, 95:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func tokenize(query: String) -> [String] {
+        query
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private func scoreForPath(_ path: String, tokens: [String]) -> Double {
+        let lower = path.lowercased()
+        var score = 0.0
+        var matchedCount = 0
+        for token in tokens {
+            if lower.hasSuffix("/\(token)") { score += 50 }
+            if lower.contains("/\(token)") { score += 20 }
+            if lower.contains(token) {
+                score += 10
+                matchedCount += 1
+            }
+        }
+        if matchedCount == 0 { return 0 }
+        score += Double(matchedCount) * 15
+        score -= Double(path.count) * 0.01
+        return score
+    }
+
+    private func titleFromPath(_ path: String) -> String {
+        let components = path.split(separator: "/")
+        guard let raw = components.last else { return path }
+        let normalized = raw.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
+        return normalized
     }
 }
 
