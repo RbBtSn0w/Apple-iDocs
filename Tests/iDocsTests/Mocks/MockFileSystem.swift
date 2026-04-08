@@ -18,7 +18,9 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
         let path = Self.canonicalPath(url.path)
         let filtered = virtualFiles.keys.filter {
             let candidate = Self.canonicalPath($0)
-            return candidate.hasPrefix(path) && candidate != path
+            guard candidate.hasPrefix(path), candidate != path else { return false }
+            let relative = candidate.dropFirst(path.count).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return !relative.isEmpty && !relative.contains("/")
         }
         return filtered.map { item in
             if item.hasSuffix("/") {
@@ -65,6 +67,9 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
         var result = path
         while result.contains("//") {
             result = result.replacingOccurrences(of: "//", with: "/")
+        }
+        while result.count > 1 && result.hasSuffix("/") {
+            result.removeLast()
         }
         return result
     }

@@ -4,6 +4,8 @@ import Foundation
 
 @Suite("FetchDocTool Tests")
 struct FetchDocToolTests {
+    private let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+
     @Test("FetchDocTool returns cached content from disk")
     func diskCacheHit() async throws {
         let mockFS = MockFileSystem()
@@ -13,7 +15,11 @@ struct FetchDocToolTests {
         try await diskCache.set("/documentation/swiftui/view", value: data, ttl: 3600)
 
         let api = AppleJSONAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout))
-        let tool = FetchDocTool(api: api, xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider()), diskCache: diskCache)
+        let tool = FetchDocTool(
+            api: api,
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
         let markdown = try await tool.run(path: "/documentation/swiftui/view")
 
         #expect(markdown.contains("# Cached"))
@@ -23,12 +29,13 @@ struct FetchDocToolTests {
     func localXcodeHit() async throws {
         let mockFS = MockFileSystem()
         let searchProvider = MockSearchProvider()
-        let xcodeDocs = XcodeLocalDocs(fileManager: mockFS, searchProvider: searchProvider)
+        let xcodeDocs = XcodeLocalDocs(fileManager: mockFS, searchProvider: searchProvider, cacheDirectory: cacheDirectory)
         mockFS.virtualFiles[xcodeDocs.cacheDirectory.path] = Data()
 
         let sdkDir = xcodeDocs.cacheDirectory.appendingPathComponent("TestSDK")
         let sdkDirPath = sdkDir.path + "/"
         mockFS.virtualFiles[sdkDirPath] = Data()
+        mockFS.virtualFiles[sdkDir.appendingPathComponent("documentation").path + "/"] = Data()
 
         let path = "/documentation/swiftui/view"
         let content = DocCHelpers.content(title: "Local")
@@ -56,7 +63,11 @@ struct FetchDocToolTests {
         session.setResponse(for: url, data: data, response: MockPayloads.httpResponse(url: url))
         let api = AppleJSONAPI(session: session)
 
-        let tool = FetchDocTool(api: api, xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider()), diskCache: diskCache)
+        let tool = FetchDocTool(
+            api: api,
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
         let markdown = try await tool.run(path: "/documentation/swiftui/view")
 
         #expect(markdown.contains("# Remote"))
@@ -79,7 +90,12 @@ struct FetchDocToolTests {
         )
         let sosumi = SosumiAPI(session: sosumiSession)
 
-        let tool = FetchDocTool(api: apple, sosumiAPI: sosumi, xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider()), diskCache: diskCache)
+        let tool = FetchDocTool(
+            api: apple,
+            sosumiAPI: sosumi,
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
         let output = try await tool.runDetailed(path: "/documentation/swiftui/view")
 
         #expect(output.source == .sosumi)

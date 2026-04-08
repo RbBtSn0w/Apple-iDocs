@@ -22,6 +22,8 @@ Note:
 
 - Ensure Xcode documentation cache exists under:
   - `~/Library/Developer/Xcode/DocumentationCache`
+- Modern Xcode caches may store local docs under `DeveloperDocumentation.index` rather than `documentation/*.json`.
+- Current local-first validation is strongest for module-style queries like `SwiftUI` and `SwiftData`; generic symbol queries may still fall through to remote search to avoid inventing incorrect local paths.
 - Run search/fetch and verify local hit behavior where applicable.
 
 ## 4) Remote Fallback Validation
