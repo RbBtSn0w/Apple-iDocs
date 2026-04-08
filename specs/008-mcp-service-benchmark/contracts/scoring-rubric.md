@@ -32,6 +32,7 @@
 - `unverifiable`
 
 准确性分数来自冻结后的 claims 命中情况，不允许评测时重写 claim 粒度或分母。
+准确性主分必须由 `avg_claim_rate` 计算，不允许退化为 `success_rate` 代理。
 
 ## Completeness Rubric
 
@@ -44,12 +45,19 @@
 - `long-content`: 分段结构、关键内容保留、来源
 
 完整性分数来自命中率映射，不允许只用自由文本描述。
+完整性主分必须由 `avg_slot_rate` 计算，不允许退化为 `success_rate` 代理。
 
 ## Golden Dataset Rule
 
 - Atomic Claims 和 Required Slots 必须在任务执行前冻结
 - 评测者只能勾选 `correct / incorrect / missing / unverifiable`
 - 不允许在评测阶段新增 claims、拆分 claims 或合并 slots
+
+### Required Pre-generation
+
+- 12 条共享任务的 `atomic_claims` 与 `required_slots` 必须在执行前写入 Golden Dataset
+- 每个 claim 的粒度必须固定（例如 “参数枚举值是否拆分”为明确预定义）
+- 评测时仅允许二元勾选，不允许临场重写分母
 
 ## Efficiency Rubric
 
@@ -83,6 +91,13 @@
 | `3` | 有具体原因且包含可执行建议、候选路径或重试条件 |
 
 最终诊断分数必须映射到该等级。
+
+### Numeric Mapping Example (Weight = 10)
+
+- Level `0` -> 0
+- Level `1` -> 3.3
+- Level `2` -> 6.6
+- Level `3` -> 10
 
 ## Format Readiness Rubric
 
@@ -123,3 +138,10 @@
 
 不得把“格式分高”解释为“内容更准确”或“功能更完整”。
 不得把 over-fetching 风险仅视为格式问题而完全排除在主评分之外。
+标记为 `needs_review` 的样本必须进入单独队列，默认不计入总分分母，直到人工复核完成。
+
+## Driver and Tokenizer Pinning
+
+- Driver 必须使用受控配置（固定温度、固定流程或 record/replay）
+- Token 估算必须使用统一 tokenizer 标尺（默认 `cl100k_base`）
+- 报告必须显式标记 token 数据是 `实测` 还是 `估算`

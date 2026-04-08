@@ -4,6 +4,8 @@
 
 本合同定义 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai` 四个目标在 008 基准评测中的统一接入要求、最小可用探测标准和成功/失败判定边界。
 
+其中 MCP 目标必须通过 JSON-RPC 2.0 over stdio 完成 `initialize -> tools/list -> tools/call` 协议链路，不允许仅用静态脚本回包替代协议交互。
+
 ## Target Set
 
 - `idocs-cli`
@@ -64,6 +66,11 @@
 - `rate_limited`
 - `internal`
 
+若状态为 `failure` 或 `partial`，必须附带：
+- `error_category`
+- `error_reason`
+- `diagnostic_hint`（若可用）
+
 ## Cold / Warm Sampling Contract
 
 - 冷启动样本：执行环境重置后运行
@@ -79,3 +86,9 @@
 - 官方参考证据链接
 
 若某目标被宣称“更快”“更稳定”“更适合 agent 使用”，必须能追溯到对应样本和证据记录。
+
+## Call Chain Normalization
+
+- 每条任务的 `call_count` 必须按完整调用链累计
+- 任何中间步骤（重试、二次抓取、二次搜索）必须计入总成本
+- 若某目标天然不支持某任务，必须返回 `not-applicable` 并说明原因，不得静默失败

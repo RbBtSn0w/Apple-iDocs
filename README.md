@@ -101,6 +101,7 @@ Notes:
 - If `iDocs.xcworkspace` is missing, it attempts `tuist generate` automatically.
 - It does not require opening Xcode IDE.
 - On failures, it prints recent logs for quick diagnostics.
+- `./scripts/tuist-silent.sh test` and benchmark scripts should run serially unless you set a separate `IDOCS_DERIVED_DATA_PATH`, otherwise Xcode may lock `build.db`.
 
 ## Usage
 

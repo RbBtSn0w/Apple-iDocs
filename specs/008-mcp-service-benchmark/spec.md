@@ -2,7 +2,7 @@
 
 **Feature Branch**: `008-mcp-service-benchmark`  
 **Created**: 2026-03-19  
-**Status**: Draft  
+**Status**: Completed  
 **Input**: User description: "为了更好验证和校验CLI的能力和返回的数据内容, 对AI的理解和帮助. 现在将apple-docs-mcp, apple-doc-mcp, sosumi.ai, 三个mcp服务都接入到当前项目环境下(注意,非全局设置MCP服务), 然后整理一些测试数据, 对四个服务, 分别进行访问和测试. 一个idocs cli, 三个MCP服务. 测试环境需要进行设计和对比, 例如token消耗, 执行速度, 内容准确等(自行补充)"
 
 ## Clarifications

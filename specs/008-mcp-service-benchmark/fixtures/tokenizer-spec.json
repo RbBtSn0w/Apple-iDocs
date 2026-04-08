@@ -1,0 +1,5 @@
+{
+  "tokenizerSpec": "cl100k_base",
+  "estimationRule": "estimated_tokens = ceil(output_chars / 4)",
+  "notes": "Use one canonical tokenizer proxy for all targets when true token is not observable."
+}

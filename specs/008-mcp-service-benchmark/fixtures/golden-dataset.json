@@ -1,0 +1,32 @@
+{
+  "truthBaseline": "xcode-16.0-ios-18.0",
+  "scenarios": [
+    {
+      "scenarioId": "S001",
+      "atomicClaims": [
+        "title equals View",
+        "path contains /documentation/swiftui/view",
+        "framework equals SwiftUI"
+      ],
+      "requiredSlots": ["title", "path", "summary", "source"]
+    },
+    {
+      "scenarioId": "S003",
+      "atomicClaims": [
+        "title equals View",
+        "kind includes protocol",
+        "platform includes iOS"
+      ],
+      "requiredSlots": ["title", "body", "signature", "parameters", "platform", "source"]
+    },
+    {
+      "scenarioId": "S009",
+      "atomicClaims": [
+        "error is surfaced",
+        "error has category",
+        "error has actionable hint"
+      ],
+      "requiredSlots": ["error_category", "error_reason", "suggestion"]
+    }
+  ]
+}

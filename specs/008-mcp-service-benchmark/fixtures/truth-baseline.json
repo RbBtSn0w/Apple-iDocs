@@ -1,0 +1,13 @@
+{
+  "truthBaselineId": "xcode-16.0-ios-18.0",
+  "officialSources": [
+    "https://developer.apple.com/documentation",
+    "official-docc-archive://xcode-16.0"
+  ],
+  "sdkVersionPinning": {
+    "xcode": "16.0",
+    "ios": "18.0",
+    "macos": "15.0"
+  },
+  "versionSkewPolicy": "mark_as_version_skew_and_exclude_from_accuracy_denominator"
+}

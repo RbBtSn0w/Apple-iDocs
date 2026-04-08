@@ -30,8 +30,19 @@
 | `overfetch_flag` | Yes | 是否发生过度召回或无请求噪音 |
 | `error_category` | No | 失败分类 |
 | `evidence_refs` | Yes | 证据引用列表 |
+| `normalized_evidence_ref` | Yes | 结构化抽取结果引用 |
+| `assertion_ref` | Yes | 断言结果引用 |
 | `accuracy_verdict` | Yes | 准确性结论 |
 | `completeness_verdict` | Yes | 完整性结论 |
+| `claim_rate` | Yes | Atomic claims 命中率（0-1） |
+| `slot_rate` | Yes | Required slots 命中率（0-1） |
+| `claim_breakdown` | Yes | Atomic claims 计数明细 |
+| `slot_breakdown` | Yes | Required slots 命中明细 |
+| `judge_verdict` | No | LLM Judge 判定结论 |
+| `judge_confidence` | No | LLM Judge 置信度 |
+| `judge_reason` | No | LLM Judge 判定原因 |
+| `needs_review` | Yes | 是否进入人工复审队列 |
+| `scored_sample` | Yes | 是否纳入总分分母 |
 | `reviewer_notes` | No | 评审备注 |
 
 ## Format Readiness Fields
@@ -68,6 +79,9 @@
 
 每个 `目标 x 共享任务` 必须能聚合输出：
 - `sample_count`
+- `scored_sample_count`
+- `unscored_sample_count`
+- `needs_review_count`
 - `success_rate`
 - `timeout_rate`
 - `mean_duration_ms`
@@ -75,6 +89,8 @@
 - `p90_duration_ms`
 - `p99_duration_ms` 或 `insufficient_sample`
 - `stddev_duration_ms`
+- `avg_claim_rate`
+- `avg_slot_rate`
 
 ## Golden Dataset Contract
 
@@ -90,3 +106,48 @@
 - 每个分数必须能映射回至少一条执行记录
 - 每个执行记录必须能映射回至少一个证据引用
 - 每个共享任务的基础总分和格式评分都必须可追溯到字段级原始记录
+- 若样本标记 `needs_review=true`，必须单列展示且默认不计入总分分母
+
+## Example Record (JSON)
+
+```json
+{
+  "run_id": "run-20260319-001",
+  "target_id": "idocs-cli",
+  "scenario_id": "S003",
+  "attempt_index": 4,
+  "sample_class": "warm",
+  "status": "success",
+  "started_at": "2026-03-19T10:00:00Z",
+  "finished_at": "2026-03-19T10:00:01Z",
+  "duration_ms": 944,
+  "call_count": 2,
+  "output_length": 2048,
+  "avg_token_per_call": 256,
+  "total_token_per_task": 512,
+  "token_observability": "none",
+  "tokenizer_spec": "cl100k_base",
+  "driver_profile": "controlled-agent-v1",
+  "truth_baseline": "xcode-16.0-ios-18.0",
+  "overfetch_flag": false,
+  "error_category": null,
+  "evidence_refs": [
+    "artifacts/evidence/run-20260319-001/idocs-cli-S003.txt"
+  ],
+  "accuracy_verdict": "correct",
+  "completeness_verdict": "partial",
+  "reviewer_notes": "",
+  "format_extractability": 5,
+  "format_density": 3,
+  "format_task_fit": 5,
+  "format_noise": 3,
+  "format_citability": 5,
+  "format_notes": "source path preserved"
+}
+```
+
+## Multi-turn Cost Rule
+
+- 成本统计必须同时记录 `avg_token_per_call` 与 `total_token_per_task`
+- `call_count` 必须覆盖完整调用链（例如 `search -> fetch -> fetch`）
+- 比较“更省 token”时，默认优先比较 `total_token_per_task`

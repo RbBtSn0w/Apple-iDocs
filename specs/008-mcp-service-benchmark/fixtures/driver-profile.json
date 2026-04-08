@@ -1,0 +1,11 @@
+{
+  "driverProfileId": "controlled-agent-v1",
+  "mode": "record-replay",
+  "temperature": 0,
+  "maxTurnsPerTask": 6,
+  "retryPolicy": {
+    "maxRetries": 1,
+    "retryOn": ["network", "timeout"]
+  },
+  "callCountPolicy": "count every tool/service request in task chain"
+}

@@ -1,0 +1,34 @@
+{
+  "targets": [
+    {
+      "id": "idocs-cli",
+      "kind": "cli",
+      "enabled": true,
+      "probeCommand": "./scripts/benchmark/target-idocs-cli.sh --probe"
+    },
+    {
+      "id": "apple-docs-mcp",
+      "kind": "mcp",
+      "enabled": true,
+      "command": "npx",
+      "args": ["-y", "@kimsungwhee/apple-docs-mcp"],
+      "probeCommand": "./scripts/benchmark/target-apple-docs-mcp.sh --probe"
+    },
+    {
+      "id": "apple-doc-mcp",
+      "kind": "mcp",
+      "enabled": true,
+      "command": "npx",
+      "args": ["apple-doc-mcp-server@latest"],
+      "probeCommand": "./scripts/benchmark/target-apple-doc-mcp.sh --probe"
+    },
+    {
+      "id": "sosumi-ai",
+      "kind": "mcp",
+      "enabled": true,
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://sosumi.ai/mcp"],
+      "probeCommand": "./scripts/benchmark/target-sosumi-ai.sh --probe"
+    }
+  ]
+}

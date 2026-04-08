@@ -1,0 +1,24 @@
+{
+  "probes": [
+    {
+      "targetId": "idocs-cli",
+      "request": "search swiftui view --limit 1",
+      "expectation": "returns at least one identifiable symbol result"
+    },
+    {
+      "targetId": "apple-docs-mcp",
+      "request": "search 'SwiftUI View' limit=1",
+      "expectation": "returns a documentation reference or a diagnosable error"
+    },
+    {
+      "targetId": "apple-doc-mcp",
+      "request": "fetch '/documentation/swiftui/view'",
+      "expectation": "returns title/body summary or diagnosable error"
+    },
+    {
+      "targetId": "sosumi-ai",
+      "request": "search 'SwiftUI View' limit=1",
+      "expectation": "returns document card/url or diagnosable error"
+    }
+  ]
+}

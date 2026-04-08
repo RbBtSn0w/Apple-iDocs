@@ -1,0 +1,9 @@
+{
+  "name": "benchmark-tools",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "dependencies": {
+    "js-tiktoken": "^1.0.21"
+  }
+}

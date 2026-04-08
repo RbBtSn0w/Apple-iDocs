@@ -1,0 +1,20 @@
+{
+  "sharedTasks": [
+    { "scenarioId": "S001", "type": "search-exact", "input": "SwiftUI View", "expectedTruthSource": "https://developer.apple.com/documentation/swiftui/view" },
+    { "scenarioId": "S002", "type": "search-fuzzy", "input": "navigation split view", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S003", "type": "fetch", "input": "/documentation/swiftui/view", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S004", "type": "understand", "input": "Summarize Observation framework in iOS", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S005", "type": "search-exact", "input": "URLSession", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S006", "type": "search-fuzzy", "input": "background transfer", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S007", "type": "fetch", "input": "/documentation/foundation/urlsession", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S008", "type": "understand", "input": "Explain actor isolation in Swift", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S009", "type": "error", "input": "/documentation/not/exist", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S010", "type": "long-content", "input": "/documentation/swiftui/bringing_robust_navigation_structure_to_your_swiftui_app", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S011", "type": "long-content", "input": "/documentation/swiftdata", "expectedTruthSource": "official-page" },
+    { "scenarioId": "S012", "type": "error", "input": "%%%%invalid-query%%%%", "expectedTruthSource": "official-page" }
+  ],
+  "extendedTasks": [
+    { "scenarioId": "E001", "type": "sdk-local-cache", "input": "show available local DocC archives", "notApplicableAllowed": true },
+    { "scenarioId": "E002", "type": "deep-read", "input": "extract platform-specific differences from long doc", "notApplicableAllowed": true }
+  ]
+}

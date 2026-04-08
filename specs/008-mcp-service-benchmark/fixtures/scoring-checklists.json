@@ -1,0 +1,21 @@
+{
+  "completenessSlots": {
+    "search": ["title", "path_or_identifier", "summary_or_snippet", "source_hint"],
+    "fetch": ["title", "body", "signature", "parameters", "platform", "source"],
+    "understand": ["concept", "constraints", "source", "task_relevance"],
+    "error": ["error_category", "reason", "actionable_hint"],
+    "long-content": ["structure", "key_points", "source"]
+  },
+  "diagnosabilityMapping": {
+    "0": "silent failure or timeout",
+    "1": "generic failure only",
+    "2": "specific reason",
+    "3": "reason plus actionable suggestion"
+  },
+  "overfetchPenalty": {
+    "none": 0,
+    "mild": 3,
+    "moderate": 7,
+    "severe": 12
+  }
+}
