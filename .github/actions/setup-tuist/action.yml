@@ -1,0 +1,39 @@
+name: "Setup Tuist Environment"
+description: "Installs Tuist, caches the binary and SPM dependencies, and runs tuist install if needed."
+runs:
+  using: "composite"
+  steps:
+    - name: Cache Tuist Binary
+      uses: actions/cache@v4
+      id: cache-tuist-bin
+      with:
+        path: .tools/tuist
+        key: tuist-bin-${{ runner.os }}-${{ hashFiles('.tuist-version') }}
+
+    - name: Install Tuist
+      if: steps.cache-tuist-bin.outputs.cache-hit != 'true'
+      run: |
+        chmod +x ./scripts/install-tuist.sh
+        ./scripts/install-tuist.sh
+      shell: bash
+
+    - name: Add Tuist to PATH
+      run: |
+        echo "$(pwd)/.tools/tuist/bin" >> $GITHUB_PATH
+      shell: bash
+
+    - name: Cache SPM Dependencies
+      uses: actions/cache@v4
+      id: cache-spm
+      with:
+        path: |
+          Tuist/.build
+          ~/.local/state/tuist
+        key: tuist-spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', '.tuist-version') }}
+        restore-keys: |
+          tuist-spm-${{ runner.os }}-
+
+    - name: Tuist Install
+      if: steps.cache-spm.outputs.cache-hit != 'true'
+      run: tuist install
+      shell: bash

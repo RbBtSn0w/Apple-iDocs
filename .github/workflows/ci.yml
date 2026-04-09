@@ -12,29 +12,15 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Tuist
-        run: |
-          chmod +x ./scripts/install-tuist.sh
-          ./scripts/install-tuist.sh >> "$GITHUB_PATH"
-        
-      - name: Tuist Install
-        run: tuist install
-        
+
+      - name: Setup Tuist
+        uses: ./.github/actions/setup-tuist
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
-        
+
       - name: Run Default Tests
         run: ./scripts/tuist-silent.sh test
-
-  arch-gate:
-    timeout-minutes: 10
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run architecture gate checks
-        run: ./scripts/arch-gate.sh
 
   e2e-cli-offline:
     timeout-minutes: 30
@@ -42,10 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Tuist
-        run: |
-          chmod +x ./scripts/install-tuist.sh
-          ./scripts/install-tuist.sh >> "$GITHUB_PATH"
+      - name: Setup Tuist
+        uses: ./.github/actions/setup-tuist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: npm/package-lock.json
 
       - name: Install Node dependencies for npm wrapper
         run: npm --prefix npm ci

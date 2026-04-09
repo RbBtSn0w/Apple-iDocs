@@ -27,6 +27,7 @@ DerivedData/
 /.tuist/
 /graph.dot
 /.build-tuist/
+.tools/
 
 # --- macOS ---
 .DS_Store
