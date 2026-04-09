@@ -6,6 +6,16 @@ cd "$ROOT_DIR"
 
 failures=0
 
+search() {
+  local pattern="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" "$@"
+  else
+    grep -R -n -E "$pattern" "$@"
+  fi
+}
+
 pass() {
   echo "[PASS] $1"
 }
@@ -33,52 +43,52 @@ else
 fi
 
 # SC-006: App layer should not instantiate Common tools directly for search/fetch/list pathways.
-if rg -n 'SearchDocsTool\(|FetchDocTool\(|BrowseTechnologiesTool\(' Sources/iDocs >/dev/null 2>&1; then
+if search 'SearchDocsTool\(|FetchDocTool\(|BrowseTechnologiesTool\(' Sources/iDocs >/dev/null 2>&1; then
   fail "SC-006 Access Gate: Sources/iDocs directly instantiates Common tool types"
 else
   pass "SC-006 Access Gate"
 fi
 
 # SC-007: Adapter APIs are async-only (no completion handlers).
-if rg -n 'completion\s*:' Sources/iDocsAdapter >/dev/null 2>&1; then
+if search 'completion\s*:' Sources/iDocsAdapter >/dev/null 2>&1; then
   fail "SC-007 Concurrency Gate: completion handlers detected in Adapter"
-elif rg -n 'func\s+(search|fetch|listTechnologies)\(' Sources/iDocsAdapter/Protocols/DocumentationService.swift | grep -vq 'async throws'; then
+elif search 'func\s+(search|fetch|listTechnologies)\(' Sources/iDocsAdapter/Protocols/DocumentationService.swift | grep -vq 'async throws'; then
   fail "SC-007 Concurrency Gate: service methods are not async throws"
 else
   pass "SC-007 Concurrency Gate"
 fi
 
 # SC-008: App readiness via injected cache path and no hardcoded global writes in adapter path.
-if ! rg -n 'cachePath' Sources/iDocsAdapter/Models/DocumentationConfig.swift >/dev/null 2>&1; then
+if ! search 'cachePath' Sources/iDocsAdapter/Models/DocumentationConfig.swift >/dev/null 2>&1; then
   fail "SC-008 App Readiness Gate: DocumentationConfig.cachePath missing"
-elif ! rg -n 'DiskCache\(' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+elif ! search 'DiskCache\(' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
   fail "SC-008 App Readiness Gate: Adapter does not inject cache directory into DiskCache"
-elif ! rg -n 'enableFileLocking:\s*config\.enableFileLocking' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+elif ! search 'enableFileLocking:\s*config\.enableFileLocking' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
   fail "SC-008 App Readiness Gate: Adapter does not forward file-locking config"
 else
   pass "SC-008 App Readiness Gate"
 fi
 
 # SC-009: Version gate enforcement in adapter startup.
-if ! rg -n 'validateVersionCompatibility' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+if ! search 'validateVersionCompatibility' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
   fail "SC-009 Version Gate: compatibility validator missing"
-elif ! rg -n 'validateVersionCompatibility\(adapterVersion: adapterVersion, core: coreVersion\)' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+elif ! search 'validateVersionCompatibility\(adapterVersion: adapterVersion, core: coreVersion\)' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
   fail "SC-009 Version Gate: init does not enforce version check"
 else
   pass "SC-009 Version Gate"
 fi
 
 # T017 support: public adapter/common interfaces should avoid platform UI types.
-if rg -n 'NSView|UIView|NSColor|UIColor|import AppKit|import UIKit' Sources/iDocsAdapter Sources/iDocsKit >/dev/null 2>&1; then
+if search 'NSView|UIView|NSColor|UIColor|import AppKit|import UIKit' Sources/iDocsAdapter Sources/iDocsKit >/dev/null 2>&1; then
   fail "T017 Cross-platform Interface Audit: platform-specific UI types detected"
 else
   pass "T017 Cross-platform Interface Audit"
 fi
 
 # Capability guard: source observability for search/fetch.
-if ! rg -n 'public let source: RetrievalSource\?' Sources/iDocsAdapter/Models/CoreEntities.swift >/dev/null 2>&1; then
+if ! search 'public let source: RetrievalSource\?' Sources/iDocsAdapter/Models/CoreEntities.swift >/dev/null 2>&1; then
   fail "Capability Gate: adapter search result source metadata missing"
-elif ! rg -n '"source"\s*:\s*output\.source\.rawValue' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
+elif ! search '"source"\s*:\s*output\.source\.rawValue' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
   fail "Capability Gate: fetch source metadata mapping missing"
 else
   pass "Capability Gate: source observability"

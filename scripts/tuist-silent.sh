@@ -5,6 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 DERIVED_DATA_PATH="${IDOCS_DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex}"
 
+search_file() {
+  local pattern="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" "$file"
+  else
+    grep -n -E "$pattern" "$file"
+  fi
+}
+
 tuist_safe() {
   local tmp
   tmp="$(mktemp)"
@@ -15,7 +25,7 @@ tuist_safe() {
     return 0
   fi
 
-  if rg -n "recent-paths.json" "$tmp" >/dev/null 2>&1; then
+  if search_file "recent-paths.json" "$tmp" >/dev/null 2>&1; then
     rm -f "$HOME/.local/state/tuist/recent-paths.json"
     mkdir -p "$HOME/.local/state/tuist"
     touch "$HOME/.local/state/tuist/recent-paths.json"
@@ -51,20 +61,20 @@ run_xcodebuild_silent() {
   tmp="$(mktemp)"
 
   if xcodebuild -derivedDataPath "$DERIVED_DATA_PATH" "$@" >"$tmp" 2>&1; then
-    if ! rg -n "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
+    if ! search_file "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
       tail -n 20 "$tmp"
     fi
     rm -f "$tmp"
     return 0
   fi
 
-  if rg -n "Trying to load an unsigned library|code signature .* not valid for use in process|The bundle .* couldn’t be loaded" "$tmp" >/dev/null 2>&1; then
+  if search_file "Trying to load an unsigned library|code signature .* not valid for use in process|The bundle .* couldn’t be loaded" "$tmp" >/dev/null 2>&1; then
     rm -rf \
       "$DERIVED_DATA_PATH/Build/Products/Debug/iDocsTests.xctest" \
       "$DERIVED_DATA_PATH/Build/Intermediates.noindex/iDocs.build/Debug/iDocsTests.build"
 
     if xcodebuild -derivedDataPath "$DERIVED_DATA_PATH" "$@" >"$tmp" 2>&1; then
-      if ! rg -n "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
+      if ! search_file "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
         tail -n 20 "$tmp"
       fi
       rm -f "$tmp"

@@ -9,6 +9,24 @@ TRACE_FILE="specs/006-cli-multisource-docs/acceptance-traceability.md"
 
 failures=0
 
+search() {
+  local pattern="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" "$@"
+  else
+    grep -n -E "$pattern" "$@"
+  fi
+}
+
+extract_ids() {
+  if command -v rg >/dev/null 2>&1; then
+    rg -o 'FR-[0-9]{3}|SC-[0-9]{3}' "$1"
+  else
+    grep -oE 'FR-[0-9]{3}|SC-[0-9]{3}' "$1"
+  fi
+}
+
 if [[ ! -f "$SPEC_FILE" ]]; then
   echo "[FAIL] Traceability Gate: missing $SPEC_FILE"
   exit 1
@@ -22,16 +40,16 @@ fi
 ids=()
 while IFS= read -r id; do
   ids+=("$id")
-done < <(rg -o 'FR-[0-9]{3}|SC-[0-9]{3}' "$SPEC_FILE" | sort -u)
+done < <(extract_ids "$SPEC_FILE" | sort -u)
 
 for id in "${ids[@]}"; do
-  if ! rg -n "^\|\s*${id}\s*\|" "$TRACE_FILE" >/dev/null 2>&1; then
+  if ! search "^\|\s*${id}\s*\|" "$TRACE_FILE" >/dev/null 2>&1; then
     echo "[FAIL] Traceability Gate: ${id} missing in acceptance matrix"
     failures=$((failures + 1))
     continue
   fi
 
-  row="$(rg -n "^\|\s*${id}\s*\|" "$TRACE_FILE" | head -n1 | cut -d: -f2-)"
+  row="$(search "^\|\s*${id}\s*\|" "$TRACE_FILE" | head -n1 | cut -d: -f2-)"
   if ! grep -Eq 'Tests/|scripts/' <<<"$row"; then
     echo "[FAIL] Traceability Gate: ${id} has no automated check reference"
     failures=$((failures + 1))
