@@ -12,14 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16.0
-        run: sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
-
-      - name: Install ripgrep
-        run: brew install ripgrep
-
       - name: Install Tuist
-        run: brew install tuist
+        run: |
+          chmod +x ./scripts/install-tuist.sh
+          ./scripts/install-tuist.sh >> "$GITHUB_PATH"
 
       - name: Install Node dependencies for npm wrapper
         run: npm --prefix npm ci
