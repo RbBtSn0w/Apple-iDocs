@@ -1,0 +1,46 @@
+name: iDocs Live E2E (Non-Blocking)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  live-e2e:
+    timeout-minutes: 45
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tuist
+        run: curl -Ls https://install.tuist.io | bash
+
+      - name: Install Node dependencies for npm wrapper
+        run: npm --prefix npm ci
+
+      - name: Run iDocs CLI E2E (live)
+        id: run_live
+        continue-on-error: true
+        run: |
+          set +e
+          ./scripts/e2e-cli.sh live 2>&1 | tee /tmp/idocs-live-e2e.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Upload live E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: idocs-live-e2e-log
+          path: /tmp/idocs-live-e2e.log
+          if-no-files-found: warn
+
+      - name: Emit non-blocking summary
+        if: always()
+        run: |
+          if [[ "${{ steps.run_live.outputs.exit_code }}" != "0" ]]; then
+            echo "::warning::Live E2E failed with exit code ${{ steps.run_live.outputs.exit_code }}. This workflow is non-blocking by design."
+          else
+            echo "Live E2E passed."
+          fi

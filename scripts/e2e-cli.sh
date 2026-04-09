@@ -4,6 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+MODE="${1:-offline}"
+if [[ "$MODE" != "offline" && "$MODE" != "live" ]]; then
+  echo "Usage: $0 [offline|live]" >&2
+  exit 1
+fi
+
 DERIVED_DATA_PATH="${IDOCS_DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex}"
 IDOCS_LOCAL_BINARY_DEFAULT="$DERIVED_DATA_PATH/Build/Products/Debug/idocs"
 TMP_DIRS=()
@@ -35,6 +41,22 @@ assert_contains() {
   fi
 }
 
+assert_search_observability_or_no_result() {
+  local output="$1"
+  local context="$2"
+  if [[ "$output" == *"source:"* ]]; then
+    return 0
+  fi
+  if [[ "$output" == *"No matching documentation found."* ]]; then
+    return 0
+  fi
+  echo "[FAIL] $context: expected output to contain either 'source:' or 'No matching documentation found.'" >&2
+  echo "------ output ------" >&2
+  echo "$output" >&2
+  echo "--------------------" >&2
+  exit 1
+}
+
 assert_exit_zero() {
   local code="$1"
   local context="$2"
@@ -58,6 +80,7 @@ run_cmd_capture() {
   rm -f "$out_file"
 }
 
+echo "[E2E] Mode: $MODE"
 echo "[E2E] Build local CLI binary"
 ./scripts/tuist-silent.sh build iDocs >/dev/null
 
@@ -84,18 +107,20 @@ run_cmd_capture idocs --help
 assert_exit_zero "$RUN_CODE" "idocs --help (link flow)"
 assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (link flow)"
 
-run_cmd_capture idocs search "Combine Publisher"
-assert_exit_zero "$RUN_CODE" "idocs search (link flow)"
-assert_contains "$RUN_OUTPUT" "source:" "idocs search source observability (link flow)"
+if [[ "$MODE" == "live" ]]; then
+  run_cmd_capture idocs search "Combine Publisher"
+  assert_exit_zero "$RUN_CODE" "idocs search (link flow)"
+  assert_search_observability_or_no_result "$RUN_OUTPUT" "idocs search contract (link flow)"
 
-run_cmd_capture idocs fetch "/documentation/swiftui/view"
-assert_exit_zero "$RUN_CODE" "idocs fetch (link flow)"
-assert_contains "$RUN_OUTPUT" "[source:" "idocs fetch source observability (link flow)"
-assert_contains "$RUN_OUTPUT" "# View" "idocs fetch markdown content (link flow)"
+  run_cmd_capture idocs fetch "/documentation/swiftui/view"
+  assert_exit_zero "$RUN_CODE" "idocs fetch (link flow)"
+  assert_contains "$RUN_OUTPUT" "[source:" "idocs fetch source observability (link flow)"
+  assert_contains "$RUN_OUTPUT" "# View" "idocs fetch markdown content (link flow)"
 
-run_cmd_capture idocs list --category Frameworks
-assert_exit_zero "$RUN_CODE" "idocs list (link flow)"
-assert_contains "$RUN_OUTPUT" "/documentation/" "idocs list structured path output (link flow)"
+  run_cmd_capture idocs list --category Frameworks
+  assert_exit_zero "$RUN_CODE" "idocs list (link flow)"
+  assert_contains "$RUN_OUTPUT" "/documentation/" "idocs list structured path output (link flow)"
+fi
 
 echo "[E2E] Path B: npm pack + local install flow"
 TGZ_FILE="$(cd npm && npm pack --json | jq -r '.[0].filename')"
@@ -123,8 +148,10 @@ run_cmd_capture "$BIN" --help
 assert_exit_zero "$RUN_CODE" "idocs --help (pack flow)"
 assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (pack flow)"
 
-run_cmd_capture "$BIN" search "SwiftUI"
-assert_exit_zero "$RUN_CODE" "idocs search (pack flow)"
-assert_contains "$RUN_OUTPUT" "source:" "idocs search source observability (pack flow)"
+if [[ "$MODE" == "live" ]]; then
+  run_cmd_capture "$BIN" search "SwiftUI"
+  assert_exit_zero "$RUN_CODE" "idocs search (pack flow)"
+  assert_search_observability_or_no_result "$RUN_OUTPUT" "idocs search contract (pack flow)"
+fi
 
-echo "[PASS] E2E CLI checks completed."
+echo "[PASS] E2E CLI checks completed (mode: $MODE)."

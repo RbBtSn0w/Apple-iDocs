@@ -23,8 +23,8 @@ The project is split into two targets for better testability:
 - `iDocsTests`: Unit tests targeting `iDocsKit`.
 
 ## Daily Development Workflow
-- **Build**: `tuist build iDocs`
-- **Run Tests**: `tuist test iDocs`
+- **Build**: `./scripts/tuist-silent.sh build iDocs`
+- **Run Tests**: `./scripts/tuist-silent.sh test`
 - **Clean**: `tuist clean`
 
 ## Verification Checklist

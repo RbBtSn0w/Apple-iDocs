@@ -30,7 +30,7 @@ iDocs is a high-performance Swift CLI for querying Apple's documentation, render
    ```
 4. Build:
    ```bash
-   tuist build iDocs
+   ./scripts/tuist-silent.sh build iDocs
    ```
 
 The binary will be located in the build directory.
@@ -76,7 +76,13 @@ IDOCS_LOCAL_BINARY="$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/
 Unified E2E validation (link + pack paths):
 
 ```bash
-./scripts/e2e-cli.sh
+./scripts/e2e-cli.sh offline
+```
+
+Live E2E validation (network-dependent, non-deterministic):
+
+```bash
+./scripts/e2e-cli.sh live
 ```
 
 Release packaging for GitHub Releases:
@@ -132,7 +138,7 @@ Default tests (offline, no external network):
 Integration tests (explicitly enabled):
 
 ```bash
-IDOCS_INTEGRATION_TESTS=1 tuist test iDocs
+IDOCS_INTEGRATION_TESTS=1 ./scripts/tuist-silent.sh test
 ```
 
 ```bash

@@ -5,7 +5,7 @@
 ```bash
 # 默认测试：不访问外部网络
 
-tuist test iDocs
+./scripts/tuist-silent.sh test
 ```
 
 ## 集成测试（需要显式开启）
@@ -13,7 +13,7 @@ tuist test iDocs
 ```bash
 # 启用网络集成测试（环境变量方式）
 
-IDOCS_INTEGRATION_TESTS=1 tuist test iDocs
+IDOCS_INTEGRATION_TESTS=1 ./scripts/tuist-silent.sh test
 ```
 
 ```bash
