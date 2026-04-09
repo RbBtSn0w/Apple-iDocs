@@ -1,3 +1,5 @@
+> **Note:** For project-specific architectural rules, design patterns, and coding standards, refer to `.specify/memory/constitution.md`.
+
 # iDocs-mcp Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-16
@@ -22,10 +24,18 @@ tests/
 ## Commands
 
 # Add commands for Swift 6.2
+- **Build**: `tuist build` or `swift build`
+- **Test**: `tuist test` or `swift test`
+- **Generate Project**: `tuist generate`
 
 ## Code Style
 
 Swift 6.2: Follow standard conventions
+
+## Infrastructure Guidelines
+- **Project Generation**: This project uses Tuist (`Project.swift`, `Tuist.swift`) for project generation and management. Run `tuist generate` to generate Xcode workspace.
+- **Dependency Management**: Swift Package Manager (SPM).
+- **Git Commit Workflow**: Please follow Conventional Commits standard (e.g. `feat: ...`, `fix: ...`, `docs: ...`).
 
 ## Recent Changes
 - 005-three-layer-architecture: Added Swift 6.2+ (Enabling Full Concurrency) + Tuist 4.158.2, ArgumentParser (for CLI target), Foundation

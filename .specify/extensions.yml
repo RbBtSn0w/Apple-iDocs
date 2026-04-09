@@ -10,6 +10,14 @@ hooks:
     prompt: Execute speckit.git.initialize?
     description: Initialize Git repository before constitution setup
     condition: null
+  - extension: memorylint
+    command: speckit.memorylint.run
+    enabled: true
+    optional: true
+    prompt: Run MemoryLint to prune out-of-bounds architecture rules and enrich missing
+      infrastructure guidelines in AGENTS.md?
+    description: ''
+    condition: null
   before_specify:
   - extension: git
     command: speckit.git.feature

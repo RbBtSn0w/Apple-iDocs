@@ -1,19 +1,11 @@
 <!--
 ## 同步影响报告 (Sync Impact Report)
 
-- **版本变更**: 0.0.0 → 1.0.0 (首次制定)
+- **版本变更**: 1.0.0 → 1.1.0 (新增原则)
 - **新增原则**:
-  - I. 离线优先 (Offline-First)
-  - II. 无状态工具设计 (Stateless Tool Design)
-  - III. 测试先行 (Test-First)
-  - IV. 可观测性 (Observability)
-  - V. 极简主义 (Simplicity)
-  - VI. Swift 原生优先 (Native Swift First)
-  - VII. 类型安全 (Type Safety)
-- **新增章节**:
-  - 技术约束 (Technical Constraints)
-  - 开发工作流 (Development Workflow)
-  - Governance
+  - VIII. Agent 记忆边界 (Agent Memory Boundary)
+- **修改原则**: 无
+- **新增章节**: 无
 - **模板同步状态**:
   - `.specify/templates/plan-template.md` — ✅ Constitution Check 章节已与原则对齐
   - `.specify/templates/spec-template.md` — ✅ 需求/场景模板可兼容当前原则
@@ -101,6 +93,15 @@
 
 **理由**: TypeScript 的 `any` 只在运行时暴露问题，Swift 的 `Codable` 在编译期保证正确性。
 
+### VIII. Agent 记忆边界 (Agent Memory Boundary)
+
+所有规则根据类型严格划分存储边界，禁止 (MUST NOT) 越界：
+
+- **架构规则 (Architecture)**：设计决策、状态管理、领域逻辑，必须独立存放在 Constitution 中。
+- **基础设施 (Infrastructure)**：构建命令、测试脚本、Git 工作流，必须存放在 `AGENTS.md`（或 `GEMINI.md`）中。
+
+**理由**：保持 `AGENTS.md` 简洁以降低每次会话的 token 消耗，同时通过 Constitution 集中管理核心架构原则，借助 `memorylint` 技能定期强制执行边界审计。
+
 ## 技术约束 (Technical Constraints)
 
 - **语言版本**: Swift 6.2+，启用 Structured Concurrency (`async/await` + `TaskGroup` + `Actor`)
@@ -141,4 +142,4 @@
   - PATCH: 措辞澄清、错别字修正、非语义性优化
 - **合规检查**: 每个 Plan 阶段 **必须 (MUST)** 执行 Constitution Check 以验证设计决策符合原则
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-03-12
+**Version**: 1.1.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-04-09
