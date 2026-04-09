@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-test:
     timeout-minutes: 30
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       
@@ -29,7 +29,7 @@ jobs:
 
   arch-gate:
     timeout-minutes: 10
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +38,7 @@ jobs:
 
   e2e-cli-offline:
     timeout-minutes: 30
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
