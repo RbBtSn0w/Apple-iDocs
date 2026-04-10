@@ -27,7 +27,8 @@ jobs:
       - name: Run Default Tests
         run: ./scripts/tuist-silent.sh test
         env:
-          IDOCS_LOCAL_BINARY: ${{ runner.temp }}/../Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          IDOCS_LOCAL_BINARY: /Users/runner/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          GITHUB_WORKSPACE: ${{ github.workspace }}
 
   e2e-cli-offline:
     timeout-minutes: 30
