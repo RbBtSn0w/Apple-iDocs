@@ -7,15 +7,15 @@ struct BenchmarkHarnessBehaviorTests {
     func idocsProbe() throws {
         let root = findProjectRoot()
         let scriptPath = root.appendingPathComponent("scripts/benchmark/target-idocs-cli.sh").path
-
+        
         // Resolve idocs binary to avoid tuist run overhead/instability
         let binPath = ProcessInfo.processInfo.environment["IDOCS_LOCAL_BINARY"] ?? findLocalBinary(projectRoot: root.path)
-
+        
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [scriptPath, "--probe"]
         process.currentDirectoryURL = root
-
+        
         var env = ProcessInfo.processInfo.environment
         if let binPath = binPath {
             env["IDOCS_LOCAL_BINARY"] = binPath
@@ -39,15 +39,14 @@ struct BenchmarkHarnessBehaviorTests {
     }
 
     private func findProjectRoot() -> URL {
-        var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        while current.path != "/" {
-            if FileManager.default.fileExists(atPath: current.appendingPathComponent("Project.swift").path) {
-                return current
-            }
-            current = current.deletingLastPathComponent()
-        }
-        // Fallback to current dir if not found
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        // Use #file to find the root relative to this source file
+        let sourceFile = URL(fileURLWithPath: #file)
+        // Path is Tests/iDocsTests/IntegrationTests/BenchmarkHarnessBehaviorTests.swift
+        return sourceFile
+            .deletingLastPathComponent() // IntegrationTests
+            .deletingLastPathComponent() // iDocsTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // Root
     }
 
     private func findLocalBinary(projectRoot: String) -> String? {
