@@ -32,22 +32,30 @@ struct BenchmarkHarnessBehaviorTests {
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
 
-        #expect(process.terminationStatus == 0, "Probe failed with exit code \(process.terminationStatus). Script: \(scriptPath). Binary: \(binPath ?? "nil"). Working Dir: \(FileManager.default.currentDirectoryPath). Output: \(output)")
+        #expect(process.terminationStatus == 0, "Probe failed with exit code \(process.terminationStatus). Script: \(scriptPath). Binary: \(binPath ?? "nil"). Root: \(root.path). Working Dir: \(FileManager.default.currentDirectoryPath). Output: \(output)")
         let jsonData = try #require(output.data(using: .utf8), "Output was not UTF8. Binary: \(binPath ?? "nil"). Output: \(output)")
         let payload = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
         #expect(payload?["status"] as? String == "success", "Probe returned non-success status. Payload: \(output)")
     }
 
     private func findProjectRoot() -> URL {
-        // 1. Try environment variable set in CI or by Xcode
+        // 1. Try environment variable
         if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"] {
             return URL(fileURLWithPath: workspace)
         }
-        if let srcRoot = ProcessInfo.processInfo.environment["SRCROOT"] {
-            return URL(fileURLWithPath: srcRoot)
+        
+        // 2. Search upwards for the scripts directory (most reliable)
+        var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        while current.path != "/" {
+            let scriptsDir = current.appendingPathComponent("scripts/benchmark")
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: scriptsDir.path, isDirectory: &isDir), isDir.boolValue {
+                return current
+            }
+            current = current.deletingLastPathComponent()
         }
         
-        // 2. Fallback to #file traversal (local dev)
+        // 3. Fallback to #file traversal
         let sourceFile = URL(fileURLWithPath: #file)
         return sourceFile
             .deletingLastPathComponent() // IntegrationTests
