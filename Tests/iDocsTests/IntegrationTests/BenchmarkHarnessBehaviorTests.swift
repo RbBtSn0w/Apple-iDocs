@@ -28,8 +28,8 @@ struct BenchmarkHarnessBehaviorTests {
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
 
-        #expect(process.terminationStatus == 0, "Probe failed with exit code \(process.terminationStatus). Binary: \(binPath ?? "nil"). Output: \(output)")
-        let jsonData = try #require(output.data(using: .utf8))
+        #expect(process.terminationStatus == 0, "Probe failed with exit code \(process.terminationStatus). Binary: \(binPath ?? "nil"). Working Dir: \(FileManager.default.currentDirectoryPath). Environment PATH: \(env["PATH"] ?? "nil"). Output: \(output)")
+        let jsonData = try #require(output.data(using: .utf8), "Output was not UTF8. Binary: \(binPath ?? "nil"). Output: \(output)")
         let payload = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
         #expect(payload?["status"] as? String == "success", "Probe returned non-success status. Payload: \(output)")
     }
