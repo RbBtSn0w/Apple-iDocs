@@ -6,7 +6,7 @@ public protocol NetworkSession: Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
 
-extension URLSession: NetworkSession {}
+extension URLSession: @unchecked Sendable, NetworkSession {}
 
 // MARK: - File System
 
@@ -18,7 +18,7 @@ public protocol FileSystem: Sendable {
     func read(from url: URL) throws -> Data
 }
 
-extension FileManager: FileSystem {
+extension FileManager: @unchecked Sendable, FileSystem {
     public func write(_ data: Data, to url: URL) throws {
         try data.write(to: url)
     }
