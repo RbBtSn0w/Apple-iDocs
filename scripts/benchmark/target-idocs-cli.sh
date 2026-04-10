@@ -4,8 +4,16 @@ set -euo pipefail
 MODE="${1:-run}"
 INPUT="${2:-SwiftUI View}"
 
+run_cli() {
+  if [[ -n "${IDOCS_LOCAL_BINARY:-}" && -x "$IDOCS_LOCAL_BINARY" ]]; then
+    "$IDOCS_LOCAL_BINARY" "$@"
+  else
+    ./scripts/tuist-silent.sh run idocs "$@"
+  fi
+}
+
 if [[ "$MODE" == "--probe" ]]; then
-  if ./scripts/tuist-silent.sh run idocs --help >/dev/null 2>&1; then
+  if run_cli --help >/dev/null 2>&1; then
     echo '{"status":"success","message":"idocs cli reachable"}'
   else
     echo '{"status":"failure","message":"idocs cli not reachable"}'
@@ -15,7 +23,7 @@ if [[ "$MODE" == "--probe" ]]; then
 fi
 
 set +e
-OUTPUT="$(./scripts/tuist-silent.sh run idocs search "$INPUT" 2>&1)"
+OUTPUT="$(run_cli search "$INPUT" 2>&1)"
 CODE=$?
 set -e
 
