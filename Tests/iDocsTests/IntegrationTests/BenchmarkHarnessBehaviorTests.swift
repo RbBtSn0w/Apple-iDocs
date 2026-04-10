@@ -39,15 +39,21 @@ struct BenchmarkHarnessBehaviorTests {
     }
 
     private func findProjectRoot() -> URL {
-        // 1. Try environment variable (passed via xcodebuild now)
-        if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"], !workspace.isEmpty {
+        let env = ProcessInfo.processInfo.environment
+        
+        // 1. Primary: Explicit project root (best for CI)
+        if let projectRoot = env["IDOCS_PROJECT_ROOT"], !projectRoot.isEmpty {
+            return URL(fileURLWithPath: projectRoot)
+        }
+        
+        // 2. Secondary: Standard workspace env
+        if let workspace = env["GITHUB_WORKSPACE"], !workspace.isEmpty {
             return URL(fileURLWithPath: workspace)
         }
         
-        // 2. Search upwards for the repository marker, avoiding DerivedData
+        // 3. Search upwards for the repository marker, avoiding DerivedData
         var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         while current.path != "/" {
-            // Avoid stopping in build directories
             if current.path.contains("DerivedData") || current.path.contains(".build") {
                 current = current.deletingLastPathComponent()
                 continue
@@ -60,7 +66,7 @@ struct BenchmarkHarnessBehaviorTests {
             current = current.deletingLastPathComponent()
         }
         
-        // 3. Fallback to #file traversal
+        // 4. Fallback to #file traversal
         let sourceFile = URL(fileURLWithPath: #file)
         return sourceFile
             .deletingLastPathComponent() // IntegrationTests

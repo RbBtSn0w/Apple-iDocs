@@ -173,6 +173,7 @@ case "$cmd" in
       -parallel-testing-enabled NO \
       -only-testing:"$test_target" \
       GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
+      IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
       IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
     ;;
   test-all)

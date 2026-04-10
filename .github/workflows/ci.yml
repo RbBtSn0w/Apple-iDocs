@@ -28,6 +28,7 @@ jobs:
         run: ./scripts/tuist-silent.sh test
         env:
           IDOCS_LOCAL_BINARY: /Users/runner/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          IDOCS_PROJECT_ROOT: ${{ github.workspace }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
   e2e-cli-offline:
