@@ -39,17 +39,22 @@ struct BenchmarkHarnessBehaviorTests {
     }
 
     private func findProjectRoot() -> URL {
-        // 1. Try environment variable
-        if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"] {
+        // 1. Try environment variable (passed via xcodebuild now)
+        if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"], !workspace.isEmpty {
             return URL(fileURLWithPath: workspace)
         }
         
-        // 2. Search upwards for the scripts directory (most reliable)
+        // 2. Search upwards for the repository marker, avoiding DerivedData
         var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         while current.path != "/" {
-            let scriptsDir = current.appendingPathComponent("scripts/benchmark")
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: scriptsDir.path, isDirectory: &isDir), isDir.boolValue {
+            // Avoid stopping in build directories
+            if current.path.contains("DerivedData") || current.path.contains(".build") {
+                current = current.deletingLastPathComponent()
+                continue
+            }
+            
+            let marker = current.appendingPathComponent("Project.swift")
+            if FileManager.default.fileExists(atPath: marker.path) {
                 return current
             }
             current = current.deletingLastPathComponent()

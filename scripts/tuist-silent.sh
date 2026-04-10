@@ -171,7 +171,9 @@ case "$cmd" in
       -scheme "$test_scheme" \
       -destination "platform=macOS,arch=arm64" \
       -parallel-testing-enabled NO \
-      -only-testing:"$test_target"
+      -only-testing:"$test_target" \
+      GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
+      IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
     ;;
   test-all)
     "$0" test iDocsTests
