@@ -6,8 +6,9 @@ struct BenchmarkHarnessBehaviorTests {
     @Test("idocs target probe should return success JSON")
     func idocsProbe() throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-lc", "./scripts/benchmark/target-idocs-cli.sh --probe"]
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["./scripts/benchmark/target-idocs-cli.sh", "--probe"]
+        process.environment = ProcessInfo.processInfo.environment
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
@@ -19,9 +20,9 @@ struct BenchmarkHarnessBehaviorTests {
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
 
-        #expect(process.terminationStatus == 0)
+        #expect(process.terminationStatus == 0, "Probe failed with exit code \(process.terminationStatus). Output: \(output)")
         let jsonData = try #require(output.data(using: .utf8))
         let payload = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-        #expect(payload?["status"] as? String == "success")
+        #expect(payload?["status"] as? String == "success", "Probe returned non-success status. Payload: \(output)")
     }
 }

@@ -133,7 +133,7 @@ TMP_INSTALL_ROOT="$(new_tmp_dir)"
 TMP_APP_DIR="$TMP_INSTALL_ROOT/app"
 mkdir -p "$TMP_APP_DIR"
 (cd "$TMP_APP_DIR" && npm init -y >/dev/null)
-(cd "$TMP_APP_DIR" && npm i "$ROOT_DIR/npm/$TGZ_FILE" >/dev/null)
+(cd "$TMP_APP_DIR" && IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" npm i "$ROOT_DIR/npm/$TGZ_FILE" >/dev/null)
 
 IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" \
   npm --prefix "$TMP_APP_DIR/node_modules/idocs-cli" run link-local >/dev/null

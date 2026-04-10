@@ -61,6 +61,11 @@ function normalizeExtractedLayout(root) {
 async function main() {
   mkdirSync(distDir, { recursive: true });
 
+  if (process.env.IDOCS_LOCAL_BINARY && existsSync(process.env.IDOCS_LOCAL_BINARY)) {
+    log("IDOCS_LOCAL_BINARY found; skipping download.");
+    return;
+  }
+
   if (!force && existsSync(binaryPath)) {
     chmodSync(binaryPath, 0o755);
     log("Binary already present; skipping download.");
