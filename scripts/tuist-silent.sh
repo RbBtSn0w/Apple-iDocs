@@ -68,22 +68,14 @@ run_xcodebuild_silent() {
     return 0
   fi
 
-  if search_file "Trying to load an unsigned library|code signature .* not valid for use in process|The bundle .* couldn’t be loaded" "$tmp" >/dev/null 2>&1; then
-    rm -rf \
-      "$DERIVED_DATA_PATH/Build/Products/Debug/iDocsTests.xctest" \
-      "$DERIVED_DATA_PATH/Build/Intermediates.noindex/iDocs.build/Debug/iDocsTests.build"
-
-    if xcodebuild -derivedDataPath "$DERIVED_DATA_PATH" "$@" >"$tmp" 2>&1; then
-      if ! search_file "^\\*\\* (BUILD|TEST) SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$" "$tmp" | sed -E 's/^[0-9]+://'; then
-        tail -n 20 "$tmp"
-      fi
-      rm -f "$tmp"
-      return 0
-    fi
+  echo "xcodebuild failed; showing failure details:" >&2
+  # Search for common failure patterns and show surrounding context
+  if grep -E "✘|error:|fail:|failed" "$tmp" >/dev/null 2>&1; then
+     grep -B 2 -A 10 -E "✘|error:|fail:|failed" "$tmp" | head -n 100 >&2
+  else
+     tail -n 120 "$tmp" >&2
   fi
-
-  echo "xcodebuild failed; recent output:" >&2
-  tail -n 120 "$tmp" >&2
+  
   rm -f "$tmp"
   return 1
 }

@@ -13,7 +13,7 @@ run_cli() {
 }
 
 if [[ "$MODE" == "--probe" ]]; then
-  if run_cli --help >/dev/null 2>&1; then
+  if run_cli --help >/dev/null; then
     echo '{"status":"success","message":"idocs cli reachable"}'
   else
     echo '{"status":"failure","message":"idocs cli not reachable"}'

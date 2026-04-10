@@ -19,10 +19,15 @@ jobs:
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
+      - name: Verify Binary
+        run: |
+          ls -l $HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          file $HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+
       - name: Run Default Tests
         run: ./scripts/tuist-silent.sh test
         env:
-          IDOCS_LOCAL_BINARY: /Users/runner/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          IDOCS_LOCAL_BINARY: ${{ runner.temp }}/../Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
 
   e2e-cli-offline:
     timeout-minutes: 30
