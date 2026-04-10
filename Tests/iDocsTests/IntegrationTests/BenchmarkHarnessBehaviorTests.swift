@@ -39,9 +39,16 @@ struct BenchmarkHarnessBehaviorTests {
     }
 
     private func findProjectRoot() -> URL {
-        // Use #file to find the root relative to this source file
+        // 1. Try environment variable set in CI or by Xcode
+        if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"] {
+            return URL(fileURLWithPath: workspace)
+        }
+        if let srcRoot = ProcessInfo.processInfo.environment["SRCROOT"] {
+            return URL(fileURLWithPath: srcRoot)
+        }
+        
+        // 2. Fallback to #file traversal (local dev)
         let sourceFile = URL(fileURLWithPath: #file)
-        // Path is Tests/iDocsTests/IntegrationTests/BenchmarkHarnessBehaviorTests.swift
         return sourceFile
             .deletingLastPathComponent() // IntegrationTests
             .deletingLastPathComponent() // iDocsTests
