@@ -30,7 +30,7 @@ struct CLICommandTests {
                 searchResults: [SearchResult(id: "/documentation/swiftui/view", title: "View", snippet: "UI", technology: "swiftui", source: .local)]
             )
         }
-        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-cli-tests") }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
         CLIEnvironment.writeStdout = { capture.stdout.append($0) }
         CLIEnvironment.writeStderr = { capture.stderr.append($0) }
 

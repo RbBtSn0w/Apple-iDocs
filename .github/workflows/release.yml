@@ -1,0 +1,57 @@
+name: Release
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # for creating tags and releases
+  id-token: write # for npm provenance and trusted publishing
+  issues: write   # for automated issue management
+  pull-requests: write # for automated PR comments
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Tuist
+        uses: ./.github/actions/setup-tuist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Semantic Release Plugins
+        run: |
+          npm install -D \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/changelog \
+            @semantic-release/npm \
+            @semantic-release/exec \
+            @semantic-release/github \
+            @semantic-release/git
+
+      - name: Run Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+        run: npx semantic-release
+
+      - name: Publish to GitHub Packages
+        if: success()
+        run: |
+          cd npm
+          # semantic-release has already updated the version in npm/package.json
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > .npmrc
+          npm publish --registry=https://npm.pkg.github.com/

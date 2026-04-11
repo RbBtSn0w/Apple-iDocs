@@ -2,7 +2,7 @@
 
 ## Package
 
-- Package name: `idocs-cli`
+- Package name: `@rbbtsn0w/idocs` (Universal Scoping)
 - Bin command: `idocs`
 - Platform (v1): `darwin` + `arm64`
 

@@ -1,22 +1,22 @@
-# idocs-cli (npm wrapper)
+# @rbbtsn0w/idocs (npm wrapper)
 
 This package distributes the `idocs` Swift CLI through npm.
 
 ## Install
 
 ```bash
-npm install -g idocs-cli
+npm install -g @rbbtsn0w/idocs
 ```
 
 By default, `postinstall` downloads `idocs-darwin-arm64.tar.gz` from:
 
-`https://github.com/OWNER/REPO/releases/download/v{version}`
+`https://github.com/RbBtSn0w/Apple-iDocs/releases/download/v{version}`
 
 Override the release URL if needed:
 
 ```bash
 export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"
-npm install -g idocs-cli
+npm install -g @rbbtsn0w/idocs
 ```
 
 The archive is expected to contain:

@@ -40,7 +40,7 @@ The binary will be located in the build directory.
 Global install:
 
 ```bash
-npm install -g idocs-cli
+npm install -g @rbbtsn0w/idocs
 idocs --help
 ```
 
@@ -49,7 +49,7 @@ You can override the download base URL:
 
 ```bash
 export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"
-npm install -g idocs-cli
+npm install -g @rbbtsn0w/idocs
 ```
 
 Local registration for development:

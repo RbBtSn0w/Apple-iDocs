@@ -1,7 +1,18 @@
 {
-  "name": "idocs-cli",
-  "version": "0.1.0",
+  "name": "@rbbtsn0w/idocs",
+  "version": "0.1.0-beta.2",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "npm distribution wrapper for the iDocs Swift CLI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RbBtSn0w/Apple-iDocs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RbBtSn0w/Apple-iDocs/issues"
+  },
+  "homepage": "https://github.com/RbBtSn0w/Apple-iDocs#readme",
   "license": "MIT",
   "type": "module",
   "bin": {

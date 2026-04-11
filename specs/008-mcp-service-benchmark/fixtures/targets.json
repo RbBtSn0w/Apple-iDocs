@@ -1,7 +1,7 @@
 {
   "targets": [
     {
-      "id": "idocs-cli",
+      "id": "@rbbtsn0w/idocs",
       "kind": "cli",
       "enabled": true,
       "probeCommand": "./scripts/benchmark/target-idocs-cli.sh --probe"

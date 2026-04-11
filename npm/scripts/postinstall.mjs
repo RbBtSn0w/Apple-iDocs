@@ -13,13 +13,13 @@ const force = process.argv.includes("--force");
 const strictInstall = process.env.IDOCS_NPM_STRICT_INSTALL === "1";
 
 function log(msg) {
-  console.log(`[idocs-cli] ${msg}`);
+  console.log(`[@rbbtsn0w/idocs] ${msg}`);
 }
 
 function fail(msg, err) {
-  console.error(`[idocs-cli] ${msg}`);
+  console.error(`[@rbbtsn0w/idocs] ${msg}`);
   if (err?.message) {
-    console.error(`[idocs-cli] ${err.message}`);
+    console.error(`[@rbbtsn0w/idocs] ${err.message}`);
   }
   if (strictInstall) {
     process.exit(1);
@@ -36,7 +36,7 @@ function releaseBaseURL(version) {
   if (configured && configured.trim().length > 0) {
     return configured.replaceAll("{version}", version);
   }
-  return `https://github.com/OWNER/REPO/releases/download/v${version}`;
+  return `https://github.com/RbBtSn0w/Apple-iDocs/releases/download/v${version}`;
 }
 
 function normalizeExtractedLayout(root) {
