@@ -4,7 +4,7 @@
   "tokenizerSpec": "cl100k_base",
   "driverProfile": "controlled-agent-v1",
   "truthBaseline": "xcode-16.0-ios-18.0",
-  "targets": ["idocs-cli", "apple-docs-mcp", "apple-doc-mcp", "sosumi-ai"],
+  "targets": ["idocs", "apple-docs-mcp", "apple-doc-mcp", "sosumi-ai"],
   "sharedTaskCount": 12,
   "samplePlan": {
     "cold": 1,

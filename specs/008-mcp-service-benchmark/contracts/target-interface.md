@@ -8,7 +8,7 @@
 
 ## Target Set
 
-- `idocs-cli`
+- `idocs`
 - `apple-docs-mcp`
 - `apple-doc-mcp`
 - `sosumi-ai`

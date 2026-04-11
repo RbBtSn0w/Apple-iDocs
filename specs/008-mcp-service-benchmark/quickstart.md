@@ -32,7 +32,7 @@ tuist install
 ```
 
 按项目配置验证 4 个目标：
-- `idocs-cli`
+- `idocs`
 - `apple-docs-mcp`
 - `apple-doc-mcp`
 - `sosumi-ai`

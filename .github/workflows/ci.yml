@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
 
+env:
+  IDOCS_DERIVED_DATA_PATH: ${{ github.workspace }}/.deriveddata
+
 jobs:
   build-and-test:
     timeout-minutes: 30
@@ -21,19 +24,21 @@ jobs:
 
       - name: Verify Binary
         run: |
-          ls -l $HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
-          file $HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          ls -l $IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs
+          file $IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs
 
       - name: Run Default Tests
         run: ./scripts/tuist-silent.sh test
         env:
-          IDOCS_LOCAL_BINARY: /Users/runner/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs
+          IDOCS_LOCAL_BINARY: ${{ env.IDOCS_DERIVED_DATA_PATH }}/Build/Products/Debug/idocs
           IDOCS_PROJECT_ROOT: ${{ github.workspace }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
   e2e-cli-offline:
     timeout-minutes: 30
     runs-on: macos-15
+    env:
+      IDOCS_LOCAL_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
     steps:
       - uses: actions/checkout@v4
 

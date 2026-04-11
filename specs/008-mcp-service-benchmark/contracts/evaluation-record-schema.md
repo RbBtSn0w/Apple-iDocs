@@ -113,7 +113,7 @@
 ```json
 {
   "run_id": "run-20260319-001",
-  "target_id": "idocs-cli",
+  "target_id": "idocs",
   "scenario_id": "S003",
   "attempt_index": 4,
   "sample_class": "warm",
@@ -132,7 +132,7 @@
   "overfetch_flag": false,
   "error_category": null,
   "evidence_refs": [
-    "artifacts/evidence/run-20260319-001/idocs-cli-S003.txt"
+    "artifacts/evidence/run-20260319-001/idocs-S003.txt"
   ],
   "accuracy_verdict": "correct",
   "completeness_verdict": "partial",

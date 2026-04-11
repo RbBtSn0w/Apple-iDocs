@@ -9,7 +9,7 @@
 ### ServiceTarget
 - **Purpose**: 描述被纳入比较的单个目标。
 - **Fields**:
-  - `id: String`，唯一标识，如 `idocs-cli`
+  - `id: String`，唯一标识，如 `idocs`
   - `name: String`
   - `kind: cli | mcp`
   - `scope: project-local`

@@ -9,7 +9,7 @@ RUN_ID="${1:-run-$(date +%Y%m%d-%H%M%S)}"
 EVIDENCE_DIR="specs/008-mcp-service-benchmark/artifacts/evidence/${RUN_ID}"
 ensure_dir "$EVIDENCE_DIR"
 
-for target in idocs-cli apple-docs-mcp apple-doc-mcp sosumi-ai; do
+for target in idocs apple-docs-mcp apple-doc-mcp sosumi-ai; do
   for scenario in S001 S002 S003 S004 S005 S006 S007 S008 S009 S010 S011 S012; do
     cat > "${EVIDENCE_DIR}/${target}-${scenario}.txt" <<EOF
 target=${target}
