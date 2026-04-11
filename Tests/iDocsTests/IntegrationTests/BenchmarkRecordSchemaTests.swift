@@ -9,7 +9,7 @@ struct BenchmarkRecordSchemaTests {
         let json = """
         {
           "run_id":"run-1",
-          "target_id":"idocs-cli",
+          "target_id":"idocs",
           "scenario_id":"S001",
           "attempt_index":1,
           "sample_class":"cold",
@@ -43,7 +43,7 @@ struct BenchmarkRecordSchemaTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let record = try decoder.decode(BenchmarkExecutionRecord.self, from: json)
-        #expect(record.targetID == "idocs-cli")
+        #expect(record.targetID == "idocs")
         #expect(record.tokenizerSpec == "cl100k_base")
         #expect(record.sampleClass == .cold)
     }

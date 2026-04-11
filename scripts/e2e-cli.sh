@@ -136,7 +136,7 @@ mkdir -p "$TMP_APP_DIR"
 (cd "$TMP_APP_DIR" && IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" npm i "$ROOT_DIR/npm/$TGZ_FILE" >/dev/null)
 
 IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" \
-  npm --prefix "$TMP_APP_DIR/node_modules/idocs-cli" run link-local >/dev/null
+  npm --prefix "$TMP_APP_DIR/node_modules/@rbbtsn0w/idocs" run link-local >/dev/null
 
 BIN="$TMP_APP_DIR/node_modules/.bin/idocs"
 if [[ ! -x "$BIN" ]]; then

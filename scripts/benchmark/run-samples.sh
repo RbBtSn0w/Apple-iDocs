@@ -8,7 +8,7 @@ source scripts/benchmark/common.sh
 RUN_ID="${1:-run-$(date +%Y%m%d-%H%M%S)}"
 COLD_SAMPLES="${COLD_SAMPLES:-1}"
 WARM_SAMPLES="${WARM_SAMPLES:-9}"
-TARGETS="${TARGETS:-idocs-cli,apple-docs-mcp,apple-doc-mcp,sosumi-ai}"
+TARGETS="${TARGETS:-idocs,apple-docs-mcp,apple-doc-mcp,sosumi-ai}"
 SHARED_LIMIT="${SHARED_LIMIT:-0}"
 
 RESULT_FILE="specs/008-mcp-service-benchmark/artifacts/results/${RUN_ID}/records.jsonl"

@@ -67,9 +67,10 @@ Local tgz smoke test:
 (cd npm && npm pack)
 TMP_DIR="$(mktemp -d)"
 npm --prefix "$TMP_DIR" init -y
-npm --prefix "$TMP_DIR" i "$(pwd)/npm/idocs-cli-0.1.0.tgz"
+# Note: name of tgz follows npm pack conventions for scoped packages
+npm --prefix "$TMP_DIR" i "$(pwd)/npm/rbbtsn0w-idocs-0.1.0-beta.2.tgz"
 IDOCS_LOCAL_BINARY="$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex/Build/Products/Debug/idocs" \
-  npm --prefix "$TMP_DIR/node_modules/idocs-cli" run link-local
+  npm --prefix "$TMP_DIR/node_modules/@rbbtsn0w/idocs" run link-local
 "$TMP_DIR/node_modules/.bin/idocs" --help
 ```
 

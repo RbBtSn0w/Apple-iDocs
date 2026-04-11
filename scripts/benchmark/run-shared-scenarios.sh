@@ -45,7 +45,7 @@ normalized_dir = Path(sys.argv[10])
 assertion_dir = Path(sys.argv[11])
 
 targets = {
-    "idocs-cli": "./scripts/benchmark/target-idocs-cli.sh",
+    "idocs": "./scripts/benchmark/target-idocs.sh",
     "apple-docs-mcp": "./scripts/benchmark/target-apple-docs-mcp.sh",
     "apple-doc-mcp": "./scripts/benchmark/target-apple-doc-mcp.sh",
     "sosumi-ai": "./scripts/benchmark/target-sosumi-ai.sh",

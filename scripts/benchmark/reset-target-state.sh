@@ -20,7 +20,7 @@ kill_if_running() {
 }
 
 case "$TARGET_ID" in
-  idocs-cli)
+  idocs)
     kill_if_running "idocs"
     ;;
   apple-docs-mcp)

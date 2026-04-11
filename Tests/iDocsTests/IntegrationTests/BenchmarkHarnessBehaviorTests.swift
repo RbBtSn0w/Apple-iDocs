@@ -6,7 +6,7 @@ struct BenchmarkHarnessBehaviorTests {
     @Test("idocs target probe should return success JSON")
     func idocsProbe() throws {
         let root = findProjectRoot()
-        let scriptPath = root.appendingPathComponent("scripts/benchmark/target-idocs-cli.sh").path
+        let scriptPath = root.appendingPathComponent("scripts/benchmark/target-idocs.sh").path
         
         // Skip if script not found (likely CI environment path mismatch)
         guard FileManager.default.fileExists(atPath: scriptPath) else {

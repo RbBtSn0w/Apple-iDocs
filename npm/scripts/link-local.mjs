@@ -11,7 +11,7 @@ const targetPath = resolve(distDir, "idocs");
 const frameworksTargetDir = resolve(distDir, "Frameworks");
 
 function info(msg) {
-  console.log(`[idocs-cli] ${msg}`);
+  console.log(`[@rbbtsn0w/idocs] ${msg}`);
 }
 
 function findFromDerivedData() {
@@ -42,9 +42,9 @@ function resolveLocalBinary() {
 
 const sourcePath = resolveLocalBinary();
 if (!sourcePath) {
-  console.error("[idocs-cli] Could not locate a local iDocs binary.");
-  console.error("[idocs-cli] Build first: ./scripts/tuist-silent.sh build iDocs");
-  console.error("[idocs-cli] Or set IDOCS_LOCAL_BINARY=/absolute/path/to/idocs");
+  console.error("[@rbbtsn0w/idocs] Could not locate a local iDocs binary.");
+  console.error("[@rbbtsn0w/idocs] Build first: ./scripts/tuist-silent.sh build iDocs");
+  console.error("[@rbbtsn0w/idocs] Or set IDOCS_LOCAL_BINARY=/absolute/path/to/idocs");
   process.exit(1);
 }
 

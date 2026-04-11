@@ -1,7 +1,7 @@
 {
   "probes": [
     {
-      "targetId": "idocs-cli",
+      "targetId": "idocs",
       "request": "search swiftui view --limit 1",
       "expectation": "returns at least one identifiable symbol result"
     },

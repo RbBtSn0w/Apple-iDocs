@@ -4,7 +4,7 @@
       "id": "@rbbtsn0w/idocs",
       "kind": "cli",
       "enabled": true,
-      "probeCommand": "./scripts/benchmark/target-idocs-cli.sh --probe"
+      "probeCommand": "./scripts/benchmark/target-idocs.sh --probe"
     },
     {
       "id": "apple-docs-mcp",

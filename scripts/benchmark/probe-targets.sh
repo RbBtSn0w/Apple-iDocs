@@ -14,7 +14,7 @@ python3 - "$PROBES_FILE" "$OUTPUT_FILE" <<'PY'
 import json, subprocess, sys, time
 probes_file, output_file = sys.argv[1], sys.argv[2]
 script_map = {
-    "idocs-cli": "./scripts/benchmark/target-idocs-cli.sh",
+    "idocs": "./scripts/benchmark/target-idocs.sh",
     "apple-docs-mcp": "./scripts/benchmark/target-apple-docs-mcp.sh",
     "apple-doc-mcp": "./scripts/benchmark/target-apple-doc-mcp.sh",
     "sosumi-ai": "./scripts/benchmark/target-sosumi-ai.sh",
