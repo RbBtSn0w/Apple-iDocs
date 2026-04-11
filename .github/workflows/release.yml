@@ -46,6 +46,7 @@ jobs:
       - name: Run Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: "none" # Placeholder to satisfy tool check; OIDC used for actual auth
           NPM_CONFIG_PROVENANCE: true
         run: |
           cd npm
