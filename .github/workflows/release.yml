@@ -46,7 +46,6 @@ jobs:
       - name: Run Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # If needed for npmjs.com
           NPM_CONFIG_PROVENANCE: true
         run: |
           cd npm
@@ -56,6 +55,6 @@ jobs:
         if: success()
         run: |
           cd npm
-          # semantic-release has already updated the version in npm/package.json
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > .npmrc
+          # Use GITHUB_TOKEN for GitHub Packages registry
+          npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
           npm publish --registry=https://npm.pkg.github.com/
