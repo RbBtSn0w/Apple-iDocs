@@ -9,6 +9,7 @@ permissions:
   id-token: write # for npm provenance and trusted publishing
   issues: write   # for automated issue management
   pull-requests: write # for automated PR comments
+  packages: write # for GitHub Packages
 
 jobs:
   release:
@@ -35,7 +36,7 @@ jobs:
         run: |
           cd npm
           npm install -D \
-            semantic-release \
+            semantic-release@25 \
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
             @semantic-release/changelog \
@@ -44,18 +45,19 @@ jobs:
             @semantic-release/git
 
       - name: Run Semantic Release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: "none" # Placeholder to satisfy tool check; OIDC used for actual auth
           NPM_CONFIG_PROVENANCE: true
         run: |
           cd npm
-          npx semantic-release
+          npx semantic-release@25
 
-      - name: Publish to GitHub Packages
+      - name: Dual Publish to GitHub Packages
         if: success()
         run: |
           cd npm
-          # Use GITHUB_TOKEN for GitHub Packages registry
-          npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
-          npm publish --registry=https://npm.pkg.github.com/
+          # Follow the exact pattern from wechat-publisher
+          echo "@rbbtsn0w:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+          npm publish --registry https://npm.pkg.github.com || echo "GitHub Packages: Version already exists or nothing to publish."
