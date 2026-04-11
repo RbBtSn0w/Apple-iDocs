@@ -114,10 +114,15 @@ jobs:
           cd npm
           npx semantic-release@25
 
-      - name: Dual Publish to GitHub Packages
+      - name: Dual Publish to Registries
         if: success()
         run: |
           cd npm
+          # 1. Publish to npmjs.org using Trusted Publishing (OIDC)
+          # No token needed, relies on id-token: write and provenance flag
+          npm publish --provenance --access public || echo "npmjs.org: Version already exists or nothing to publish."
+
+          # 2. Publish to GitHub Packages
           # Use npm config for safer registry authentication
           npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
           npm publish --registry https://npm.pkg.github.com || echo "GitHub Packages: Version already exists or nothing to publish."
