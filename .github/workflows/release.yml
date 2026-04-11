@@ -4,17 +4,20 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write # for creating tags and releases
-  id-token: write # for npm provenance and trusted publishing
-  issues: write   # for automated issue management
-  pull-requests: write # for automated PR comments
-  packages: write # for GitHub Packages
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
     name: Build and Release
     runs-on: macos-15
+    permissions:
+      contents: write # for creating tags and releases
+      id-token: write # for npm provenance and trusted publishing
+      issues: write   # for automated issue management
+      pull-requests: write # for automated PR comments
+      packages: write # for GitHub Packages
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -57,7 +60,6 @@ jobs:
         if: success()
         run: |
           cd npm
-          # Follow the exact pattern from wechat-publisher
-          echo "@rbbtsn0w:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+          # Use npm config for safer registry authentication
+          npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
           npm publish --registry https://npm.pkg.github.com || echo "GitHub Packages: Version already exists or nothing to publish."
