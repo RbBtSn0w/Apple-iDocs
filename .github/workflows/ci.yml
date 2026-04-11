@@ -64,3 +64,60 @@ jobs:
 
       - name: Run iDocs CLI E2E (offline deterministic gate)
         run: IDOCS_NPM_STRICT_INSTALL=1 ./scripts/e2e-cli.sh offline
+
+  release:
+    name: Build and Release
+    needs: [build-and-test, e2e-cli-offline]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: macos-15
+    permissions:
+      contents: write
+      id-token: write
+      issues: write
+      pull-requests: write
+      packages: write
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Tuist
+        uses: ./.github/actions/setup-tuist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: 'npm'
+          cache-dependency-path: npm/package-lock.json
+
+      - name: Install Release Plugins
+        run: |
+          cd npm
+          npm install -D \
+            semantic-release@25 \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/changelog \
+            @semantic-release/npm \
+            @semantic-release/github \
+            @semantic-release/git
+
+      - name: Run Semantic Release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+        run: |
+          cd npm
+          npx semantic-release@25
+
+      - name: Dual Publish to GitHub Packages
+        if: success()
+        run: |
+          cd npm
+          # Use npm config for safer registry authentication
+          npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
+          npm publish --registry https://npm.pkg.github.com || echo "GitHub Packages: Version already exists or nothing to publish."
