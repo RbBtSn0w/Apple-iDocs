@@ -1,5 +1,7 @@
 # MCP Tool Contracts: iDocs
 
+> Historical note: 该契约文档仅保留为历史 MCP 方案记录。当前仓库不再交付这些 MCP runtime/tool contracts 作为主产品接口。
+
 **Branch**: `001-swift-apple-docs-mcp` | **Date**: 2026-03-13
 
 本文档定义了 iDocs MCP Server 暴露的 7 个工具的接口契约。

@@ -2,6 +2,8 @@
 
 iDocs is a high-performance Swift CLI for querying Apple's documentation, rendering Markdown output, and listing technology catalogs.
 
+The repository also contains project-scoped benchmark assets for external MCP services. Those assets exist only for comparison and validation; the shipped product runtime is CLI-only.
+
 ## Features
 
 - **Search Docs**: Global search across Apple's documentation catalog.
@@ -100,11 +102,13 @@ Use the helper script to run build/test/run quietly from terminal:
 ./scripts/tuist-silent.sh build iDocs
 ./scripts/tuist-silent.sh run idocs --help
 ./scripts/tuist-silent.sh test
+./scripts/tuist-silent.sh test iDocsAdapterTests
 ./scripts/tuist-silent.sh test-all
 ```
 
 Notes:
 - This workflow wraps `xcodebuild` directly and prints only summary lines on success.
+- `./scripts/tuist-silent.sh test` runs the full default suite (`iDocsTests` + `iDocsAdapterTests`).
 - If `iDocs.xcworkspace` is missing, it attempts `tuist generate` automatically.
 - It does not require opening Xcode IDE.
 - On failures, it prints recent logs for quick diagnostics.
@@ -136,6 +140,13 @@ Default tests (offline, no external network):
 ./scripts/tuist-silent.sh test
 ```
 
+Scoped runs:
+
+```bash
+./scripts/tuist-silent.sh test iDocsTests
+./scripts/tuist-silent.sh test iDocsAdapterTests
+```
+
 Integration tests (explicitly enabled):
 
 ```bash
@@ -148,6 +159,7 @@ swift test --filter IntegrationTests
 
 Notes:
 - Default tests do not access external networks
+- Default tests cover both CLI and Adapter test targets
 - Integration tests validate live endpoints and may fail if services are unavailable
 
 ## Quality Gates

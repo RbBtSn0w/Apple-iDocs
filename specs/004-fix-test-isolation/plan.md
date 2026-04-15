@@ -1,5 +1,7 @@
 # Implementation Plan: 测试稳定性与网络隔离
 
+> Historical context: this plan was authored during the transition from MCP-focused runtime goals to the current `idocs` CLI-only direction. Mentions of MCP server runtime below are retained for history and are not the current shipped product contract.
+
 **Branch**: `004-fix-test-isolation` | **Date**: 2026-03-16 | **Spec**: [specs/004-fix-test-isolation/spec.md](spec.md)
 **Input**: Feature specification from `/specs/004-fix-test-isolation/spec.md`
 

@@ -1,8 +1,10 @@
 # Feature Specification: Swift 原生 Apple 文档 MCP 服务器
 
+> Historical note: 该文档记录的是已被替代的 MCP Server 产品方向。当前仓库实际交付与主线运行时已收敛为 CLI-only，见 `specs/005-three-layer-architecture/` 与 `specs/006-cli-multisource-docs/`。本目录仅保留为历史设计上下文。
+
 **Feature Branch**: `001-swift-apple-docs-mcp`
 **Created**: 2026-03-12
-**Status**: Completed
+**Status**: Superseded by CLI-only migration
 **Input**: User description: "用 Swift 构建一个'终极版'Apple 文档 MCP 服务器，集三者之长、补三者之短，并利用 Swift 独有能力直接访问 Xcode 本地文档。"
 
 ## User Scenarios & Testing *(mandatory)*

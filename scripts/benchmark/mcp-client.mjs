@@ -6,14 +6,22 @@ function parseArgs() {
   const result = {
     command: null,
     tool: null,
-    input: null
+    input: null,
+    rejectPatterns: []
   };
   for (let i = 0; i < args.length; i += 1) {
     const k = args[i];
-    const v = args[i + 1];
-    if (k === "--command") result.command = v;
-    if (k === "--tool") result.tool = v;
-    if (k === "--input") result.input = v;
+    if (k === "--command" || k === "--tool" || k === "--input" || k === "--reject-pattern") {
+      const v = args[i + 1];
+      if (!v) throw new Error(`missing value for ${k}`);
+      if (k === "--command") result.command = v;
+      if (k === "--tool") result.tool = v;
+      if (k === "--input") result.input = v;
+      if (k === "--reject-pattern") result.rejectPatterns.push(v);
+      i += 1;
+      continue;
+    }
+    throw new Error(`unknown argument: ${k}`);
   }
   if (!result.command) throw new Error("missing --command");
   return result;
@@ -25,8 +33,41 @@ function nextId() {
 }
 nextId.counter = 0;
 
+function collectText(value) {
+  if (value == null) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectText);
+  if (typeof value === "object") {
+    return Object.entries(value).flatMap(([key, nested]) => {
+      if ((key === "text" || key === "message") && typeof nested === "string") {
+        return [nested];
+      }
+      return collectText(nested);
+    });
+  }
+  return [];
+}
+
+function findRejectMatch(result, rejectPatterns) {
+  if (!rejectPatterns.length) return null;
+
+  const haystacks = collectText(result);
+  const json = JSON.stringify(result);
+  if (json) haystacks.push(json);
+  const searchable = haystacks.join("\n");
+
+  for (const pattern of rejectPatterns) {
+    const regex = new RegExp(pattern, "i");
+    if (regex.test(searchable)) {
+      return { pattern, searchable };
+    }
+  }
+
+  return null;
+}
+
 async function main() {
-  const { command, tool, input } = parseArgs();
+  const { command, tool, input, rejectPatterns } = parseArgs();
   const [bin, ...parts] = command.split(" ");
   const child = spawn(bin, parts, { stdio: ["pipe", "pipe", "pipe"], shell: false });
 
@@ -94,6 +135,23 @@ async function main() {
         path: input
       }
     });
+
+    const rejectMatch = findRejectMatch(callRes?.result ?? null, rejectPatterns);
+    if (rejectMatch) {
+      const response = {
+        status: "failure",
+        tool: selected,
+        result: callRes?.result ?? null,
+        error: `tool result matched reject pattern: ${rejectMatch.pattern}`,
+        error_category: "invalid_input",
+        error_reason: `tool result matched reject pattern '${rejectMatch.pattern}'`,
+        diagnostic_hint: "Adjust the benchmark wrapper or request so required prerequisite context is supplied before scoring the target as success.",
+        stderr: stderrBuffer.trim() || null
+      };
+      process.stdout.write(JSON.stringify(response));
+      process.exitCode = 1;
+      return;
+    }
 
     const response = {
       status: "success",

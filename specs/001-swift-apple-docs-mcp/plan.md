@@ -1,5 +1,7 @@
 # Implementation Plan: Swift 原生 Apple 文档 MCP 服务器
 
+> Historical note: 本计划对应的 MCP Server 方向已被 CLI-only 主线替代。当前产品/runtime 以 `specs/005-three-layer-architecture/` 和 `specs/006-cli-multisource-docs/` 为准；本文件仅作为历史方案留档。
+
 **Branch**: `001-swift-apple-docs-mcp` | **Date**: 2026-03-13 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `specs/001-swift-apple-docs-mcp/spec.md`
 

@@ -1,5 +1,7 @@
 # Implementation Plan: Migrate project management to Tuist
 
+> Historical context: this migration plan predates the repository's explicit `CLI-only` product direction. Any MCP runtime references below are legacy context and should not be read as the current shipped architecture.
+
 **Branch**: `003-tuist-migration` | **Date**: 2026-03-16 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/003-tuist-migration/spec.md`
 

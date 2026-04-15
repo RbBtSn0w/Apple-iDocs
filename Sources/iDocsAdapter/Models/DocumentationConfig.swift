@@ -1,10 +1,15 @@
 import Foundation
 
 public struct DocumentationConfig: Sendable, Equatable {
+    /// Active runtime knob used by the default adapter to place the disk cache.
     public let cachePath: String
+    /// Active locale metadata carried through adapter responses.
     public let locale: Locale
+    /// Reserved for future transport-level customization. The current default CLI adapter does not override URLSession timeouts with this value.
     public let timeout: TimeInterval
+    /// Reserved for future datasource overrides. The current default CLI adapter uses built-in endpoint resolution.
     public let apiBaseURL: URL
+    /// Active flag controlling optional advisory file locking for shared-cache scenarios.
     public let enableFileLocking: Bool
 
     public init(
