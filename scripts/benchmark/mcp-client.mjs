@@ -5,16 +5,27 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const result = {
     command: null,
+    commandBin: null,
+    commandArgs: [],
     tool: null,
     input: null,
     rejectPatterns: []
   };
   for (let i = 0; i < args.length; i += 1) {
     const k = args[i];
-    if (k === "--command" || k === "--tool" || k === "--input" || k === "--reject-pattern") {
+    if (
+      k === "--command" ||
+      k === "--command-bin" ||
+      k === "--tool" ||
+      k === "--input" ||
+      k === "--reject-pattern" ||
+      k === "--command-arg"
+    ) {
       const v = args[i + 1];
       if (!v) throw new Error(`missing value for ${k}`);
       if (k === "--command") result.command = v;
+      if (k === "--command-bin") result.commandBin = v;
+      if (k === "--command-arg") result.commandArgs.push(v);
       if (k === "--tool") result.tool = v;
       if (k === "--input") result.input = v;
       if (k === "--reject-pattern") result.rejectPatterns.push(v);
@@ -23,7 +34,12 @@ function parseArgs() {
     }
     throw new Error(`unknown argument: ${k}`);
   }
-  if (!result.command) throw new Error("missing --command");
+  if (result.command && result.commandBin) {
+    throw new Error("use either --command or --command-bin/--command-arg, not both");
+  }
+  if (!result.command && !result.commandBin) {
+    throw new Error("missing --command or --command-bin");
+  }
   return result;
 }
 
@@ -67,8 +83,10 @@ function findRejectMatch(result, rejectPatterns) {
 }
 
 async function main() {
-  const { command, tool, input, rejectPatterns } = parseArgs();
-  const [bin, ...parts] = command.split(" ");
+  const { command, commandBin, commandArgs, tool, input, rejectPatterns } = parseArgs();
+  const [bin, ...parts] = commandBin
+    ? [commandBin, ...commandArgs]
+    : command.split(" ").filter(Boolean);
   const child = spawn(bin, parts, { stdio: ["pipe", "pipe", "pipe"], shell: false });
 
   const pending = new Map();

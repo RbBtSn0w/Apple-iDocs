@@ -3,13 +3,19 @@ set -euo pipefail
 
 MODE="${1:-run}"
 INPUT="${2:-SwiftUI View}"
-
-CMD="npx apple-doc-mcp-server@latest"
 REJECT_PATTERN="No Technology Selected"
 
+run_client() {
+  node scripts/benchmark/mcp-client.mjs \
+    --command-bin npx \
+    --command-arg apple-doc-mcp-server@latest \
+    --input "$1" \
+    --reject-pattern "$REJECT_PATTERN"
+}
+
 if [[ "$MODE" == "--probe" ]]; then
-  node scripts/benchmark/mcp-client.mjs --command "$CMD" --input "SwiftUI View" --reject-pattern "$REJECT_PATTERN"
+  run_client "SwiftUI View"
   exit $?
 fi
 
-node scripts/benchmark/mcp-client.mjs --command "$CMD" --input "$INPUT" --reject-pattern "$REJECT_PATTERN"
+run_client "$INPUT"

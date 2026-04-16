@@ -4,11 +4,17 @@ set -euo pipefail
 MODE="${1:-run}"
 INPUT="${2:-SwiftUI View}"
 
-CMD="npx -y @kimsungwhee/apple-docs-mcp"
+run_client() {
+  node scripts/benchmark/mcp-client.mjs \
+    --command-bin npx \
+    --command-arg -y \
+    --command-arg @kimsungwhee/apple-docs-mcp \
+    --input "$1"
+}
 
 if [[ "$MODE" == "--probe" ]]; then
-  node scripts/benchmark/mcp-client.mjs --command "$CMD" --input "SwiftUI View"
+  run_client "SwiftUI View"
   exit $?
 fi
 
-node scripts/benchmark/mcp-client.mjs --command "$CMD" --input "$INPUT"
+run_client "$INPUT"
