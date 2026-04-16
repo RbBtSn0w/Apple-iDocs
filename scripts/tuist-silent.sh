@@ -158,6 +158,7 @@ run_test_target() {
         -scheme iDocsAdapter \
         -destination "platform=macOS,arch=arm64" \
         -parallel-testing-enabled NO \
+        -only-testing:iDocsAdapterTests \
         GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
         IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
         IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"

@@ -62,7 +62,7 @@ rl.on("line", (line) => {
   }
 
   if (message.method === "tools/call" && message.id) {
-    const text = mode == "failure-like"
+    const text = mode === "failure-like"
       ? "# Search Cannot Proceed - No Technology Selected"
       : "# View\n\nA protocol that provides a view.";
     write({
