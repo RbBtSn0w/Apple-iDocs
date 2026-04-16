@@ -1,5 +1,7 @@
 # Quickstart: iDocs MCP Server
 
+> Historical note: 该 Quickstart 描述的是已被替代的 MCP Server 运行方式。当前仓库主产品为 CLI-only；如需当前有效入口，请优先参考根目录 `README.md`。
+
 **Branch**: `001-swift-apple-docs-mcp` | **Date**: 2026-03-13
 
 ## 前置条件

@@ -30,6 +30,10 @@
 - `callCount`
 - `rawEvidenceRef`
 
+最小验证请求的 `status` 不能只依据 JSON-RPC `tools/call` 是否返回成功。
+如果目标返回的是前置条件阻断、引导性错误或其他“协议成功但任务未完成”的内容，
+wrapper 必须将其识别为 `failure` 或 `partial`，不得记为 `success`。
+
 ## Shared vs Extended Capability Contract
 
 ### Shared Capability Tasks

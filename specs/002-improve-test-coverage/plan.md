@@ -1,5 +1,7 @@
 # Implementation Plan: 提高项目可测试性与单元测试覆盖率
 
+> Historical context: this plan was written before the repository was explicitly narrowed to the `idocs` CLI-only product direction. References to MCP server runtime or MCP-specific dependencies below describe the superseded context, not the current shipped runtime.
+
 **Branch**: `002-improve-test-coverage` | **Date**: 2026-03-13 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `specs/002-improve-test-coverage/spec.md`
 

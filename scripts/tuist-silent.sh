@@ -90,12 +90,13 @@ Usage:
 
 Defaults:
   scheme = idocs
-  test target = iDocsTests
+  test target = full default suite (`iDocsTests` + `iDocsAdapterTests`)
 
 Examples:
   ./scripts/tuist-silent.sh build
   ./scripts/tuist-silent.sh run idocs --help
   ./scripts/tuist-silent.sh test
+  ./scripts/tuist-silent.sh test iDocsAdapterTests
   ./scripts/tuist-silent.sh test-all
 EOF
 }
@@ -131,6 +132,44 @@ build_quiet() {
     -destination "platform=macOS,arch=arm64"
 }
 
+run_test_target() {
+  local test_target="$1"
+
+  ensure_workspace
+  rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
+
+  case "$test_target" in
+    iDocsTests)
+      run_xcodebuild_silent \
+        test \
+        -workspace iDocs.xcworkspace \
+        -scheme iDocs \
+        -destination "platform=macOS,arch=arm64" \
+        -parallel-testing-enabled NO \
+        -only-testing:iDocsTests \
+        GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
+        IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
+        IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
+      ;;
+    iDocsAdapterTests)
+      run_xcodebuild_silent \
+        test \
+        -workspace iDocs.xcworkspace \
+        -scheme iDocsAdapter \
+        -destination "platform=macOS,arch=arm64" \
+        -parallel-testing-enabled NO \
+        -only-testing:iDocsAdapterTests \
+        GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
+        IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
+        IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
+      ;;
+    *)
+      echo "Error: unsupported test target '$test_target' (supported: iDocsTests, iDocsAdapterTests)" >&2
+      exit 1
+      ;;
+  esac
+}
+
 cmd="${1:-}"
 scheme="${2:-idocs}"
 
@@ -153,31 +192,16 @@ case "$cmd" in
     "$bin" "$@"
     ;;
   test)
-    test_target="${2:-iDocsTests}"
-    case "$test_target" in
-      iDocsTests)
-        test_scheme="iDocs"
-        ;;
-      *)
-        echo "Error: unsupported test target '$test_target' (supported: iDocsTests)" >&2
-        exit 1
-        ;;
-    esac
-    ensure_workspace
-    rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
-    run_xcodebuild_silent \
-      test \
-      -workspace iDocs.xcworkspace \
-      -scheme "$test_scheme" \
-      -destination "platform=macOS,arch=arm64" \
-      -parallel-testing-enabled NO \
-      -only-testing:"$test_target" \
-      GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
-      IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
-      IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
+    if [[ -n "${2:-}" ]]; then
+      run_test_target "$2"
+    else
+      run_test_target iDocsTests
+      run_test_target iDocsAdapterTests
+    fi
     ;;
   test-all)
-    "$0" test iDocsTests
+    run_test_target iDocsTests
+    run_test_target iDocsAdapterTests
     ;;
   -h|--help|help)
     usage
