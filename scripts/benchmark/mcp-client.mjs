@@ -71,10 +71,10 @@ function findRejectMatch(result, rejectPatterns) {
   const json = JSON.stringify(result);
   if (json) haystacks.push(json);
   const searchable = haystacks.join("\n");
-  const normalizedSearchable = searchable.toLocaleLowerCase();
+  const normalizedSearchable = searchable.toLowerCase();
 
   for (const pattern of rejectPatterns) {
-    if (normalizedSearchable.includes(pattern.toLocaleLowerCase())) {
+    if (normalizedSearchable.includes(pattern.toLowerCase())) {
       return { pattern, searchable };
     }
   }

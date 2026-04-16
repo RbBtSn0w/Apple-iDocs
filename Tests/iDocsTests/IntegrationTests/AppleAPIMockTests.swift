@@ -69,6 +69,7 @@ struct BenchmarkHarnessBehaviorTests {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [scriptPath, "--probe"]
+        process.currentDirectoryURL = root
 
         var env = ProcessInfo.processInfo.environment
         env["IDOCS_LOCAL_BINARY"] = binPath
