@@ -144,7 +144,9 @@ TMP_FAIL_APP_DIR="$TMP_FAIL_ROOT/app"
 mkdir -p "$TMP_FAIL_APP_DIR"
 (cd "$TMP_FAIL_APP_DIR" && npm init -y >/dev/null)
 
-run_cmd_capture bash -lc "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+# This negative-path install must not inherit the CI job's IDOCS_LOCAL_BINARY,
+# otherwise npm postinstall will skip the download and the assertion becomes invalid.
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
 assert_exit_nonzero "$RUN_CODE" "npm install should fail fast when release asset is unavailable"
 assert_contains "$RUN_OUTPUT" "Binary download failed. Install aborted" "npm install fail-fast message"
 
