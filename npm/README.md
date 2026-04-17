@@ -12,6 +12,8 @@ By default, `postinstall` downloads `idocs-darwin-arm64.tar.gz` from:
 
 `https://github.com/RbBtSn0w/Apple-iDocs/releases/download/v{version}`
 
+The matching GitHub Release must include that asset. If the download fails, install exits non-zero by default so npm does not leave an unusable `idocs` shim behind.
+
 Override the release URL if needed:
 
 ```bash
@@ -32,6 +34,6 @@ npm --prefix npm link
 idocs --help
 ```
 
-## Strict install mode
+## Non-strict install mode
 
-Set `IDOCS_NPM_STRICT_INSTALL=1` to fail install when binary download fails.
+Set `IDOCS_NPM_STRICT_INSTALL=0` only if you intentionally want to keep the wrapper installed without a binary for local debugging flows.

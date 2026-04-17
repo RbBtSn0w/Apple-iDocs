@@ -66,6 +66,15 @@ assert_exit_zero() {
   fi
 }
 
+assert_exit_nonzero() {
+  local code="$1"
+  local context="$2"
+  if [[ "$code" -eq 0 ]]; then
+    echo "[FAIL] $context: expected non-zero exit, got 0" >&2
+    exit 1
+  fi
+}
+
 RUN_CODE=""
 RUN_OUTPUT=""
 
@@ -128,6 +137,16 @@ if [[ -z "$TGZ_FILE" || ! -f "npm/$TGZ_FILE" ]]; then
   echo "[FAIL] npm pack did not produce expected tgz file" >&2
   exit 1
 fi
+
+echo "[E2E] Path B0: npm pack fails fast when release asset cannot be downloaded"
+TMP_FAIL_ROOT="$(new_tmp_dir)"
+TMP_FAIL_APP_DIR="$TMP_FAIL_ROOT/app"
+mkdir -p "$TMP_FAIL_APP_DIR"
+(cd "$TMP_FAIL_APP_DIR" && npm init -y >/dev/null)
+
+run_cmd_capture bash -lc "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+assert_exit_nonzero "$RUN_CODE" "npm install should fail fast when release asset is unavailable"
+assert_contains "$RUN_OUTPUT" "Binary download failed. Install aborted" "npm install fail-fast message"
 
 TMP_INSTALL_ROOT="$(new_tmp_dir)"
 TMP_APP_DIR="$TMP_INSTALL_ROOT/app"

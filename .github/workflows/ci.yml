@@ -93,6 +93,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: npm/package-lock.json
 
+      - name: Stage GitHub Release Assets
+        run: ./scripts/release-package.sh staged "$GITHUB_WORKSPACE/dist/release/staged"
+
+      - name: Verify Staged Release Assets
+        run: |
+          ls -l "$GITHUB_WORKSPACE/dist/release/staged"
+          test -f "$GITHUB_WORKSPACE/dist/release/staged/idocs-darwin-arm64.tar.gz"
+          test -f "$GITHUB_WORKSPACE/dist/release/staged/idocs-darwin-arm64.sha256"
+
       - name: Install Release Plugins
         run: |
           cd npm
