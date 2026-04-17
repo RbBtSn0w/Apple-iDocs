@@ -66,4 +66,47 @@ struct DocumentationServiceContractTests {
         #expect(results.count == 1)
         #expect(results[0].source == .sosumi)
     }
+
+    struct DocumentationErrorScenario: Sendable {
+        let error: DocumentationError
+        let expectedDescription: String
+    }
+
+    @Test(
+        "DocumentationError exposes stable localized descriptions",
+        arguments: [
+            DocumentationErrorScenario(
+                error: .notFound(id: "/documentation/swiftui/view"),
+                expectedDescription: "Documentation for '/documentation/swiftui/view' could not be found."
+            ),
+            DocumentationErrorScenario(
+                error: .networkError(message: "timeout"),
+                expectedDescription: "Network error: timeout"
+            ),
+            DocumentationErrorScenario(
+                error: .parsingError(reason: "invalid payload"),
+                expectedDescription: "Parsing error: invalid payload"
+            ),
+            DocumentationErrorScenario(
+                error: .unauthorized,
+                expectedDescription: "Unauthorized access."
+            ),
+            DocumentationErrorScenario(
+                error: .invalidConfiguration(message: "missing cache path"),
+                expectedDescription: "Invalid configuration: missing cache path"
+            ),
+            DocumentationErrorScenario(
+                error: .incompatibleVersion(adapter: "2.0.0", core: "1.0.0"),
+                expectedDescription: "Incompatible adapter/core versions. adapter=2.0.0, core=1.0.0"
+            ),
+            DocumentationErrorScenario(
+                error: .internalError(message: "unexpected nil"),
+                expectedDescription: "Internal error: unexpected nil"
+            )
+        ]
+    )
+    func documentationErrorDescriptions(scenario: DocumentationErrorScenario) {
+        #expect(scenario.error.errorDescription == scenario.expectedDescription)
+        #expect(scenario.error.localizedDescription == scenario.expectedDescription)
+    }
 }
