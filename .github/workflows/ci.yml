@@ -23,6 +23,11 @@ jobs:
       - name: Setup Tuist
         uses: ./.github/actions/setup-tuist
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
