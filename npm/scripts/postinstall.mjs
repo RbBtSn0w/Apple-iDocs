@@ -9,6 +9,7 @@ const distDir = resolve(npmRoot, "dist");
 const binaryPath = resolve(distDir, "idocs");
 const frameworksPath = resolve(distDir, "Frameworks");
 const tmpArchive = resolve(distDir, "idocs-darwin-arm64.tar.gz");
+const extractedBundleDir = resolve(distDir, "idocs-darwin-arm64");
 const force = process.argv.includes("--force");
 const strictInstall = process.env.IDOCS_NPM_STRICT_INSTALL !== "0";
 
@@ -114,8 +115,7 @@ async function main() {
     log("Binary installed successfully.");
   } catch (error) {
     rmSync(tmpArchive, { force: true });
-    rmSync(binaryPath, { force: true });
-    rmSync(frameworksPath, { recursive: true, force: true });
+    rmSync(extractedBundleDir, { recursive: true, force: true });
     fail(
       "Binary download failed. Install aborted because the package would be unusable without npm/dist/idocs.",
       error

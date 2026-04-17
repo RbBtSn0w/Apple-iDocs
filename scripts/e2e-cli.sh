@@ -116,6 +116,19 @@ run_cmd_capture idocs --help
 assert_exit_zero "$RUN_CODE" "idocs --help (link flow)"
 assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (link flow)"
 
+echo "[E2E] Path A0: failed fetch-binary preserves existing linked binary"
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$ROOT_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm --prefix npm run fetch-binary"
+assert_exit_nonzero "$RUN_CODE" "npm run fetch-binary should fail when release asset is unavailable"
+
+if [[ ! -x "$ROOT_DIR/npm/dist/idocs" ]]; then
+  echo "[FAIL] linked binary should remain after failed fetch-binary" >&2
+  exit 1
+fi
+
+run_cmd_capture idocs --help
+assert_exit_zero "$RUN_CODE" "idocs --help after failed fetch-binary"
+assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help after failed fetch-binary"
+
 if [[ "$MODE" == "live" ]]; then
   run_cmd_capture idocs search "Combine Publisher"
   assert_exit_zero "$RUN_CODE" "idocs search (link flow)"
