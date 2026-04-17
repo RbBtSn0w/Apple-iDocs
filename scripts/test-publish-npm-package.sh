@@ -45,6 +45,24 @@ assert_not_contains() {
   fi
 }
 
+assert_order() {
+  local haystack="$1"
+  local first="$2"
+  local second="$3"
+  local context="$4"
+  local first_line
+  local second_line
+  first_line="$(printf '%s\n' "$haystack" | nl -ba | awk -v needle="$first" 'index($0, needle) { print $1; exit }')"
+  second_line="$(printf '%s\n' "$haystack" | nl -ba | awk -v needle="$second" 'index($0, needle) { print $1; exit }')"
+  if [[ -z "$first_line" || -z "$second_line" || "$first_line" -ge "$second_line" ]]; then
+    echo "[FAIL] $context: expected '$first' before '$second'" >&2
+    echo "------ output ------" >&2
+    echo "$haystack" >&2
+    echo "--------------------" >&2
+    exit 1
+  fi
+}
+
 assert_file_missing() {
   local path="$1"
   local context="$2"
@@ -122,6 +140,12 @@ echo "USERCONFIG=${NPM_CONFIG_USERCONFIG:-} :: $*" >> "${NPM_STUB_LOG:?}"
 
 case "${1:-}" in
   view)
+    if [[ -n "${NPM_STUB_VIEW_STDOUT:-}" ]]; then
+      printf '%s\n' "${NPM_STUB_VIEW_STDOUT}"
+    fi
+    if [[ -n "${NPM_STUB_VIEW_STDERR:-}" ]]; then
+      printf '%s\n' "${NPM_STUB_VIEW_STDERR}" >&2
+    fi
     exit "${NPM_STUB_VIEW_EXIT:-1}"
     ;;
   publish)
@@ -169,6 +193,7 @@ run_cmd_capture env \
   PATH="$TMP_BIN_DIR:$PATH" \
   NPM_STUB_LOG="$TMP_LOG_FILE" \
   NPM_STUB_VIEW_EXIT=1 \
+  NPM_STUB_VIEW_STDERR="npm ERR! code E404" \
   NPM_STUB_PUBLISH_EXIT=17 \
   IDOCS_NPM_PACKAGE_DIR="$TMP_PACKAGE_DIR" \
   bash "$SCRIPT_PATH" npmjs
@@ -177,6 +202,43 @@ assert_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public -
 NPMJS_FAIL_USERCONFIG="$(extract_userconfig_path "$TMP_LOG_FILE")"
 assert_nonempty "$NPMJS_FAIL_USERCONFIG" "npmjs publish should use an isolated npmrc"
 assert_file_missing "$NPMJS_FAIL_USERCONFIG" "npmjs publish should clean up temporary npmrc"
+
+echo "[TEST] publish script surfaces non-E404 npmjs view errors without publishing"
+TMP_PACKAGE_DIR="$(new_tmp_dir)"
+TMP_BIN_DIR="$(new_tmp_dir)"
+TMP_LOG_FILE="$(new_tmp_dir)/npm.log"
+write_package_json "$TMP_PACKAGE_DIR"
+write_npm_stub "$TMP_BIN_DIR"
+
+run_cmd_capture env \
+  PATH="$TMP_BIN_DIR:$PATH" \
+  NPM_STUB_LOG="$TMP_LOG_FILE" \
+  NPM_STUB_VIEW_EXIT=42 \
+  NPM_STUB_VIEW_STDERR="npm ERR! code ECONNRESET" \
+  IDOCS_NPM_PACKAGE_DIR="$TMP_PACKAGE_DIR" \
+  bash "$SCRIPT_PATH" npmjs
+assert_exit_nonzero "$RUN_CODE" "publish-npm-package npmjs should fail on non-E404 view errors"
+assert_contains "$RUN_OUTPUT" "Failed to check @rbbtsn0w/idocs@1.1.2 on https://registry.npmjs.org" "npmjs view error should be surfaced"
+assert_contains "$RUN_OUTPUT" "npm ERR! code ECONNRESET" "npmjs view stderr should be surfaced"
+assert_not_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public --registry https://registry.npmjs.org" "npmjs view error should not publish"
+
+echo "[TEST] publish script configures npmjs auth before checking existing versions"
+TMP_PACKAGE_DIR="$(new_tmp_dir)"
+TMP_BIN_DIR="$(new_tmp_dir)"
+TMP_LOG_FILE="$(new_tmp_dir)/npm.log"
+write_package_json "$TMP_PACKAGE_DIR"
+write_npm_stub "$TMP_BIN_DIR"
+
+run_cmd_capture env \
+  PATH="$TMP_BIN_DIR:$PATH" \
+  NODE_AUTH_TOKEN="test-token" \
+  NPM_STUB_LOG="$TMP_LOG_FILE" \
+  NPM_STUB_VIEW_EXIT=0 \
+  IDOCS_NPM_PACKAGE_DIR="$TMP_PACKAGE_DIR" \
+  bash "$SCRIPT_PATH" npmjs
+assert_exit_zero "$RUN_CODE" "publish-npm-package npmjs auth path should skip existing version"
+assert_contains "$(cat "$TMP_LOG_FILE")" "config set //registry.npmjs.org/:_authToken test-token" "npmjs auth config"
+assert_order "$(cat "$TMP_LOG_FILE")" "config set //registry.npmjs.org/:_authToken test-token" "view @rbbtsn0w/idocs@1.1.2 version --registry https://registry.npmjs.org" "npmjs auth should be configured before view"
 
 echo "[TEST] publish script configures GitHub Packages registry before checking version"
 TMP_PACKAGE_DIR="$(new_tmp_dir)"
