@@ -147,7 +147,7 @@ run_cmd_capture env \
   IDOCS_NPM_PACKAGE_DIR="$TMP_PACKAGE_DIR" \
   bash "$SCRIPT_PATH" npmjs
 assert_exit_nonzero "$RUN_CODE" "publish-npm-package npmjs should fail when publish fails"
-assert_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public" "npmjs publish command should be attempted"
+assert_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public --registry https://registry.npmjs.org" "npmjs publish command should target npmjs.org explicitly"
 
 echo "[TEST] publish script configures GitHub Packages registry before checking version"
 TMP_PACKAGE_DIR="$(new_tmp_dir)"

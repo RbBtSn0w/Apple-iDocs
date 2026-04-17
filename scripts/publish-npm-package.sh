@@ -38,7 +38,7 @@ case "$TARGET_REGISTRY" in
       npm config set "//registry.npmjs.org/:_authToken" "$NODE_AUTH_TOKEN" >/dev/null
     fi
 
-    npm publish --provenance --access public
+    npm publish --provenance --access public --registry "$NPMJS_REGISTRY"
     ;;
   github)
     if [[ "$PACKAGE_SCOPE" == "$PACKAGE_NAME" ]]; then
