@@ -11,10 +11,9 @@ const frameworksPath = resolve(here, "../dist/Frameworks");
 
 if (!existsSync(binaryPath)) {
   console.error("iDocs binary not found at npm/dist/idocs.");
-  console.error("Try one of the following:");
-  console.error("  1) npm --prefix npm run fetch-binary");
-  console.error("  2) export IDOCS_RELEASE_BASE_URL='https://github.com/<owner>/<repo>/releases/download/v{version}'");
-  console.error("  3) npm --prefix npm run link-local");
+  console.error("Reinstall @rbbtsn0w/idocs so postinstall can download the matching release asset.");
+  console.error("If reinstall still fails, review the npm install output for the underlying packaging error.");
+  console.error("For local repository development only, run npm --prefix npm run link-local.");
   process.exit(1);
 }
 
