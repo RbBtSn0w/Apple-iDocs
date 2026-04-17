@@ -45,6 +45,24 @@ assert_not_contains() {
   fi
 }
 
+assert_file_missing() {
+  local path="$1"
+  local context="$2"
+  if [[ -e "$path" ]]; then
+    echo "[FAIL] $context: expected file to be removed: $path" >&2
+    exit 1
+  fi
+}
+
+assert_nonempty() {
+  local value="$1"
+  local context="$2"
+  if [[ -z "$value" ]]; then
+    echo "[FAIL] $context: expected a non-empty value" >&2
+    exit 1
+  fi
+}
+
 assert_exit_zero() {
   local code="$1"
   local context="$2"
@@ -77,6 +95,11 @@ run_cmd_capture() {
   rm -f "$out_file"
 }
 
+extract_userconfig_path() {
+  local log_file="$1"
+  sed -n 's/^USERCONFIG=\([^ ]*\) :: .*/\1/p' "$log_file" | head -n 1
+}
+
 write_package_json() {
   local package_dir="$1"
   mkdir -p "$package_dir"
@@ -91,11 +114,11 @@ EOF
 write_npm_stub() {
   local bin_dir="$1"
   mkdir -p "$bin_dir"
-  cat >"$bin_dir/npm" <<'EOF'
+cat >"$bin_dir/npm" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "$*" >> "${NPM_STUB_LOG:?}"
+echo "USERCONFIG=${NPM_CONFIG_USERCONFIG:-} :: $*" >> "${NPM_STUB_LOG:?}"
 
 case "${1:-}" in
   view)
@@ -131,6 +154,9 @@ run_cmd_capture env \
 assert_exit_zero "$RUN_CODE" "publish-npm-package npmjs skip existing version"
 assert_contains "$RUN_OUTPUT" "already exists on npmjs.org; skipping publish." "npmjs skip message"
 assert_not_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public" "npmjs skip should not publish"
+NPMJS_SKIP_USERCONFIG="$(extract_userconfig_path "$TMP_LOG_FILE")"
+assert_nonempty "$NPMJS_SKIP_USERCONFIG" "npmjs skip should use an isolated npmrc"
+assert_file_missing "$NPMJS_SKIP_USERCONFIG" "npmjs skip should clean up temporary npmrc"
 
 echo "[TEST] publish script fails loudly when npmjs.org publish fails"
 TMP_PACKAGE_DIR="$(new_tmp_dir)"
@@ -148,6 +174,9 @@ run_cmd_capture env \
   bash "$SCRIPT_PATH" npmjs
 assert_exit_nonzero "$RUN_CODE" "publish-npm-package npmjs should fail when publish fails"
 assert_contains "$(cat "$TMP_LOG_FILE")" "publish --provenance --access public --registry https://registry.npmjs.org" "npmjs publish command should target npmjs.org explicitly"
+NPMJS_FAIL_USERCONFIG="$(extract_userconfig_path "$TMP_LOG_FILE")"
+assert_nonempty "$NPMJS_FAIL_USERCONFIG" "npmjs publish should use an isolated npmrc"
+assert_file_missing "$NPMJS_FAIL_USERCONFIG" "npmjs publish should clean up temporary npmrc"
 
 echo "[TEST] publish script configures GitHub Packages registry before checking version"
 TMP_PACKAGE_DIR="$(new_tmp_dir)"
@@ -167,5 +196,8 @@ assert_exit_zero "$RUN_CODE" "publish-npm-package github skip existing version"
 assert_contains "$(cat "$TMP_LOG_FILE")" "config set @rbbtsn0w:registry https://npm.pkg.github.com" "github registry scope config"
 assert_contains "$(cat "$TMP_LOG_FILE")" "config set //npm.pkg.github.com/:_authToken test-token" "github auth config"
 assert_contains "$RUN_OUTPUT" "already exists on GitHub Packages; skipping publish." "github skip message"
+GITHUB_SKIP_USERCONFIG="$(extract_userconfig_path "$TMP_LOG_FILE")"
+assert_nonempty "$GITHUB_SKIP_USERCONFIG" "github publish should use an isolated npmrc"
+assert_file_missing "$GITHUB_SKIP_USERCONFIG" "github publish should clean up temporary npmrc"
 
 echo "[PASS] publish-npm-package checks completed."

@@ -72,7 +72,7 @@ Local tgz smoke test:
 ```bash
 TMP_DIR="$(mktemp -d)"
 npm --prefix "$TMP_DIR" init -y
-TGZ_FILE="$(cd npm && npm pack --json | jq -r '.[0].filename')"
+TGZ_FILE="$(cd npm && npm pack --silent)"
 npm --prefix "$TMP_DIR" i "$(pwd)/npm/$TGZ_FILE"
 IDOCS_LOCAL_BINARY="${PWD}/.deriveddata/Build/Products/Debug/idocs" \
   npm --prefix "$TMP_DIR/node_modules/@rbbtsn0w/idocs" run link-local

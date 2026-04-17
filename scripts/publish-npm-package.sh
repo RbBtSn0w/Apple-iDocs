@@ -18,6 +18,15 @@ fi
 PACKAGE_NAME="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).name" "$PACKAGE_DIR/package.json")"
 PACKAGE_VERSION="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).version" "$PACKAGE_DIR/package.json")"
 PACKAGE_SCOPE="${PACKAGE_NAME%%/*}"
+TEMP_NPMRC_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "$TEMP_NPMRC_DIR"
+}
+
+trap cleanup EXIT
+export NPM_CONFIG_USERCONFIG="$TEMP_NPMRC_DIR/.npmrc"
+: > "$NPM_CONFIG_USERCONFIG"
 
 package_exists() {
   local registry="$1"
