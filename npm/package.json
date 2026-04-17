@@ -17,7 +17,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "idocs": "./bin/idocs.js"
+    "idocs": "bin/idocs.js"
   },
   "files": [
     "bin",

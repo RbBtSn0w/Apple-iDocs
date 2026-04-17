@@ -15,12 +15,31 @@ The repository also contains project-scoped benchmark assets for external MCP se
 
 ## Installation
 
-### Prerequisites
+### Install from npm (recommended)
+
+Requirements:
+- macOS 13.0+
+- Apple Silicon (`arm64`)
+- Node.js 20+
+
+Normal users only need:
+
+```bash
+npm install -g @rbbtsn0w/idocs
+idocs --help
+```
+
+The npm wrapper downloads the matching CLI bundle from GitHub Releases during `postinstall`.
+If install fails, treat it as a packaging problem and inspect the npm output.
+
+### Build from source (development)
+
+Prerequisites:
 - macOS 13.0+
 - Xcode 15.0+
 - [Tuist](https://tuist.io): `curl -Ls https://install.tuist.io | bash`
 
-### Setup and Build
+Setup and build:
 1. Clone the repository.
 2. Resolve dependencies:
    ```bash
@@ -37,25 +56,9 @@ The repository also contains project-scoped benchmark assets for external MCP se
 
 The binary will be located in the build directory.
 
-### npm Distribution (macOS arm64)
+### Local npm development
 
-Global install:
-
-```bash
-npm install -g @rbbtsn0w/idocs
-idocs --help
-```
-
-The npm wrapper downloads `idocs-darwin-arm64.tar.gz` from GitHub Releases during `postinstall`.
-The matching GitHub Release must include that asset; otherwise install now fails immediately instead of leaving an unusable shim on PATH.
-You can override the download base URL:
-
-```bash
-export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"
-npm install -g @rbbtsn0w/idocs
-```
-
-Local registration for development:
+Link the locally built binary into the npm wrapper:
 
 ```bash
 ./scripts/tuist-silent.sh build iDocs
@@ -67,11 +70,10 @@ idocs --help
 Local tgz smoke test:
 
 ```bash
-(cd npm && npm pack)
 TMP_DIR="$(mktemp -d)"
 npm --prefix "$TMP_DIR" init -y
-# Note: name of tgz follows npm pack conventions for scoped packages
-npm --prefix "$TMP_DIR" i "$(pwd)/npm/rbbtsn0w-idocs-0.1.0-beta.2.tgz"
+TGZ_FILE="$(cd npm && npm pack --silent)"
+npm --prefix "$TMP_DIR" i "$(pwd)/npm/$TGZ_FILE"
 IDOCS_LOCAL_BINARY="${PWD}/.deriveddata/Build/Products/Debug/idocs" \
   npm --prefix "$TMP_DIR/node_modules/@rbbtsn0w/idocs" run link-local
 "$TMP_DIR/node_modules/.bin/idocs" --help
@@ -125,19 +127,20 @@ Notes:
 
 ### CLI
 ```bash
-./scripts/tuist-silent.sh run idocs --help
+idocs --help
 ```
 
 ### Subcommands
 ```bash
-./scripts/tuist-silent.sh run idocs search "SwiftUI"
-./scripts/tuist-silent.sh run idocs fetch "/documentation/swiftui/view"
-./scripts/tuist-silent.sh run idocs list
+idocs search "SwiftUI"
+idocs fetch "/documentation/swiftui/view"
+idocs list
 ```
 
 Notes:
 - Search output includes source markers like `{source: apple}`.
 - Fetch output includes a source header like `[source: local|apple|sosumi|cache]`.
+- For source-checkout workflows, replace `idocs` with `./scripts/tuist-silent.sh run idocs --`.
 
 ## Testing
 

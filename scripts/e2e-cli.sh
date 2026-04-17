@@ -163,6 +163,25 @@ run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_FAIL_APP_DIR\" && 
 assert_exit_nonzero "$RUN_CODE" "npm install should fail fast when release asset is unavailable"
 assert_contains "$RUN_OUTPUT" "Binary download failed. npm/dist/idocs was not refreshed from the release asset." "npm install fail-fast message"
 
+echo "[E2E] Path B1: wrapper-only install prints end-user recovery guidance"
+TMP_WRAPPER_ROOT="$(new_tmp_dir)"
+TMP_WRAPPER_APP_DIR="$TMP_WRAPPER_ROOT/app"
+mkdir -p "$TMP_WRAPPER_APP_DIR"
+(cd "$TMP_WRAPPER_APP_DIR" && npm init -y >/dev/null)
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_WRAPPER_APP_DIR\" && IDOCS_NPM_STRICT_INSTALL=0 IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+assert_exit_zero "$RUN_CODE" "wrapper-only npm install should succeed when strict install is disabled"
+
+WRAPPER_BIN="$TMP_WRAPPER_APP_DIR/node_modules/.bin/idocs"
+if [[ ! -x "$WRAPPER_BIN" ]]; then
+  echo "[FAIL] wrapper-only idocs shim missing: $WRAPPER_BIN" >&2
+  exit 1
+fi
+
+run_cmd_capture "$WRAPPER_BIN" --help
+assert_exit_nonzero "$RUN_CODE" "wrapper-only idocs --help should fail without downloaded binary"
+assert_contains "$RUN_OUTPUT" "Reinstall @rbbtsn0w/idocs so postinstall can download the matching release asset." "wrapper-only user recovery guidance"
+assert_contains "$RUN_OUTPUT" "For local repository development only, run npm --prefix npm run link-local." "wrapper-only development guidance"
+
 TMP_INSTALL_ROOT="$(new_tmp_dir)"
 TMP_APP_DIR="$TMP_INSTALL_ROOT/app"
 mkdir -p "$TMP_APP_DIR"

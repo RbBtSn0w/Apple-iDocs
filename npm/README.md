@@ -6,15 +6,16 @@ This package distributes the `idocs` Swift CLI through npm.
 
 ```bash
 npm install -g @rbbtsn0w/idocs
+idocs --help
 ```
 
-By default, `postinstall` downloads `idocs-darwin-arm64.tar.gz` from:
+For normal users, this is the complete install flow. `postinstall` downloads the matching `idocs-darwin-arm64.tar.gz` asset from GitHub Releases automatically.
 
-`https://github.com/RbBtSn0w/Apple-iDocs/releases/download/v{version}`
+If install fails, rerun the install and inspect the npm output. A failed download should be treated as a release packaging problem, not as an expected manual setup step.
 
-The matching GitHub Release must include that asset. If the download fails, install exits non-zero by default so npm does not leave an unusable `idocs` shim behind.
+## Advanced: Alternate Release Mirror
 
-Override the release URL if needed:
+`IDOCS_RELEASE_BASE_URL` is only for internal mirrors or custom release hosting. It is not required for the normal npm install path.
 
 ```bash
 export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"

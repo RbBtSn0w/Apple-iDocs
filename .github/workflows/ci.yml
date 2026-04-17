@@ -23,6 +23,11 @@ jobs:
       - name: Setup Tuist
         uses: ./.github/actions/setup-tuist
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
@@ -37,6 +42,9 @@ jobs:
           IDOCS_LOCAL_BINARY: ${{ env.IDOCS_DERIVED_DATA_PATH }}/Build/Products/Debug/idocs
           IDOCS_PROJECT_ROOT: ${{ github.workspace }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Verify npm publish script
+        run: bash ./scripts/test-publish-npm-package.sh
 
   e2e-cli-offline:
     timeout-minutes: 30
@@ -123,15 +131,16 @@ jobs:
           cd npm
           npx semantic-release@25
 
-      - name: Dual Publish to Registries
+      - name: Publish to npmjs.org
         if: success()
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd npm
-          # 1. Publish to npmjs.org using Trusted Publishing (OIDC)
-          # No token needed, relies on id-token: write and provenance flag
-          npm publish --provenance --access public || echo "npmjs.org: Version already exists or nothing to publish."
+          ./scripts/publish-npm-package.sh npmjs
 
-          # 2. Publish to GitHub Packages
-          # Use npm config for safer registry authentication
-          npm config set //npm.pkg.github.com/:_authToken ${{ secrets.GITHUB_TOKEN }}
-          npm publish --registry https://npm.pkg.github.com || echo "GitHub Packages: Version already exists or nothing to publish."
+      - name: Publish to GitHub Packages
+        if: success()
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/publish-npm-package.sh github
