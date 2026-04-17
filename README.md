@@ -47,6 +47,7 @@ idocs --help
 ```
 
 The npm wrapper downloads `idocs-darwin-arm64.tar.gz` from GitHub Releases during `postinstall`.
+The matching GitHub Release must include that asset; otherwise install now fails immediately instead of leaving an unusable shim on PATH.
 You can override the download base URL:
 
 ```bash
@@ -74,6 +75,12 @@ npm --prefix "$TMP_DIR" i "$(pwd)/npm/rbbtsn0w-idocs-0.1.0-beta.2.tgz"
 IDOCS_LOCAL_BINARY="${PWD}/.deriveddata/Build/Products/Debug/idocs" \
   npm --prefix "$TMP_DIR/node_modules/@rbbtsn0w/idocs" run link-local
 "$TMP_DIR/node_modules/.bin/idocs" --help
+```
+
+If you intentionally want a wrapper-only install for local debugging, opt out of fail-fast explicitly:
+
+```bash
+IDOCS_NPM_STRICT_INSTALL=0 npm install -g @rbbtsn0w/idocs
 ```
 
 Unified E2E validation (link + pack paths):

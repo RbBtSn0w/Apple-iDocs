@@ -9,8 +9,9 @@ const distDir = resolve(npmRoot, "dist");
 const binaryPath = resolve(distDir, "idocs");
 const frameworksPath = resolve(distDir, "Frameworks");
 const tmpArchive = resolve(distDir, "idocs-darwin-arm64.tar.gz");
+const extractedBundleDir = resolve(distDir, "idocs-darwin-arm64");
 const force = process.argv.includes("--force");
-const strictInstall = process.env.IDOCS_NPM_STRICT_INSTALL === "1";
+const strictInstall = process.env.IDOCS_NPM_STRICT_INSTALL !== "0";
 
 function log(msg) {
   console.log(`[@rbbtsn0w/idocs] ${msg}`);
@@ -24,6 +25,7 @@ function fail(msg, err) {
   if (strictInstall) {
     process.exit(1);
   }
+  console.error("[@rbbtsn0w/idocs] Continuing because IDOCS_NPM_STRICT_INSTALL=0.");
 }
 
 function getVersion() {
@@ -112,7 +114,12 @@ async function main() {
     unlinkSync(tmpArchive);
     log("Binary installed successfully.");
   } catch (error) {
-    fail("Binary download failed. Install will continue in non-strict mode.", error);
+    rmSync(tmpArchive, { force: true });
+    rmSync(extractedBundleDir, { recursive: true, force: true });
+    fail(
+      "Binary download failed. npm/dist/idocs was not refreshed from the release asset.",
+      error
+    );
   }
 }
 

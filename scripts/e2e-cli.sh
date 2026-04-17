@@ -66,6 +66,15 @@ assert_exit_zero() {
   fi
 }
 
+assert_exit_nonzero() {
+  local code="$1"
+  local context="$2"
+  if [[ "$code" -eq 0 ]]; then
+    echo "[FAIL] $context: expected non-zero exit, got 0" >&2
+    exit 1
+  fi
+}
+
 RUN_CODE=""
 RUN_OUTPUT=""
 
@@ -107,6 +116,19 @@ run_cmd_capture idocs --help
 assert_exit_zero "$RUN_CODE" "idocs --help (link flow)"
 assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (link flow)"
 
+echo "[E2E] Path A0: failed fetch-binary preserves existing linked binary"
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$ROOT_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm --prefix npm run fetch-binary"
+assert_exit_nonzero "$RUN_CODE" "npm run fetch-binary should fail when release asset is unavailable"
+
+if [[ ! -x "$ROOT_DIR/npm/dist/idocs" ]]; then
+  echo "[FAIL] linked binary should remain after failed fetch-binary" >&2
+  exit 1
+fi
+
+run_cmd_capture idocs --help
+assert_exit_zero "$RUN_CODE" "idocs --help after failed fetch-binary"
+assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help after failed fetch-binary"
+
 if [[ "$MODE" == "live" ]]; then
   run_cmd_capture idocs search "Combine Publisher"
   assert_exit_zero "$RUN_CODE" "idocs search (link flow)"
@@ -128,6 +150,18 @@ if [[ -z "$TGZ_FILE" || ! -f "npm/$TGZ_FILE" ]]; then
   echo "[FAIL] npm pack did not produce expected tgz file" >&2
   exit 1
 fi
+
+echo "[E2E] Path B0: npm install fails fast when release asset cannot be downloaded"
+TMP_FAIL_ROOT="$(new_tmp_dir)"
+TMP_FAIL_APP_DIR="$TMP_FAIL_ROOT/app"
+mkdir -p "$TMP_FAIL_APP_DIR"
+(cd "$TMP_FAIL_APP_DIR" && npm init -y >/dev/null)
+
+# This negative-path install must not inherit the CI job's IDOCS_LOCAL_BINARY,
+# otherwise npm postinstall will skip the download and the assertion becomes invalid.
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+assert_exit_nonzero "$RUN_CODE" "npm install should fail fast when release asset is unavailable"
+assert_contains "$RUN_OUTPUT" "Binary download failed. npm/dist/idocs was not refreshed from the release asset." "npm install fail-fast message"
 
 TMP_INSTALL_ROOT="$(new_tmp_dir)"
 TMP_APP_DIR="$TMP_INSTALL_ROOT/app"

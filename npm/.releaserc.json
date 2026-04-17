@@ -23,6 +23,20 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],
-    "@semantic-release/github"
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "../dist/release/staged/idocs-darwin-arm64.tar.gz",
+            "label": "macOS arm64 CLI bundle"
+          },
+          {
+            "path": "../dist/release/staged/idocs-darwin-arm64.sha256",
+            "label": "SHA-256 checksum"
+          }
+        ]
+      }
+    ]
   ]
 }
