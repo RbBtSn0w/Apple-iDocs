@@ -151,7 +151,7 @@ if [[ -z "$TGZ_FILE" || ! -f "npm/$TGZ_FILE" ]]; then
   exit 1
 fi
 
-echo "[E2E] Path B0: npm pack fails fast when release asset cannot be downloaded"
+echo "[E2E] Path B0: npm install fails fast when release asset cannot be downloaded"
 TMP_FAIL_ROOT="$(new_tmp_dir)"
 TMP_FAIL_APP_DIR="$TMP_FAIL_ROOT/app"
 mkdir -p "$TMP_FAIL_APP_DIR"
