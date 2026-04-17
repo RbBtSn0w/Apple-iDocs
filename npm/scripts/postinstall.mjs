@@ -117,7 +117,7 @@ async function main() {
     rmSync(tmpArchive, { force: true });
     rmSync(extractedBundleDir, { recursive: true, force: true });
     fail(
-      "Binary download failed. Install aborted because the package would be unusable without npm/dist/idocs.",
+      "Binary download failed. npm/dist/idocs was not refreshed from the release asset.",
       error
     );
   }
