@@ -1,7 +1,4 @@
 {
   "integration": "codex",
-  "version": "0.5.1",
-  "scripts": {
-    "update-context": ".specify/integrations/codex/scripts/update-context.sh"
-  }
+  "version": "0.7.5.dev0"
 }

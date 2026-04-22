@@ -42,6 +42,14 @@ hooks:
     prompt: Commit outstanding changes before planning?
     description: Auto-commit before implementation planning
     condition: null
+  - extension: memorylint
+    command: speckit.memorylint.load-agents
+    enabled: true
+    optional: false
+    prompt: Execute speckit.memorylint.load-agents?
+    description: 'Mandatory gate: Load AGENTS.md to enforce core rules and prevent
+      rule drift during the planning (plan.md generation) phase.'
+    condition: null
   before_tasks:
   - extension: git
     command: speckit.git.commit
@@ -57,6 +65,16 @@ hooks:
     optional: true
     prompt: Commit outstanding changes before implementation?
     description: Auto-commit before implementation
+    condition: null
+  - extension: superb
+    command: speckit.superb.tdd
+    enabled: true
+    optional: false
+    prompt: Execute speckit.superb.tdd?
+    description: 'Mandatory TDD gate. Bridges an installed superpowers test-driven-development
+      skill into the spec-kit task structure before any code is written.
+
+      '
     condition: null
   before_checklist:
   - extension: git
@@ -122,6 +140,16 @@ hooks:
     prompt: Commit task changes?
     description: Auto-commit after task generation
     condition: null
+  - extension: superb
+    command: speckit.superb.review
+    enabled: true
+    optional: true
+    prompt: Review tasks.md for coverage and TDD-readiness before implementation?
+    description: 'Catches missing or under-specified tasks at planning time. Produces
+      a requirement coverage and TDD-readiness report. Bridge-native logic.
+
+      '
+    condition: null
   after_implement:
   - extension: git
     command: speckit.git.commit
@@ -129,6 +157,16 @@ hooks:
     optional: true
     prompt: Commit implementation changes?
     description: Auto-commit after implementation
+    condition: null
+  - extension: superb
+    command: speckit.superb.verify
+    enabled: true
+    optional: false
+    prompt: Execute speckit.superb.verify?
+    description: 'Mandatory completion gate. Bridges an installed superpowers verification-before-completion
+      skill and extends it with spec-kit spec-coverage checks. Prevents false completions.
+
+      '
     condition: null
   after_checklist:
   - extension: git
