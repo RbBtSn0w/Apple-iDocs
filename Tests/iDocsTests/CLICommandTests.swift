@@ -43,6 +43,59 @@ struct CLICommandTests {
         #expect(capture.stdout.joined(separator: "\n").contains("source: local"))
     }
 
+    @Test("CLI search emits machine-readable JSON with caller context")
+    func searchJSONOutputIncludesCaller() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                searchResults: [
+                    SearchResult(
+                        id: "/documentation/swiftui/view",
+                        title: "View",
+                        snippet: "UI",
+                        technology: "swiftui",
+                        source: .local
+                    )
+                ]
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(
+            query: "SwiftUI",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "search")
+        #expect(payload.caller == "skill.swiftui-engineering")
+        #expect(payload.query == "SwiftUI")
+        #expect(payload.exitCategory == .ok)
+        #expect(payload.resultCount == 1)
+        #expect(payload.selectedPaths == ["/documentation/swiftui/view"])
+        #expect(payload.source == "local")
+        #expect(payload.results?.first?.source == "local")
+        #expect(payload.durationMs >= 0)
+    }
+
     @Test("CLI outputs standardized DocumentationError mapping")
     func standardizedErrorOutput() async {
         let capture = OutputCapture()
@@ -124,6 +177,52 @@ struct CLICommandTests {
         #expect(capture.stdout.joined(separator: "\n").contains("[source: apple]"))
     }
 
+    @Test("CLI fetch emits machine-readable JSON body payload")
+    func fetchJSONOutput() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                documentByID: [
+                    "/documentation/swiftui/view": DocumentationContent(
+                        title: "View",
+                        body: "# View",
+                        metadata: ["source": "apple"],
+                        url: URL(string: "https://developer.apple.com/documentation/swiftui/view")!
+                    )
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runFetch(
+            id: "/documentation/swiftui/view",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "fetch")
+        #expect(payload.id == "/documentation/swiftui/view")
+        #expect(payload.source == "apple")
+        #expect(payload.resultCount == 1)
+        #expect(payload.selectedPaths == ["/documentation/swiftui/view"])
+        #expect(payload.body == "# View")
+    }
+
     @Test("CLI list prints technologies and supports category filtering")
     func listTechnologiesAndFilter() async {
         let capture = OutputCapture()
@@ -155,6 +254,81 @@ struct CLICommandTests {
         let output = capture.stdout.joined(separator: "\n")
         #expect(output.contains("SwiftUI"))
         #expect(!output.contains("CloudKit"))
+    }
+
+    @Test("CLI list emits machine-readable JSON payload")
+    func listJSONOutput() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                technologies: [
+                    Technology(name: "SwiftUI", id: "/documentation/swiftui", category: "framework")
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runList(
+            category: "framework",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "list")
+        #expect(payload.category == "framework")
+        #expect(payload.source == "apple")
+        #expect(payload.resultCount == 1)
+        #expect(payload.technologies?.first?.name == "SwiftUI")
+    }
+
+    @Test("CLI JSON mode preserves structured errors on stdout")
+    func jsonErrorOutput() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(errorToThrow: .networkError(message: "connection lost"))
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(
+            query: "SwiftUI",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 1)
+        #expect(capture.stderr.joined(separator: "\n").contains("Error [NETWORK]"))
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "search")
+        #expect(payload.exitCategory == .network)
+        #expect(payload.errorMessage?.contains("Error [NETWORK]") == true)
+        #expect(payload.resultCount == 0)
     }
 
     @Test("CLI list returns standardized error mapping")
@@ -211,5 +385,7 @@ struct CLICommandTests {
         #expect(content.contains("`idocs search <query>`"))
         #expect(content.contains("`idocs fetch <id>`"))
         #expect(content.contains("`idocs list"))
+        #expect(content.contains("`--json`"))
+        #expect(content.contains("`--caller <opaque-id>`"))
     }
 }

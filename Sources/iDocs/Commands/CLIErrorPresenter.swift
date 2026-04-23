@@ -2,6 +2,29 @@ import Foundation
 import iDocsAdapter
 
 public enum CLIErrorPresenter {
+    public static func category(for error: Error) -> CLIExitCategory {
+        guard let docError = error as? DocumentationError else {
+            return .internalError
+        }
+
+        switch docError {
+        case .notFound:
+            return .notFound
+        case .networkError:
+            return .network
+        case .parsingError:
+            return .parsing
+        case .unauthorized:
+            return .unauthorized
+        case .invalidConfiguration:
+            return .config
+        case .incompatibleVersion:
+            return .versionMismatch
+        case .internalError:
+            return .internalError
+        }
+    }
+
     public static func message(for error: Error) -> String {
         guard let docError = error as? DocumentationError else {
             return "Error [INTERNAL]: \(error.localizedDescription)"

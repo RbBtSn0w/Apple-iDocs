@@ -22,10 +22,20 @@ public struct SearchCommand: AsyncParsableCommand {
     @Argument(help: "Search query")
     var query: String
 
+    @Flag(name: .long, help: "Emit machine-readable JSON output")
+    var json = false
+
+    @Option(name: .long, help: "Opaque caller identity for agent or workflow integration")
+    var caller: String?
+
     public init() {}
 
     public mutating func run() async throws {
-        let code = await CLIExecutor.runSearch(query: query)
+        let code = await CLIExecutor.runSearch(
+            query: query,
+            outputFormat: json ? .json : .text,
+            callerID: caller
+        )
         if code != 0 {
             throw ExitCode(code)
         }
@@ -42,10 +52,20 @@ public struct FetchCommand: AsyncParsableCommand {
     @Argument(help: "Documentation identifier/path")
     var id: String
 
+    @Flag(name: .long, help: "Emit machine-readable JSON output")
+    var json = false
+
+    @Option(name: .long, help: "Opaque caller identity for agent or workflow integration")
+    var caller: String?
+
     public init() {}
 
     public mutating func run() async throws {
-        let code = await CLIExecutor.runFetch(id: id)
+        let code = await CLIExecutor.runFetch(
+            id: id,
+            outputFormat: json ? .json : .text,
+            callerID: caller
+        )
         if code != 0 {
             throw ExitCode(code)
         }
@@ -62,10 +82,20 @@ public struct ListCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Filter by category")
     var category: String?
 
+    @Flag(name: .long, help: "Emit machine-readable JSON output")
+    var json = false
+
+    @Option(name: .long, help: "Opaque caller identity for agent or workflow integration")
+    var caller: String?
+
     public init() {}
 
     public mutating func run() async throws {
-        let code = await CLIExecutor.runList(category: category)
+        let code = await CLIExecutor.runList(
+            category: category,
+            outputFormat: json ? .json : .text,
+            callerID: caller
+        )
         if code != 0 {
             throw ExitCode(code)
         }

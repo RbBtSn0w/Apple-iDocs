@@ -1,7 +1,11 @@
 import Foundation
 
 public final class SpotlightSearchProvider: SearchProvider, @unchecked Sendable {
-    public init() {}
+    private let timeoutSeconds: TimeInterval
+
+    public init(timeoutSeconds: TimeInterval = 2.0) {
+        self.timeoutSeconds = timeoutSeconds
+    }
     
     public func search(query: String) async throws -> [URL] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -19,7 +23,18 @@ public final class SpotlightSearchProvider: SearchProvider, @unchecked Sendable 
 
         do {
             try process.run()
-            process.waitUntilExit()
+            let start = Date()
+
+            while process.isRunning && Date().timeIntervalSince(start) < timeoutSeconds {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+
+            if process.isRunning {
+                process.terminate()
+                process.waitUntilExit()
+                return []
+            }
+
             guard process.terminationStatus == 0 else { return [] }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             guard let output = String(data: data, encoding: .utf8) else { return [] }

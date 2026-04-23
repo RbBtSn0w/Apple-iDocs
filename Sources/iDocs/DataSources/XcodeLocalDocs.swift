@@ -86,6 +86,40 @@ public struct XcodeLocalDocs {
 
         var results: [SearchResult] = []
 
+        // Fast path: module-style queries can usually be satisfied from local
+        // documentation roots or index stores without paying the cost of a
+        // broader provider search.
+        let directModuleResults = searchDocumentationRoots(query: trimmed, sdks: sdks, limit: 20)
+        if !directModuleResults.isEmpty {
+            return directModuleResults
+        }
+
+        let directIndexResults = searchIndexStores(query: trimmed, sdks: sdks)
+        if !directIndexResults.isEmpty {
+            return directIndexResults
+        }
+
+        // Composite queries such as "SwiftUI View" still benefit from resolving
+        // the framework/module token first before searching more broadly.
+        if let moduleHint = extractModuleHint(from: trimmed) {
+            let hinted = searchDocumentationRoots(query: moduleHint, sdks: sdks, limit: 20)
+            if !hinted.isEmpty {
+                logger.info("Recovered \(hinted.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
+                return hinted
+            }
+
+            let hintedIndexResults = searchIndexStores(query: moduleHint, sdks: sdks)
+            if !hintedIndexResults.isEmpty {
+                logger.info("Recovered \(hintedIndexResults.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
+                return hintedIndexResults
+            }
+        }
+
+        if shouldShortCircuitOpaqueMissQuery(trimmed) {
+            logger.info("Skipping expensive local miss path for opaque query: \(trimmed)")
+            return []
+        }
+
         // Preferred path: delegate lookup to injected search provider (Spotlight/Mock/etc.)
         if let urls = try? await searchProvider.search(query: trimmed), !urls.isEmpty {
             results.append(contentsOf: urls.prefix(50).map { fileURL in
@@ -100,53 +134,14 @@ public struct XcodeLocalDocs {
             })
         }
 
-        let indexResults = searchIndexStores(query: trimmed, sdks: sdks)
-        if !indexResults.isEmpty {
-            return indexResults
-        }
-
-        // Fallback path: lightweight scan under local documentation roots.
-        if results.isEmpty {
-            let needle = trimmed.lowercased()
-            for sdk in sdks {
-                let docsDir = sdk.cachePath.appendingPathComponent("documentation")
-                guard fileManager.fileExists(atPath: docsDir.path) else { continue }
-                let entries = (try? fileManager.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil, options: [])) ?? []
-                for entry in entries where entry.hasDirectoryPath {
-                    let module = entry.lastPathComponent
-                    guard module.lowercased().contains(needle) else { continue }
-                    results.append(
-                        SearchResult(
-                            title: module,
-                            abstract: "Matched module name in local Xcode documentation.",
-                            path: "/documentation/\(module)",
-                            kind: .framework,
-                            source: .local
-                        )
-                    )
-                    if results.count >= 50 { return results }
-                }
-            }
-        }
-
         // Fallback path for modern Xcode caches:
         // scan DeveloperDocumentation.index store files and recover
         // /documentation/... identifiers directly from index payloads.
         if results.isEmpty {
-            let indexResults = try searchDeveloperDocumentationIndexes(query: trimmed, limit: 50)
+            let indexResults = try searchDeveloperDocumentationIndexes(query: trimmed, sdks: sdks, limit: 50)
             if !indexResults.isEmpty {
                 logger.info("Recovered \(indexResults.count) matches from DeveloperDocumentation.index for: \(trimmed)")
                 results = indexResults
-            }
-        }
-
-        // Composite-query fallback:
-        // if query is like "SwiftUI View", resolve likely module token first.
-        if results.isEmpty, let moduleHint = extractModuleHint(from: trimmed) {
-            let hinted = searchIndexStores(query: moduleHint, sdks: sdks)
-            if !hinted.isEmpty {
-                logger.info("Recovered \(hinted.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
-                results = hinted
             }
         }
 
@@ -173,6 +168,43 @@ public struct XcodeLocalDocs {
         return nil
     }
 
+    private func searchDocumentationRoots(query: String, sdks: [XcodeLocalDocInfo], limit: Int) -> [SearchResult] {
+        let needle = query.lowercased()
+        guard !needle.isEmpty else { return [] }
+
+        var results: [SearchResult] = []
+        var seenModules = Set<String>()
+
+        for sdk in sdks {
+            let docsDir = sdk.cachePath.appendingPathComponent("documentation")
+            guard fileManager.fileExists(atPath: docsDir.path) else { continue }
+            let entries = (try? fileManager.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil, options: [])) ?? []
+            for entry in entries where entry.hasDirectoryPath {
+                let module = entry.lastPathComponent
+                guard module.lowercased().contains(needle) else { continue }
+
+                let normalizedKey = module.lowercased()
+                guard seenModules.insert(normalizedKey).inserted else { continue }
+
+                results.append(
+                    SearchResult(
+                        title: module,
+                        abstract: "Matched module name in local Xcode documentation.",
+                        path: "/documentation/\(module)",
+                        kind: .framework,
+                        source: .local
+                    )
+                )
+
+                if results.count >= limit {
+                    return results
+                }
+            }
+        }
+
+        return results
+    }
+
     private func searchIndexStores(query: String, sdks: [XcodeLocalDocInfo]) -> [SearchResult] {
         guard isLikelyModuleQuery(query) else { return [] }
 
@@ -181,27 +213,36 @@ public struct XcodeLocalDocs {
 
         for sdk in sdks where sdk.hasIndex {
             for storeURL in indexStoreURLs(for: sdk.cachePath) {
-                guard let data = try? fileManager.read(from: storeURL) else { continue }
-                let printableStrings = extractPrintableStrings(from: data)
-                for match in printableStrings where match.caseInsensitiveCompare(query) == .orderedSame {
-                    let normalizedTitle = match.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !normalizedTitle.isEmpty else { continue }
-                    let normalizedKey = normalizedTitle.lowercased()
-                    guard seenTitles.insert(normalizedKey).inserted else { continue }
-
-                    results.append(
-                        SearchResult(
-                            title: normalizedTitle,
-                            abstract: "Matched module name in local Xcode documentation index.",
-                            path: "/documentation/\(normalizedTitle)",
-                            kind: .framework,
-                            source: .local
-                        )
-                    )
-
-                    if results.count >= 20 {
-                        return results
+                let data: Data
+                do {
+                    if fileManager is FileManager {
+                        data = try Data(contentsOf: storeURL, options: .mappedIfSafe)
+                    } else {
+                        data = try fileManager.read(from: storeURL)
                     }
+                } catch {
+                    continue
+                }
+
+                guard containsToken(query, in: data) else { continue }
+
+                let normalizedTitle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalizedTitle.isEmpty else { continue }
+                let normalizedKey = normalizedTitle.lowercased()
+                guard seenTitles.insert(normalizedKey).inserted else { continue }
+
+                results.append(
+                    SearchResult(
+                        title: normalizedTitle,
+                        abstract: "Matched module name in local Xcode documentation index.",
+                        path: "/documentation/\(normalizedTitle)",
+                        kind: .framework,
+                        source: .local
+                    )
+                )
+
+                if results.count >= 20 {
+                    return results
                 }
             }
         }
@@ -223,28 +264,29 @@ public struct XcodeLocalDocs {
         return []
     }
 
-    private func extractPrintableStrings(from data: Data, minimumLength: Int = 4) -> [String] {
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._:/-")
-        var buffer = ""
-        var results: [String] = []
+    private func containsToken(_ token: String, in data: Data) -> Bool {
+        guard let needle = token.data(using: .utf8), !needle.isEmpty else { return false }
+        let moduleCharacterSet = CharacterSet.alphanumerics
 
-        for byte in data {
-            if let scalar = UnicodeScalar(Int(byte)), allowed.contains(scalar) {
-                buffer.unicodeScalars.append(scalar)
-            } else {
-                flushBuffer(&buffer, into: &results, minimumLength: minimumLength)
+        var searchRange = 0..<data.count
+        while let matchRange = data.range(of: needle, options: [], in: searchRange) {
+            let lowerBound = matchRange.lowerBound
+            let upperBound = matchRange.upperBound
+            let hasLeadingBoundary = lowerBound == data.startIndex || !isModuleByte(data[lowerBound - 1], moduleCharacterSet: moduleCharacterSet)
+            let hasTrailingBoundary = upperBound == data.endIndex || !isModuleByte(data[upperBound], moduleCharacterSet: moduleCharacterSet)
+            if hasLeadingBoundary && hasTrailingBoundary {
+                return true
             }
+
+            searchRange = upperBound..<data.count
         }
 
-        flushBuffer(&buffer, into: &results, minimumLength: minimumLength)
-        return results
+        return false
     }
 
-    private func flushBuffer(_ buffer: inout String, into results: inout [String], minimumLength: Int) {
-        defer { buffer.removeAll(keepingCapacity: true) }
-        let candidate = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard candidate.count >= minimumLength else { return }
-        results.append(candidate)
+    private func isModuleByte(_ byte: UInt8, moduleCharacterSet: CharacterSet) -> Bool {
+        guard let scalar = UnicodeScalar(Int(byte)) else { return false }
+        return moduleCharacterSet.contains(scalar)
     }
 
     private func isLikelyModuleQuery(_ query: String) -> Bool {
@@ -257,6 +299,14 @@ public struct XcodeLocalDocs {
             }
         }
         return query.count >= 3 && uppercaseCount >= 2
+    }
+
+    private func shouldShortCircuitOpaqueMissQuery(_ query: String) -> Bool {
+        guard !query.contains(where: \.isWhitespace) else { return false }
+        guard query.count >= 16 else { return false }
+        guard let first = query.first, first.isLowercase else { return false }
+        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
+        return query.lowercased() == query
     }
 
     private func extractModuleHint(from query: String) -> String? {
@@ -280,29 +330,25 @@ public struct XcodeLocalDocs {
         return "Unknown"
     }
 
-    private func searchDeveloperDocumentationIndexes(query: String, limit: Int) throws -> [SearchResult] {
+    private func searchDeveloperDocumentationIndexes(query: String, sdks: [XcodeLocalDocInfo], limit: Int) throws -> [SearchResult] {
         let tokens = tokenize(query: query)
         guard !tokens.isEmpty else { return [] }
-
-        let indexRoots = findDeveloperIndexRoots(maxDepth: 6)
-        guard !indexRoots.isEmpty else { return [] }
 
         var ranked: [(path: String, score: Double)] = []
         var seen = Set<String>()
 
-        for root in indexRoots {
-            let storeDB = root
-                .appendingPathComponent("NSFileProtectionCompleteUntilFirstUserAuthentication")
-                .appendingPathComponent("index.spotlightV3")
-                .appendingPathComponent("store.db")
-            guard fileManager.fileExists(atPath: storeDB.path) else { continue }
+        for sdk in sdks where sdk.hasIndex {
+            let storeURLs = indexStoreURLs(for: sdk.cachePath)
+            guard !storeURLs.isEmpty else { continue }
 
-            for path in extractDocumentationPaths(from: storeDB) {
-                if seen.contains(path) { continue }
-                let score = scoreForPath(path, tokens: tokens)
-                guard score > 0 else { continue }
-                seen.insert(path)
-                ranked.append((path, score))
+            for storeDB in storeURLs {
+                for path in extractDocumentationPaths(from: storeDB) {
+                    if seen.contains(path) { continue }
+                    let score = scoreForPath(path, tokens: tokens)
+                    guard score > 0 else { continue }
+                    seen.insert(path)
+                    ranked.append((path, score))
+                }
             }
         }
 
@@ -323,36 +369,6 @@ public struct XcodeLocalDocs {
                     relevance: item.score
                 )
             }
-    }
-
-    private func findDeveloperIndexRoots(maxDepth: Int) -> [URL] {
-        var results: [URL] = []
-        var queue: [(url: URL, depth: Int)] = [(cacheDirectory, 0)]
-        var head = 0
-
-        while head < queue.count {
-            let current = queue[head]
-            head += 1
-            if current.depth > maxDepth { continue }
-
-            let children = (try? fileManager.contentsOfDirectory(
-                at: current.url,
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            )) ?? []
-
-            for child in children where child.hasDirectoryPath {
-                if child.lastPathComponent == "DeveloperDocumentation.index" {
-                    results.append(child)
-                    continue
-                }
-                if current.depth < maxDepth {
-                    queue.append((child, current.depth + 1))
-                }
-            }
-        }
-
-        return results
     }
 
     private func extractDocumentationPaths(from url: URL) -> [String] {
