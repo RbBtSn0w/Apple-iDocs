@@ -8,6 +8,9 @@ struct DocumentationServiceContractTests {
     func configInjection() {
         let config = DocumentationConfig(
             cachePath: "/tmp/idocs-tests",
+            callerID: "skill.swiftui-engineering",
+            usageLogPath: "/tmp/idocs-tests/usage.jsonl",
+            technologyCategoryFilter: "framework",
             locale: Locale(identifier: "en_US"),
             timeout: 12,
             apiBaseURL: URL(string: "https://example.com")!,
@@ -15,6 +18,9 @@ struct DocumentationServiceContractTests {
         )
 
         #expect(config.cachePath == "/tmp/idocs-tests")
+        #expect(config.callerID == "skill.swiftui-engineering")
+        #expect(config.usageLogPath == "/tmp/idocs-tests/usage.jsonl")
+        #expect(config.technologyCategoryFilter == "framework")
         #expect(config.timeout == 12)
         #expect(config.apiBaseURL.absoluteString == "https://example.com")
         #expect(config.enableFileLocking)
@@ -24,6 +30,66 @@ struct DocumentationServiceContractTests {
     func defaultCLIConfig() {
         let config = DocumentationConfig.cliDefault()
         #expect(config.cachePath.contains("iDocs"))
+        #expect(config.usageLogPath?.contains("iDocs") == true)
+    }
+
+    @Test("Default CLI config honors environment overrides")
+    func defaultCLIConfigHonorsEnvironmentOverrides() {
+        let config = DocumentationConfig.cliDefault(
+            environment: [
+                "IDOCS_CACHE_PATH": "/tmp/idocs-custom-cache",
+                "IDOCS_USAGE_LOG_PATH": "/tmp/idocs-custom-usage.jsonl",
+            ]
+        )
+
+        #expect(config.cachePath == "/tmp/idocs-custom-cache")
+        #expect(config.usageLogPath == "/tmp/idocs-custom-usage.jsonl")
+        #expect(config.technologyCategoryFilter == nil)
+    }
+
+    @Test("Invocation context preserves existing technology category filter")
+    func invocationContextPreservesExistingTechnologyCategoryFilter() {
+        let config = DocumentationConfig(
+            cachePath: "/tmp/idocs-tests",
+            technologyCategoryFilter: "framework"
+        )
+
+        let updated = config.withInvocationContext(callerID: "skill.swiftui-engineering")
+
+        #expect(updated.callerID == "skill.swiftui-engineering")
+        #expect(updated.technologyCategoryFilter == "framework")
+    }
+
+    @Test("Invocation context explicitly overrides technology category filter")
+    func invocationContextOverridesTechnologyCategoryFilter() {
+        let config = DocumentationConfig(
+            cachePath: "/tmp/idocs-tests",
+            technologyCategoryFilter: "framework"
+        )
+
+        let updated = config.withInvocationContext(
+            callerID: "skill.swiftui-engineering",
+            technologyCategoryFilter: "service"
+        )
+
+        #expect(updated.callerID == "skill.swiftui-engineering")
+        #expect(updated.technologyCategoryFilter == "service")
+    }
+
+    @Test("Invocation context explicitly clears technology category filter")
+    func invocationContextClearsTechnologyCategoryFilter() {
+        let config = DocumentationConfig(
+            cachePath: "/tmp/idocs-tests",
+            technologyCategoryFilter: "framework"
+        )
+
+        let updated = config.withInvocationContext(
+            callerID: "skill.swiftui-engineering",
+            technologyCategoryFilter: nil
+        )
+
+        #expect(updated.callerID == "skill.swiftui-engineering")
+        #expect(updated.technologyCategoryFilter == nil)
     }
 
     @Test("DocumentationService exposes async API shape")

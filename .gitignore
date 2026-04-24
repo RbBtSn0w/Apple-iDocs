@@ -52,9 +52,7 @@ Temporary Items
 ~/Library/Caches/iDocs/
 
 # Ignore large data directories if they are not part of the core repo
-apple-doc-mcp/
-apple-docs-mcp/
-sosumi.ai/
+corrival/
 
 # --- Test & Coverage ---
 coverage_report/

@@ -52,6 +52,57 @@ struct XcodeLocalDocsMockTests {
         #expect(results.isEmpty)
     }
 
+    @Test("Module queries prefer documentation roots before provider search")
+    func testModuleQueryUsesDocumentationRootFastPath() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
+        let docsRoot = sdkURL.appendingPathComponent("documentation", isDirectory: true)
+        let moduleRoot = docsRoot.appendingPathComponent("SwiftData", isDirectory: true)
+
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[docsRoot.path + "/"] = Data()
+        mockFS.virtualFiles[moduleRoot.path + "/"] = Data()
+
+        let results = try await docs.search(query: "SwiftData")
+
+        #expect(results.count == 1)
+        #expect(results.first?.title == "SwiftData")
+        #expect(results.first?.path == "/documentation/SwiftData")
+        #expect(results.first?.source == .local)
+        #expect(mockSearch.searchCallCount == 0)
+    }
+
+    @Test("Non-module queries skip documentation root fast path")
+    func testNonModuleQuerySkipsDocumentationRootFastPath() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
+        let docsRoot = sdkURL.appendingPathComponent("documentation", isDirectory: true)
+        let moduleRoot = docsRoot.appendingPathComponent("SwiftUI", isDirectory: true)
+        let providerURL = URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/swiftui/view.json")
+
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[docsRoot.path + "/"] = Data()
+        mockFS.virtualFiles[moduleRoot.path + "/"] = Data()
+        mockSearch.mockResults = [providerURL]
+
+        let results = try await docs.search(query: "view")
+
+        #expect(results.count == 1)
+        #expect(results.first?.path == "/documentation/view")
+        #expect(results.first?.source == .local)
+        #expect(mockSearch.searchCallCount == 1)
+    }
+
     @Test("Search falls back to DeveloperDocumentation.index store for module queries")
     func testSearchIndexStoreFallback() async throws {
         let mockFS = MockFileSystem()
@@ -77,6 +128,35 @@ struct XcodeLocalDocsMockTests {
         #expect(results.first?.title == "SwiftUI")
         #expect(results.first?.path == "/documentation/SwiftUI")
         #expect(results.first?.source == .local)
+        #expect(mockSearch.searchCallCount == 0)
+    }
+
+    @Test("Composite queries recover module hint before provider search")
+    func testCompositeQueryUsesModuleHintFastPath() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
+        let storeURL = sdkURL
+            .appendingPathComponent("DeveloperDocumentation.index")
+            .appendingPathComponent("NSFileProtectionCompleteUntilFirstUserAuthentication")
+            .appendingPathComponent("index.spotlightV3")
+            .appendingPathComponent("store.db")
+
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[sdkURL.appendingPathComponent("DeveloperDocumentation.index").path + "/"] = Data()
+        mockFS.virtualFiles[storeURL.path] = Data([0x00]) + Data("SwiftUI".utf8) + Data([0x00])
+
+        let results = try await docs.search(query: "SwiftUI View")
+
+        #expect(results.count == 1)
+        #expect(results.first?.title == "SwiftUI")
+        #expect(results.first?.path == "/documentation/SwiftUI")
+        #expect(results.first?.source == .local)
+        #expect(mockSearch.searchCallCount == 0)
     }
 
     @Test("Search does not invent local symbol paths from index store fallback")
@@ -101,5 +181,21 @@ struct XcodeLocalDocsMockTests {
         let results = try await docs.search(query: "View")
 
         #expect(results.isEmpty)
+    }
+
+    @Test("Opaque long miss queries skip provider fallback")
+    func testOpaqueLongMissQuerySkipsProviderFallback() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        mockSearch.mockResults = [URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/placeholder.json")]
+
+        let results = try await docs.search(query: "qwertyzzdocnotfound")
+
+        #expect(results.isEmpty)
+        #expect(mockSearch.searchCallCount == 0)
     }
 }

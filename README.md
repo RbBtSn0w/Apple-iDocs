@@ -141,6 +141,7 @@ Notes:
 - Search output includes source markers like `{source: apple}`.
 - Fetch output includes a source header like `[source: local|apple|sosumi|cache]`.
 - For source-checkout workflows, replace `idocs` with `./scripts/tuist-silent.sh run idocs --`.
+- Agent and benchmark workflows can override cache or usage-log locations with `IDOCS_CACHE_PATH` and `IDOCS_USAGE_LOG_PATH`.
 
 ## Testing
 
@@ -179,11 +180,14 @@ Notes:
 ./scripts/spec-trace-gate.sh
 ./scripts/coverage-gate.sh 60
 ./scripts/e2e-cli.sh
+./scripts/benchmark/check-local-cli-latency.sh
 ```
 
 Notes:
 - `spec-trace-gate.sh` verifies every `FR-*`/`SC-*` in `spec.md` has a mapped automated check.
 - `coverage-gate.sh` runs `xcodebuild` with coverage and evaluates average line coverage for `iDocsKit`, `iDocsAdapter`, and `iDocsApp`.
+- `check-local-cli-latency.sh` runs a local binary directly, records usage JSONL in an isolated cache/log location, and fails if the current p50/p95 thresholds regress.
+- `check-local-cli-latency.sh` honors `IDOCS_LATENCY_SAMPLES`, `IDOCS_LATENCY_COMMAND_TIMEOUT_SECONDS`, `IDOCS_LATENCY_KEEP_ARTIFACTS`, `IDOCS_LATENCY_CACHE_DIR`, and `IDOCS_LATENCY_USAGE_LOG` for local diagnostics.
 
 ## License
 MIT
