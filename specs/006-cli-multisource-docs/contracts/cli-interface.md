@@ -33,13 +33,18 @@
 
 When `--json` is set, `stdout` contains one JSON payload with at least:
 - `command`
-- `query` or `id`
 - `caller`
 - `source`
 - `duration_ms`
 - `result_count`
 - `selected_paths`
 - `exit_category`
+
+Command-specific selectors:
+
+- `search` includes `query`
+- `fetch` includes `id`
+- `list` may include `category`
 
 `fetch` responses also include the rendered Markdown `body` payload.
 

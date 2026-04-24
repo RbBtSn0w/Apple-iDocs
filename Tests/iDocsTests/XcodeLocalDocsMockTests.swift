@@ -77,6 +77,32 @@ struct XcodeLocalDocsMockTests {
         #expect(mockSearch.searchCallCount == 0)
     }
 
+    @Test("Non-module queries skip documentation root fast path")
+    func testNonModuleQuerySkipsDocumentationRootFastPath() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
+        let docsRoot = sdkURL.appendingPathComponent("documentation", isDirectory: true)
+        let moduleRoot = docsRoot.appendingPathComponent("SwiftUI", isDirectory: true)
+        let providerURL = URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/swiftui/view.json")
+
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[docsRoot.path + "/"] = Data()
+        mockFS.virtualFiles[moduleRoot.path + "/"] = Data()
+        mockSearch.mockResults = [providerURL]
+
+        let results = try await docs.search(query: "view")
+
+        #expect(results.count == 1)
+        #expect(results.first?.path == "/documentation/view")
+        #expect(results.first?.source == .local)
+        #expect(mockSearch.searchCallCount == 1)
+    }
+
     @Test("Search falls back to DeveloperDocumentation.index store for module queries")
     func testSearchIndexStoreFallback() async throws {
         let mockFS = MockFileSystem()

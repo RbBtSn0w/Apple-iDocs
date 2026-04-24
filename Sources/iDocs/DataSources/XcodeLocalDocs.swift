@@ -89,14 +89,16 @@ public struct XcodeLocalDocs {
         // Fast path: module-style queries can usually be satisfied from local
         // documentation roots or index stores without paying the cost of a
         // broader provider search.
-        let directModuleResults = searchDocumentationRoots(query: trimmed, sdks: sdks, limit: 20)
-        if !directModuleResults.isEmpty {
-            return directModuleResults
-        }
+        if isLikelyModuleQuery(trimmed) {
+            let directModuleResults = searchDocumentationRoots(query: trimmed, sdks: sdks, limit: 20)
+            if !directModuleResults.isEmpty {
+                return directModuleResults
+            }
 
-        let directIndexResults = searchIndexStores(query: trimmed, sdks: sdks)
-        if !directIndexResults.isEmpty {
-            return directIndexResults
+            let directIndexResults = searchIndexStores(query: trimmed, sdks: sdks)
+            if !directIndexResults.isEmpty {
+                return directIndexResults
+            }
         }
 
         // Composite queries such as "SwiftUI View" still benefit from resolving
