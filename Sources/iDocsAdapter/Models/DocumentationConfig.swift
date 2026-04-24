@@ -7,6 +7,8 @@ public struct DocumentationConfig: Sendable, Equatable {
     public let callerID: String?
     /// Optional local usage log path for CLI and agent-side observability.
     public let usageLogPath: String?
+    /// Optional category filter for technology-list workflows.
+    public let technologyCategoryFilter: String?
     /// Active locale metadata carried through adapter responses.
     public let locale: Locale
     /// Reserved for future transport-level customization. The current default CLI adapter does not override URLSession timeouts with this value.
@@ -20,6 +22,7 @@ public struct DocumentationConfig: Sendable, Equatable {
         cachePath: String,
         callerID: String? = nil,
         usageLogPath: String? = nil,
+        technologyCategoryFilter: String? = nil,
         locale: Locale = Locale(identifier: "en_US_POSIX"),
         timeout: TimeInterval = 30,
         apiBaseURL: URL = URL(string: "https://developer.apple.com/tutorials/data")!,
@@ -28,6 +31,7 @@ public struct DocumentationConfig: Sendable, Equatable {
         self.cachePath = cachePath
         self.callerID = callerID
         self.usageLogPath = usageLogPath
+        self.technologyCategoryFilter = technologyCategoryFilter
         self.locale = locale
         self.timeout = timeout
         self.apiBaseURL = apiBaseURL
@@ -53,11 +57,30 @@ public struct DocumentationConfig: Sendable, Equatable {
         return DocumentationConfig(cachePath: cachePath, usageLogPath: usageLogPath)
     }
 
-    public func withInvocationContext(callerID: String?) -> DocumentationConfig {
+    public func withInvocationContext(
+        callerID: String?
+    ) -> DocumentationConfig {
         DocumentationConfig(
             cachePath: cachePath,
             callerID: callerID,
             usageLogPath: usageLogPath,
+            technologyCategoryFilter: technologyCategoryFilter,
+            locale: locale,
+            timeout: timeout,
+            apiBaseURL: apiBaseURL,
+            enableFileLocking: enableFileLocking
+        )
+    }
+
+    public func withInvocationContext(
+        callerID: String?,
+        technologyCategoryFilter: String?
+    ) -> DocumentationConfig {
+        DocumentationConfig(
+            cachePath: cachePath,
+            callerID: callerID,
+            usageLogPath: usageLogPath,
+            technologyCategoryFilter: technologyCategoryFilter,
             locale: locale,
             timeout: timeout,
             apiBaseURL: apiBaseURL,

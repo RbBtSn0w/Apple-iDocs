@@ -163,6 +163,40 @@ struct UsageLoggingTests {
         #expect(stages.compactMap { $0["name"] as? String } == ["cache", "local"])
     }
 
+    @Test("DefaultDocumentationAdapter logs filtered technology count for category list requests")
+    func adapterLogsFilteredTechnologyCountForListRequests() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let logURL = temporaryDirectory.appendingPathComponent("usage.jsonl")
+        let config = DocumentationConfig(
+            cachePath: temporaryDirectory.appendingPathComponent("cache").path,
+            callerID: "skill.swiftui-engineering",
+            usageLogPath: logURL.path,
+            technologyCategoryFilter: "framework"
+        )
+
+        let adapter = try DefaultDocumentationAdapter(
+            technologiesPerformer: {
+                [
+                    Technology(name: "SwiftUI", id: "/documentation/swiftui", category: "framework"),
+                    Technology(name: "CloudKit", id: "/documentation/cloudkit", category: "service")
+                ]
+            }
+        )
+        let results = try await adapter.listTechnologies(config: config)
+
+        let payload = try readSingleLogEntry(from: logURL)
+
+        #expect(!results.isEmpty)
+        #expect(results.allSatisfy { $0.category?.localizedCaseInsensitiveContains("framework") == true })
+        #expect(payload["operation"] as? String == "list")
+        #expect(payload["caller"] as? String == "skill.swiftui-engineering")
+        #expect(payload["category"] as? String == "framework")
+        #expect(payload["result_count"] as? Int == results.count)
+        #expect(payload["source"] as? String == "apple")
+    }
+
     private func makeMockAppleAPI(queries: [String]) -> AppleJSONAPI {
         let session = MockNetworkSession()
         for query in queries {

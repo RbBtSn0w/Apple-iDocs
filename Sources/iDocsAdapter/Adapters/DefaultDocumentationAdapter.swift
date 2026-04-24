@@ -5,12 +5,14 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     private let adapterVersion: String
     private let logger: any DocumentationLogger
     private let searchPerformer: @Sendable (String) async throws -> SearchDocsRunOutput
+    private let technologiesPerformer: @Sendable () async throws -> [Technology]
     private let usageRecorder: DocumentationUsageRecorder
 
     public init(
         adapterVersion: String = "1.0.0",
         logger: any DocumentationLogger = NoopDocumentationLogger(),
         searchPerformer: (@Sendable (String) async throws -> SearchDocsRunOutput)? = nil,
+        technologiesPerformer: (@Sendable () async throws -> [Technology])? = nil,
         usageRecorder: DocumentationUsageRecorder = DocumentationUsageRecorder()
     ) throws {
         self.adapterVersion = adapterVersion
@@ -21,6 +23,9 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 sosumiAPI: SosumiAPI(),
                 xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider())
             ).runDetailed(query: query)
+        }
+        self.technologiesPerformer = technologiesPerformer ?? {
+            try await AppleJSONAPI().fetchTechnologies().map { Technology(name: $0.name, id: $0.url, category: $0.kind) }
         }
         self.usageRecorder = usageRecorder
         try Self.validateVersionCompatibility(adapterVersion: adapterVersion, core: coreVersion)
@@ -142,21 +147,22 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     public func listTechnologies(config: DocumentationConfig) async throws -> [Technology] {
         let start = ContinuousClock.now
         do {
-            let technologies = try await AppleJSONAPI().fetchTechnologies()
-            let mapped = technologies.map { Technology(name: $0.name, id: $0.url, category: $0.kind) }
+            let technologies = try await technologiesPerformer()
+            let filtered = filterTechnologies(technologies, category: config.technologyCategoryFilter)
             await recordUsageIfConfigured(
                 DocumentationUsageLogEntry(
                     operation: "list",
                     caller: config.callerID,
                     status: .success,
+                    category: config.technologyCategoryFilter,
                     localeIdentifier: config.locale.identifier,
                     durationMs: durationInMilliseconds(since: start),
-                    resultCount: mapped.count,
-                    source: mapped.isEmpty ? nil : "apple"
+                    resultCount: filtered.count,
+                    source: filtered.isEmpty ? nil : "apple"
                 ),
                 config: config
             )
-            return mapped
+            return filtered
         } catch {
             logger.log(level: .error, message: "Adapter listTechnologies failed", context: ["error": error.localizedDescription])
             let mappedError = mapError(error, fallbackID: "technologies")
@@ -165,6 +171,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     operation: "list",
                     caller: config.callerID,
                     status: .failure,
+                    category: config.technologyCategoryFilter,
                     localeIdentifier: config.locale.identifier,
                     durationMs: durationInMilliseconds(since: start),
                     resultCount: 0,
@@ -267,6 +274,20 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         let duration = start.duration(to: ContinuousClock.now)
         return Double(duration.components.seconds) * 1_000
             + Double(duration.components.attoseconds) / 1_000_000_000_000_000
+    }
+
+    private func filterTechnologies(
+        _ technologies: [Technology],
+        category: String?
+    ) -> [Technology] {
+        guard let category = category?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !category.isEmpty else {
+            return technologies
+        }
+
+        return technologies.filter { technology in
+            technology.category?.localizedCaseInsensitiveContains(category) == true
+        }
     }
 
     private func errorCategory(for error: DocumentationError) -> String {

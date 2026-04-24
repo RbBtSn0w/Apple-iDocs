@@ -167,12 +167,11 @@ public enum CLIExecutor {
         let start = ContinuousClock.now
         do {
             let adapter = try CLIEnvironment.serviceFactory()
-            let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+            let config = CLIEnvironment.configFactory().withInvocationContext(
+                callerID: callerID,
+                technologyCategoryFilter: category
+            )
             let technologies = try await adapter.listTechnologies(config: config)
-            let filtered = technologies.filter { tech in
-                guard let category else { return true }
-                return tech.category?.localizedCaseInsensitiveContains(category) == true
-            }
             let durationMs = durationInMilliseconds(since: start)
 
             if outputFormat == .json {
@@ -183,14 +182,14 @@ public enum CLIExecutor {
                         query: nil,
                         id: nil,
                         category: category,
-                        source: filtered.isEmpty ? nil : "apple",
+                        source: technologies.isEmpty ? nil : "apple",
                         durationMs: durationMs,
-                        resultCount: filtered.count,
-                        selectedPaths: filtered.map(\.id),
+                        resultCount: technologies.count,
+                        selectedPaths: technologies.map(\.id),
                         exitCategory: .ok,
                         body: nil,
                         results: nil,
-                        technologies: filtered.map {
+                        technologies: technologies.map {
                             CLITechnologyPayload(id: $0.id, name: $0.name, category: $0.category)
                         },
                         errorMessage: nil
@@ -198,12 +197,12 @@ public enum CLIExecutor {
                 )
             }
 
-            if filtered.isEmpty {
+            if technologies.isEmpty {
                 CLIEnvironment.writeStdout("No technologies found in the catalog.")
                 return 0
             }
 
-            let lines = filtered.map { tech in
+            let lines = technologies.map { tech in
                 if let category = tech.category {
                     return "- \(tech.name) (\(category)) [\(tech.id)]"
                 }

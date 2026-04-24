@@ -36,7 +36,14 @@ public struct MockDocumentationAdapter: DocumentationService {
 
     public func listTechnologies(config: DocumentationConfig) async throws -> [Technology] {
         if let errorToThrow { throw errorToThrow }
-        return technologies
+        guard let category = config.technologyCategoryFilter?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !category.isEmpty else {
+            return technologies
+        }
+
+        return technologies.filter { technology in
+            technology.category?.localizedCaseInsensitiveContains(category) == true
+        }
     }
 
     public func getCoreVersion() -> String {
