@@ -42,4 +42,4 @@ The `Project.swift` needs to be updated to:
 - **Q: How does Tuist handle SPM products with different names than the package?**
   - **A**: Tuist 4's `Package.swift` integration handles this automatically. We reference them by the product name defined in the package, which is exactly what `.external(name:)` expects.
 - **Q: Will `swift test` still work?**
-  - **A**: `swift test` requires a `Package.swift`. After migration, we should use `tuist test` for consistency. If `swift test` is still needed (e.g., for CI tools that only support SPM), we can keep a stub `Package.swift` or generate one, but `tuist test` is the primary command.
+  - **A**: No. This is an App/CLI repository, so the root `Package.swift` is intentionally absent and `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing` is the primary test command. Root SwiftPM manifests are reserved for SDK/library repositories whose repository root is the external SwiftPM release contract.

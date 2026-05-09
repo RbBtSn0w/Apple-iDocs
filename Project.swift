@@ -82,6 +82,15 @@ let project = Project(
             bundleId: "com.snow.idocsTests",
             deploymentTargets: .macOS("14.0"),
             sources: ["Tests/iDocsTests/**"],
+            resources: [
+                "specs/008-mcp-service-benchmark/fixtures/**"
+            ],
+            copyFiles: [
+                .resources(
+                    name: "Copy Latency Gate Script",
+                    files: ["scripts/benchmark/evaluate-cli-latency.swift"]
+                )
+            ],
             dependencies: [
                 .target(name: "iDocsKit"),
                 .target(name: "iDocsApp"),

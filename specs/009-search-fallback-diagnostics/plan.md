@@ -81,15 +81,15 @@ Primary commands:
 ```bash
 tuist install
 tuist build
-tuist test --inspect-mode local --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
 ./scripts/arch-gate.sh
 ```
 
 Focused checks:
 
 ```bash
-tuist test --inspect-mode local --no-selective-testing --test-targets iDocsTests -- -destination 'platform=macOS,name=My Mac'
-tuist test --inspect-mode local --no-selective-testing --test-targets iDocsAdapterTests -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing --test-targets iDocsTests -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing --test-targets iDocsAdapterTests -- -destination 'platform=macOS,name=My Mac'
 idocs search --json "NavigationSplitView"
 idocs search --json "inspectorColumnWidth"
 idocs search --json "SomeFakeAPIThatDoesntExistInApple"

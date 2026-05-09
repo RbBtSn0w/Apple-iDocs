@@ -9,7 +9,7 @@ This feature enhances `idocs search` so missing local Xcode documentation, remot
 ```bash
 tuist install
 tuist build
-tuist test --inspect-mode local --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
 ```
 
 Tuist owns the project graph through `Project.swift`; `Tuist/Package.swift` is only the SwiftPM third-party dependency entry point.
@@ -18,8 +18,8 @@ Root `Package.swift` manifests are reserved for SDK repositories that publish a 
 For a deterministic full test-target run:
 
 ```bash
-tuist test --inspect-mode local --no-selective-testing --test-targets iDocsTests -- -destination 'platform=macOS,name=My Mac'
-tuist test --inspect-mode local --no-selective-testing --test-targets iDocsAdapterTests -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing --test-targets iDocsTests -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing --test-targets iDocsAdapterTests -- -destination 'platform=macOS,name=My Mac'
 ```
 
 Locate the built binary if you are running directly from a source checkout:

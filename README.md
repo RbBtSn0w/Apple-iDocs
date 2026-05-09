@@ -150,7 +150,7 @@ Notes:
 Default tests (offline, no external network):
 
 ```bash
-tuist test --inspect-mode local --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
 ./scripts/tuist-silent.sh test
 ```
 
@@ -172,7 +172,8 @@ Notes:
 - Default tests cover both CLI and Adapter test targets
 - Integration tests validate live endpoints and may fail if services are unavailable
 - Tuist owns the project graph through `Project.swift`; `Tuist/Package.swift` is only the third-party SwiftPM dependency entry point for `.external(...)` dependencies.
-- Tuist test commands should run headlessly with local inspect mode; SDK repositories are the case that should expose a root `Package.swift` as their SwiftPM release contract.
+- Tuist test commands should run headlessly with the shared `iDocs` scheme, local inspect mode, `--no-upload`, `--no-selective-testing`, and an explicit macOS destination.
+- SDK repositories are the case that should expose a root `Package.swift` as their SwiftPM release contract.
 
 ## Quality Gates
 

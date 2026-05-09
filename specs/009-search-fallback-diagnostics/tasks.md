@@ -44,11 +44,11 @@ description: "Task list for search quality and fallback diagnostics implementati
 - [x] T014 Document search fallback diagnostics in `README.md`.
 - [x] T015 Replace template plan and quickstart commands with actual Tuist verification commands in `specs/009-search-fallback-diagnostics/plan.md` and `specs/009-search-fallback-diagnostics/quickstart.md`.
 - [x] T016 Add requirement-to-test traceability in `specs/009-search-fallback-diagnostics/acceptance-traceability.md`.
-- [x] T017 Add an explicit shared `iDocs` scheme in `Project.swift` so `tuist build` and headless `tuist test --inspect-mode local` exercise the CLI and test targets.
+- [x] T017 Add an explicit shared `iDocs` scheme in `Project.swift` so `tuist build` and headless `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing` exercise the CLI and test targets.
 
 ## Verification Checklist
 
 - [x] `tuist build`
-- [x] `tuist test --inspect-mode local --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- [x] `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
 - [x] `./scripts/arch-gate.sh`
 - [x] `git diff --check`

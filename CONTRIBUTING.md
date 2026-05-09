@@ -16,6 +16,7 @@ Thanks for your interest in contributing.
 3. Build and test:
    ```bash
    tuist build iDocs
+   tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
    ./scripts/tuist-silent.sh test
    ```
 
