@@ -2,7 +2,7 @@
 
 **Feature Branch**: `009-search-fallback-diagnostics`  
 **Created**: 2026-05-09  
-**Status**: Verified
+**Status**: In Review
 **Input**: User description: "Fix Apple-iDocs search quality and fallback diagnostics failure when Xcode DocumentationCache is not found."
 
 ## User Scenarios & Testing *(mandatory)*
