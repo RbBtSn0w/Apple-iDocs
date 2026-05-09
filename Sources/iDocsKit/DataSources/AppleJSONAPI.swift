@@ -114,7 +114,7 @@ public actor AppleJSONAPI {
         throw lastError ?? iDocsError.maxRetriesReached
     }
 
-    private func documentKind(kind: String?, role: String?, type: String?) -> DocumentKind {
+    private nonisolated func documentKind(kind: String?, role: String?, type: String?) -> DocumentKind {
         let value = (kind ?? role ?? type ?? "").lowercased()
         switch value {
         case "framework", "module":
@@ -181,25 +181,46 @@ public actor AppleJSONAPI {
 
     private func searchDirectAppleDocs(query: String) async throws -> [SearchResult] {
         var results: [SearchResult] = []
-        var seenPaths = Set<String>()
+        var firstFailure: Error?
 
-        for candidate in directLookupCandidates(for: query) {
-            guard seenPaths.insert(candidate.path).inserted else { continue }
-            do {
-                let summary = try await fetchDirectDocSummary(path: candidate.path)
-                results.append(
-                    SearchResult(
-                        title: summary.metadata.title,
-                        abstract: summary.abstractText,
-                        path: candidate.path,
-                        kind: documentKind(kind: nil, role: summary.metadata.role, type: nil),
-                        source: .apple,
-                        relevance: candidate.relevance
-                    )
-                )
-            } catch {
-                logger.debug("Direct Apple lookup candidate missed: \(candidate.path) (\(error.localizedDescription))")
+        await withTaskGroup(of: DirectLookupResult.self) { group in
+            for candidate in uniqueDirectLookupCandidates(for: query) {
+                group.addTask { [self] in
+                    do {
+                        let summary = try await fetchDirectDocSummary(path: candidate.path)
+                        return .hit(
+                            SearchResult(
+                                title: summary.metadata.title,
+                                abstract: summary.abstractText,
+                                path: candidate.path,
+                                kind: documentKind(kind: nil, role: summary.metadata.role, type: nil),
+                                source: .apple,
+                                relevance: candidate.relevance
+                            )
+                        )
+                    } catch {
+                        if isDirectLookupMiss(error) {
+                            return .miss(path: candidate.path, errorDescription: error.localizedDescription)
+                        }
+                        return .failure(error)
+                    }
+                }
             }
+
+            for await lookupResult in group {
+                switch lookupResult {
+                case .hit(let result):
+                    results.append(result)
+                case .miss(let path, let errorDescription):
+                    logger.debug("Direct Apple lookup candidate missed: \(path) (\(errorDescription))")
+                case .failure(let error):
+                    firstFailure = firstFailure ?? error
+                }
+            }
+        }
+
+        if results.isEmpty, let firstFailure {
+            throw firstFailure
         }
 
         return results.sorted {
@@ -219,9 +240,17 @@ public actor AppleJSONAPI {
         return try JSONDecoder().decode(DirectDocSummary.self, from: data)
     }
 
+    private func uniqueDirectLookupCandidates(for query: String) -> [DirectLookupCandidate] {
+        var seenPaths = Set<String>()
+        return directLookupCandidates(for: query).filter { candidate in
+            seenPaths.insert(candidate.path).inserted
+        }
+    }
+
     private func directLookupCandidates(for query: String) -> [DirectLookupCandidate] {
         let normalized = normalizeSearchText(query)
-        let tokens = Set(searchTokens(query))
+        let orderedTokens = searchTokens(query)
+        let tokens = Set(orderedTokens.map { $0.lowercased() })
         let hasKnownDirectSymbol = normalized.contains("navigationsplitview")
             || normalized.contains("inspectorcolumnwidth")
         var candidates: [DirectLookupCandidate] = []
@@ -247,7 +276,7 @@ public actor AppleJSONAPI {
         }
 
         if tokens.contains("swiftui") && !hasKnownDirectSymbol {
-            for token in searchTokens(query) where isLikelySwiftSymbolToken(token) {
+            for token in orderedTokens where isLikelySwiftSymbolToken(token) {
                 append("/documentation/swiftui/\(token.lowercased())", relevance: 120)
             }
         }
@@ -256,29 +285,39 @@ public actor AppleJSONAPI {
     }
 
     private func normalizeSearchText(_ text: String) -> String {
-        text.unicodeScalars
-            .map { CharacterSet.alphanumerics.contains($0) ? String($0).lowercased() : "" }
-            .joined()
+        text.lowercased().filter { $0.isLetter || $0.isNumber }
     }
 
     private func searchTokens(_ text: String) -> [String] {
         text.split { character in
             !character.isLetter && !character.isNumber
         }
-        .map { String($0).lowercased() }
+        .map { String($0) }
         .filter { !$0.isEmpty }
     }
 
     private func isLikelySwiftSymbolToken(_ token: String) -> Bool {
+        let normalized = token.lowercased()
         let excluded = [
             "swiftui", "macos", "ios", "ipados", "watchos", "tvos",
             "visionos", "sidebar", "sidebars", "detail", "inspector",
             "split", "view", "views", "ispresented"
         ]
-        guard !excluded.contains(token) else { return false }
+        guard !excluded.contains(normalized) else { return false }
         return token.rangeOfCharacter(from: .uppercaseLetters) != nil
-            || token.contains("view")
-            || token.contains("width")
+            || normalized.contains("view")
+            || normalized.contains("width")
+    }
+
+    private nonisolated func isDirectLookupMiss(_ error: Error) -> Bool {
+        switch error {
+        case iDocsError.invalidURL:
+            return true
+        case iDocsError.httpError(let statusCode):
+            return statusCode == 404
+        default:
+            return false
+        }
     }
 
     private func parseTechnologies(from data: Data) throws -> [Technology] {
@@ -326,6 +365,12 @@ public actor AppleJSONAPI {
 private struct DirectLookupCandidate {
     let path: String
     let relevance: Double
+}
+
+private enum DirectLookupResult: Sendable {
+    case hit(SearchResult)
+    case miss(path: String, errorDescription: String)
+    case failure(any Error)
 }
 
 // MARK: - API Response Types

@@ -10,7 +10,7 @@ extension URLSession: NetworkSession {}
 
 // MARK: - File System
 
-public protocol FileSystem: Sendable {
+public protocol FileSystem {
     func contentsOfDirectory(at url: URL, includingPropertiesForKeys keys: [URLResourceKey]?, options: FileManager.DirectoryEnumerationOptions) throws -> [URL]
     func fileExists(atPath path: String) -> Bool
     func removeItem(at url: URL) throws

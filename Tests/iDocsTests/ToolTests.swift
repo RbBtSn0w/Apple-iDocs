@@ -122,6 +122,31 @@ struct ToolTests {
         }
     }
 
+    @Test("AppleJSONAPI preserves direct lookup transport failures")
+    func appleDirectLookupPreservesTransportFailures() async throws {
+        let session = MockNetworkSession()
+        let query = "NavigationSplitView"
+        let searchURL = try #require(URLHelpers.searchURL(query: query))
+        session.setResponse(
+            for: searchURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: searchURL)
+        )
+        let dataURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui/navigationsplitview"))
+        session.setError(for: dataURL, error: URLError(.notConnectedToInternet))
+
+        let api = AppleJSONAPI(session: session)
+
+        do {
+            _ = try await api.search(query: query)
+            Issue.record("Expected direct Apple lookup transport failure to be propagated.")
+        } catch let error as URLError {
+            #expect(error.code == .notConnectedToInternet)
+        } catch {
+            Issue.record("Expected URLError, got \(error).")
+        }
+    }
+
     @Test("AppleJSONAPI parses technologies payload")
     func parseTechnologiesPayload() async throws {
         let api = makeMockAPI(queries: [])
