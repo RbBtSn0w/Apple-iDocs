@@ -63,7 +63,8 @@ public struct SearchDocsTool {
                 name: "cache",
                 status: .miss,
                 durationMs: durationInMilliseconds(since: cacheStart),
-                resultCount: 0
+                resultCount: 0,
+                reason: "cache_miss"
             )
         )
         
@@ -93,7 +94,9 @@ public struct SearchDocsTool {
                     name: "local",
                     status: .miss,
                     durationMs: durationInMilliseconds(since: localStart),
-                    resultCount: 0
+                    resultCount: 0,
+                    reason: "local_no_results",
+                    hint: "Local Xcode documentation did not return a match; remote Apple and sosumi fallbacks will be attempted."
                 )
             )
         } catch {
@@ -102,7 +105,9 @@ public struct SearchDocsTool {
                     name: "local",
                     status: .error,
                     durationMs: durationInMilliseconds(since: localStart),
-                    resultCount: 0
+                    resultCount: 0,
+                    reason: "local_error",
+                    hint: "Local Xcode documentation search failed; remote Apple and sosumi fallbacks will be attempted."
                 )
             )
             logger.warning("Local Xcode search failed: \(error.localizedDescription)")
@@ -137,7 +142,9 @@ public struct SearchDocsTool {
                     name: "apple",
                     status: .miss,
                     durationMs: durationInMilliseconds(since: appleStart),
-                    resultCount: 0
+                    resultCount: 0,
+                    reason: "remote_no_results",
+                    hint: searchQualityMissHint(stage: "apple")
                 )
             )
             logger.info("Apple remote returned no results, trying sosumi fallback.")
@@ -147,7 +154,9 @@ public struct SearchDocsTool {
                     name: "apple",
                     status: .error,
                     durationMs: durationInMilliseconds(since: appleStart),
-                    resultCount: 0
+                    resultCount: 0,
+                    reason: remoteErrorReason(for: error),
+                    hint: remoteErrorHint(for: error)
                 )
             )
             logger.warning("Apple remote search failed: \(error.localizedDescription). Trying sosumi fallback.")
@@ -165,7 +174,9 @@ public struct SearchDocsTool {
                     name: "sosumi",
                     status: sosumiResults.isEmpty ? .miss : .hit,
                     durationMs: durationInMilliseconds(since: sosumiStart),
-                    resultCount: sosumiResults.count
+                    resultCount: sosumiResults.count,
+                    reason: sosumiResults.isEmpty ? "remote_no_results" : nil,
+                    hint: sosumiResults.isEmpty ? searchQualityMissHint(stage: "sosumi") : nil
                 )
             )
             await memoryCache.set(query, value: sosumiResults)
@@ -180,7 +191,9 @@ public struct SearchDocsTool {
                     name: "sosumi",
                     status: .error,
                     durationMs: durationInMilliseconds(since: sosumiStart),
-                    resultCount: 0
+                    resultCount: 0,
+                    reason: remoteErrorReason(for: error),
+                    hint: remoteErrorHint(for: error)
                 )
             )
             logger.warning("Sosumi search failed: \(error.localizedDescription). Returning empty results.")
@@ -220,6 +233,73 @@ public struct SearchDocsTool {
         let duration = start.duration(to: ContinuousClock.now)
         return Double(duration.components.seconds) * 1_000
             + Double(duration.components.attoseconds) / 1_000_000_000_000_000
+    }
+
+    private func searchQualityMissHint(stage: String) -> String {
+        "Remote \(stage) search reached the service but returned no matching results. Try an exact API or HIG title, or report a search-quality miss if the page exists on developer.apple.com."
+    }
+
+    private func remoteErrorReason(for error: Error) -> String {
+        if error is RemoteSearchTimeoutError {
+            return "remote_timeout"
+        }
+
+        let nsError = error as NSError
+        let message = error.localizedDescription.lowercased()
+        if nsError.domain == NSPOSIXErrorDomain && nsError.code == 1
+            || message.contains("operation not permitted")
+            || message.contains("not permitted")
+            || message.contains("permission") {
+            return "remote_permission_denied"
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet,
+                 .networkConnectionLost,
+                 .cannotFindHost,
+                 .cannotConnectToHost,
+                 .dnsLookupFailed,
+                 .internationalRoamingOff,
+                 .dataNotAllowed,
+                 .secureConnectionFailed:
+                return "remote_network_failure"
+            case .timedOut:
+                return "remote_timeout"
+            default:
+                break
+            }
+        }
+
+        if let idocsError = error as? iDocsError {
+            switch idocsError {
+            case .httpError(let statusCode) where statusCode == 401 || statusCode == 403:
+                return "remote_permission_denied"
+            case .httpError:
+                return "remote_http_error"
+            case .maxRetriesReached:
+                return "remote_network_failure"
+            case .invalidURL:
+                return "remote_invalid_url"
+            }
+        }
+
+        return "remote_error"
+    }
+
+    private func remoteErrorHint(for error: Error) -> String {
+        switch remoteErrorReason(for: error) {
+        case "remote_permission_denied":
+            return "Retry with network permission enabled; this does not prove the documentation page is missing."
+        case "remote_network_failure":
+            return "Retry when network access is available; this does not prove the documentation page is missing."
+        case "remote_timeout":
+            return "Retry with a longer timeout or working network before treating this as a documentation miss."
+        case "remote_http_error":
+            return "The remote documentation service returned an HTTP error; retry or inspect upstream status before treating this as a documentation miss."
+        default:
+            return "Inspect the remote error and retry before treating this as a documentation miss."
+        }
     }
 
     private func withRemoteSearchTimeout<T: Sendable>(

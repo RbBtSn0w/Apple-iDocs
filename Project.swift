@@ -22,12 +22,6 @@ let project = Project(
             bundleId: "com.snow.idocs.kit",
             deploymentTargets: .macOS("13.0"),
             sources: [
-                "Sources/iDocs/Cache/**",
-                "Sources/iDocs/DataSources/**",
-                "Sources/iDocs/Protocols/**",
-                "Sources/iDocs/Rendering/**",
-                "Sources/iDocs/Tools/**",
-                "Sources/iDocs/Utils/**",
                 "Sources/iDocsKit/**"
             ],
             dependencies: [
@@ -52,7 +46,7 @@ let project = Project(
             bundleId: "com.snow.idocs.app",
             deploymentTargets: .macOS("13.0"),
             sources: [
-                "Sources/iDocs/Commands/**"
+                "Sources/iDocsApp/**"
             ],
             dependencies: [
                 .target(name: "iDocsAdapter"),
@@ -65,10 +59,9 @@ let project = Project(
             product: .commandLineTool,
             bundleId: "com.snow.idocs",
             deploymentTargets: .macOS("13.0"),
-            sources: ["Sources/iDocs/Main.swift"],
+            sources: ["Sources/iDocsCLI/**"],
             dependencies: [
-                .target(name: "iDocsApp"),
-                .target(name: "iDocsAdapter")
+                .target(name: "iDocsApp")
             ],
             settings: .settings(
                 base: [
@@ -105,6 +98,17 @@ let project = Project(
             dependencies: [
                 .target(name: "iDocsAdapter")
             ]
+        )
+    ],
+    schemes: [
+        .scheme(
+            name: "iDocs",
+            shared: true,
+            buildAction: .buildAction(targets: [.target("iDocs")]),
+            testAction: .targets([
+                .testableTarget(target: .target("iDocsTests")),
+                .testableTarget(target: .target("iDocsAdapterTests"))
+            ])
         )
     ]
 )

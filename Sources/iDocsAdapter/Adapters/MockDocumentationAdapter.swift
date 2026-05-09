@@ -2,6 +2,7 @@ import Foundation
 
 public struct MockDocumentationAdapter: DocumentationService {
     public var searchResults: [SearchResult]
+    public var searchDiagnostics: SearchDiagnostics?
     public var documentByID: [String: DocumentationContent]
     public var technologies: [Technology]
     public var errorToThrow: DocumentationError?
@@ -9,12 +10,14 @@ public struct MockDocumentationAdapter: DocumentationService {
 
     public init(
         searchResults: [SearchResult] = [],
+        searchDiagnostics: SearchDiagnostics? = nil,
         documentByID: [String: DocumentationContent] = [:],
         technologies: [Technology] = [],
         errorToThrow: DocumentationError? = nil,
         version: String = "1.0.0"
     ) {
         self.searchResults = searchResults
+        self.searchDiagnostics = searchDiagnostics
         self.documentByID = documentByID
         self.technologies = technologies
         self.errorToThrow = errorToThrow
@@ -24,6 +27,11 @@ public struct MockDocumentationAdapter: DocumentationService {
     public func search(query: String, config: DocumentationConfig) async throws -> [SearchResult] {
         if let errorToThrow { throw errorToThrow }
         return searchResults
+    }
+
+    public func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
+        if let errorToThrow { throw errorToThrow }
+        return DocumentationSearchResponse(results: searchResults, diagnostics: searchDiagnostics)
     }
 
     public func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {

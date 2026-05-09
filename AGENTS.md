@@ -11,15 +11,18 @@ Auto-generated from all feature plans. Last updated: 2026-03-19
 ## Project Structure
 
 ```text
-src/
-tests/
+Project.swift
+Sources/
+Tests/
+Tuist/
+└── Package.swift
 ```
 
 ## Commands
 
 # Add commands for Swift 6.0（项目设置）+ shell scripts
-- **Build**: `tuist build` or `swift build`
-- **Test**: `tuist test` or `swift test`
+- **Build**: `tuist build`
+- **Test**: `tuist test --inspect-mode local --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
 - **Generate Project**: `tuist generate`
 
 ## Code Style
@@ -28,7 +31,9 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 
 ## Infrastructure Guidelines
 - **Project Generation**: This project uses Tuist (`Project.swift`, `Tuist.swift`) for project generation and management. Run `tuist generate` to generate Xcode workspace.
-- **Dependency Management**: Swift Package Manager (SPM).
+- **Dependency Management**: Tuist owns the project graph in `Project.swift`; Swift Package Manager is used only for third-party dependencies declared in `Tuist/Package.swift` and consumed through `.external(...)`.
+- **SPM Boundary**: For App/CLI/main products, `Tuist/Package.swift` is a dependency entry point, not a repository identity manifest. Only SDK/library repositories that publish through SwiftPM should use a root `Package.swift`, because that manifest is their external release contract.
+- **Headless Tests**: Tuist test runs should use local inspect mode and an explicit macOS destination so they do not depend on opening Xcode or remote result inspection.
 - **Git Commit Workflow**: Please follow Conventional Commits standard (e.g. `feat: ...`, `fix: ...`, `docs: ...`).
 
 ## Recent Changes
@@ -40,5 +45,6 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan:
+specs/009-search-fallback-diagnostics/plan.md
 <!-- SPECKIT END -->

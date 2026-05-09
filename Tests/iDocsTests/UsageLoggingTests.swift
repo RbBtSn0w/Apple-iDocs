@@ -105,6 +105,47 @@ struct UsageLoggingTests {
         #expect(output.instrumentation.totalDurationMs < 500)
     }
 
+    @Test("SearchDocsTool distinguishes permission failure from remote no-result miss")
+    func searchDocsToolDistinguishesPermissionFailureFromNoResultMiss() async throws {
+        let appleSession = MockNetworkSession(
+            stubbedError: NSError(
+                domain: NSPOSIXErrorDomain,
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Operation not permitted"]
+            )
+        )
+        let sosumiSession = MockNetworkSession()
+        let query = "NavigationSplitView"
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.emptySosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(
+                fileManager: MockFileSystem(),
+                searchProvider: MockSearchProvider()
+            ),
+            memoryCache: MemoryCache<String, [iDocsKit.SearchResult]>(capacity: 5),
+            remoteSearchTimeoutSeconds: 0
+        )
+
+        let output = try await tool.runDetailed(query: query)
+        let appleStage = try #require(output.instrumentation.stages.first { $0.name == "apple" })
+        let sosumiStage = try #require(output.instrumentation.stages.first { $0.name == "sosumi" })
+
+        #expect(output.results.isEmpty)
+        #expect(appleStage.status == .error)
+        #expect(appleStage.reason == "remote_permission_denied")
+        #expect(appleStage.hint?.contains("network permission") == true)
+        #expect(sosumiStage.status == .miss)
+        #expect(sosumiStage.reason == "remote_no_results")
+        #expect(sosumiStage.hint?.contains("search-quality miss") == true)
+    }
+
     @Test("DefaultDocumentationAdapter writes sanitized search usage log with timings")
     func adapterWritesSanitizedSearchUsageLog() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()

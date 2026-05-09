@@ -70,6 +70,58 @@ struct ToolTests {
         #expect(results.first?.path == "/documentation/swiftui/view")
     }
 
+    @Test("AppleJSONAPI recovers known issue pages through direct Apple lookup")
+    func appleDirectLookupRecoversKnownIssuePages() async throws {
+        let session = MockNetworkSession()
+        let cases = [
+            (
+                query: "NavigationSplitView",
+                title: "NavigationSplitView",
+                path: "/documentation/swiftui/navigationsplitview",
+                abstract: "A view that presents views in two or three columns."
+            ),
+            (
+                query: "SwiftUI inspector isPresented inspectorColumnWidth",
+                title: "inspectorColumnWidth(min:ideal:max:)",
+                path: "/documentation/swiftui/view/inspectorcolumnwidth(min:ideal:max:)",
+                abstract: "Sets a flexible preferred width for the inspector column."
+            ),
+            (
+                query: "macOS split views inspector sidebar SwiftUI",
+                title: "Split views",
+                path: "/design/human-interface-guidelines/split-views",
+                abstract: "A split view manages multiple adjacent panes of content."
+            )
+        ]
+
+        for testCase in cases {
+            let searchURL = try #require(URLHelpers.searchURL(query: testCase.query))
+            session.setResponse(
+                for: searchURL,
+                data: MockPayloads.emptySearchJSON,
+                response: MockPayloads.httpResponse(url: searchURL)
+            )
+            let dataURL = try #require(URLHelpers.dataURL(for: testCase.path))
+            session.setResponse(
+                for: dataURL,
+                data: MockPayloads.docCJSON(
+                    title: testCase.title,
+                    identifier: "doc://com.apple.documentation\(testCase.path)",
+                    abstract: testCase.abstract
+                ),
+                response: MockPayloads.httpResponse(url: dataURL)
+            )
+        }
+
+        let api = AppleJSONAPI(session: session)
+
+        for testCase in cases {
+            let results = try await api.search(query: testCase.query)
+
+            #expect(results.contains { $0.title == testCase.title && $0.path == testCase.path && $0.source == .apple })
+        }
+    }
+
     @Test("AppleJSONAPI parses technologies payload")
     func parseTechnologiesPayload() async throws {
         let api = makeMockAPI(queries: [])

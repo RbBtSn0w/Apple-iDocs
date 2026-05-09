@@ -17,19 +17,32 @@ public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
     public let status: DocumentationSearchStageStatus
     public let durationMs: Double
     public let resultCount: Int
+    public let reason: String?
+    public let hint: String?
 
     enum CodingKeys: String, CodingKey {
         case name
         case status
         case durationMs = "duration_ms"
         case resultCount = "result_count"
+        case reason
+        case hint
     }
 
-    public init(name: String, status: DocumentationSearchStageStatus, durationMs: Double, resultCount: Int) {
+    public init(
+        name: String,
+        status: DocumentationSearchStageStatus,
+        durationMs: Double,
+        resultCount: Int,
+        reason: String? = nil,
+        hint: String? = nil
+    ) {
         self.name = name
         self.status = status
         self.durationMs = durationMs
         self.resultCount = resultCount
+        self.reason = reason
+        self.hint = hint
     }
 }
 

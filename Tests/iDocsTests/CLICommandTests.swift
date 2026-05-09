@@ -3,7 +3,7 @@ import Foundation
 import iDocsAdapter
 @testable import iDocsApp
 
-@Suite("CLI Command Tests")
+@Suite("CLI Command Tests", .serialized)
 struct CLICommandTests {
     final class OutputCapture: @unchecked Sendable {
         var stdout: [String] = []
@@ -94,6 +94,144 @@ struct CLICommandTests {
         #expect(payload.source == "local")
         #expect(payload.results?.first?.source == "local")
         #expect(payload.durationMs >= 0)
+    }
+
+    @Test("CLI search JSON exposes actionable diagnostics for empty results")
+    func searchJSONOutputIncludesEmptyResultDiagnostics() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                searchResults: [],
+                searchDiagnostics: SearchDiagnostics(
+                    stages: [
+                        SearchStageDiagnostic(
+                            name: "apple",
+                            status: "error",
+                            durationMs: 1.0,
+                            resultCount: 0,
+                            reason: "remote_permission_denied",
+                            hint: "Retry with network permission enabled."
+                        ),
+                        SearchStageDiagnostic(
+                            name: "sosumi",
+                            status: "miss",
+                            durationMs: 1.0,
+                            resultCount: 0,
+                            reason: "remote_no_results",
+                            hint: "Report this as a search-quality miss if the page exists on developer.apple.com."
+                        )
+                    ]
+                )
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(
+            query: "NavigationSplitView",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+
+        #expect(payload.command == "search")
+        #expect(payload.resultCount == 0)
+        #expect(payload.searchDiagnostics?.map(\.name) == ["apple", "sosumi"])
+        #expect(payload.searchDiagnostics?.first?.reason == "remote_permission_denied")
+        #expect(payload.searchDiagnostics?.last?.reason == "remote_no_results")
+        #expect(payload.searchDiagnostics?.last?.hint?.contains("search-quality miss") == true)
+    }
+
+    @Test("CLI search JSON distinguishes a true miss from network failure")
+    func searchJSONOutputClassifiesTrueMiss() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                searchResults: [],
+                searchDiagnostics: SearchDiagnostics(
+                    stages: [
+                        SearchStageDiagnostic(
+                            name: "local",
+                            status: "miss",
+                            durationMs: 1.0,
+                            resultCount: 0,
+                            reason: "cache_miss",
+                            hint: "Xcode DocumentationCache is unavailable."
+                        ),
+                        SearchStageDiagnostic(
+                            name: "apple",
+                            status: "miss",
+                            durationMs: 1.0,
+                            resultCount: 0,
+                            reason: "remote_no_results",
+                            hint: "Remote Apple lookup completed but returned no matching documentation."
+                        ),
+                        SearchStageDiagnostic(
+                            name: "sosumi",
+                            status: "miss",
+                            durationMs: 1.0,
+                            resultCount: 0,
+                            reason: "remote_no_results",
+                            hint: "Report this as a search-quality miss if the page exists on developer.apple.com."
+                        )
+                    ]
+                )
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(
+            query: "SomeFakeAPIThatDoesntExistInApple",
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+
+        #expect(payload.exitCategory == .ok)
+        #expect(payload.errorMessage == nil)
+        #expect(payload.resultCount == 0)
+        #expect(payload.searchDiagnostics?.map(\.reason) == [
+            "cache_miss",
+            "remote_no_results",
+            "remote_no_results"
+        ])
+        #expect(payload.searchDiagnostics?.contains { $0.reason == "remote_permission_denied" } == false)
+        #expect(payload.searchDiagnostics?.contains { $0.reason == "remote_network_failure" } == false)
     }
 
     @Test("CLI outputs standardized DocumentationError mapping")

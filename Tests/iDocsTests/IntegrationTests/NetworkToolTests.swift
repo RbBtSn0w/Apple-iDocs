@@ -37,8 +37,10 @@ struct NetworkToolTests {
         do {
             _ = try await api.search(query: "View")
             Issue.record("Expected network error but request succeeded")
+        } catch let error as URLError {
+            #expect(error.code == .notConnectedToInternet)
         } catch {
-            #expect(true)
+            Issue.record("Expected URLError.notConnectedToInternet but received: \(error)")
         }
     }
 

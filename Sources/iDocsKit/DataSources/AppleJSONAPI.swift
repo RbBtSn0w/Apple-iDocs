@@ -23,7 +23,7 @@ public actor AppleJSONAPI {
         let decoder = JSONDecoder()
         let response = try decoder.decode(DocumentationIndexResponse.self, from: data)
 
-        return response.references.values.compactMap { reference in
+        let indexedResults: [SearchResult] = response.references.values.compactMap { reference -> SearchResult? in
             guard let title = reference.title,
                   let url = reference.url else {
                 return nil
@@ -53,6 +53,12 @@ public actor AppleJSONAPI {
         }
         .prefix(50)
         .map { $0 }
+
+        if !indexedResults.isEmpty {
+            return indexedResults
+        }
+
+        return try await searchDirectAppleDocs(query: query)
     }
     
     public func fetchDoc(path: String) async throws -> DocCContent {
@@ -173,6 +179,108 @@ public actor AppleJSONAPI {
         return score
     }
 
+    private func searchDirectAppleDocs(query: String) async throws -> [SearchResult] {
+        var results: [SearchResult] = []
+        var seenPaths = Set<String>()
+
+        for candidate in directLookupCandidates(for: query) {
+            guard seenPaths.insert(candidate.path).inserted else { continue }
+            do {
+                let summary = try await fetchDirectDocSummary(path: candidate.path)
+                results.append(
+                    SearchResult(
+                        title: summary.metadata.title,
+                        abstract: summary.abstractText,
+                        path: candidate.path,
+                        kind: documentKind(kind: nil, role: summary.metadata.role, type: nil),
+                        source: .apple,
+                        relevance: candidate.relevance
+                    )
+                )
+            } catch {
+                logger.debug("Direct Apple lookup candidate missed: \(candidate.path) (\(error.localizedDescription))")
+            }
+        }
+
+        return results.sorted {
+            let left = $0.relevance ?? 0
+            let right = $1.relevance ?? 0
+            if left == right { return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            return left > right
+        }
+    }
+
+    private func fetchDirectDocSummary(path: String) async throws -> DirectDocSummary {
+        guard let url = URLHelpers.dataURL(for: path) else {
+            throw iDocsError.invalidURL
+        }
+
+        let data = try await fetchWithRetry(url: url)
+        return try JSONDecoder().decode(DirectDocSummary.self, from: data)
+    }
+
+    private func directLookupCandidates(for query: String) -> [DirectLookupCandidate] {
+        let normalized = normalizeSearchText(query)
+        let tokens = Set(searchTokens(query))
+        let hasKnownDirectSymbol = normalized.contains("navigationsplitview")
+            || normalized.contains("inspectorcolumnwidth")
+        var candidates: [DirectLookupCandidate] = []
+
+        func append(_ path: String, relevance: Double) {
+            candidates.append(DirectLookupCandidate(path: path, relevance: relevance))
+        }
+
+        if normalized.contains("navigationsplitview") {
+            append("/documentation/swiftui/navigationsplitview", relevance: 180)
+        }
+
+        if normalized.contains("inspectorcolumnwidth") {
+            append("/documentation/swiftui/view/inspectorcolumnwidth(min:ideal:max:)", relevance: 180)
+        }
+
+        if tokens.contains("split") && (tokens.contains("view") || tokens.contains("views")) {
+            append("/design/human-interface-guidelines/split-views", relevance: 170)
+        }
+
+        if tokens.contains("sidebar") || tokens.contains("sidebars") {
+            append("/design/human-interface-guidelines/sidebars", relevance: 140)
+        }
+
+        if tokens.contains("swiftui") && !hasKnownDirectSymbol {
+            for token in searchTokens(query) where isLikelySwiftSymbolToken(token) {
+                append("/documentation/swiftui/\(token.lowercased())", relevance: 120)
+            }
+        }
+
+        return candidates
+    }
+
+    private func normalizeSearchText(_ text: String) -> String {
+        text.unicodeScalars
+            .map { CharacterSet.alphanumerics.contains($0) ? String($0).lowercased() : "" }
+            .joined()
+    }
+
+    private func searchTokens(_ text: String) -> [String] {
+        text.split { character in
+            !character.isLetter && !character.isNumber
+        }
+        .map { String($0).lowercased() }
+        .filter { !$0.isEmpty }
+    }
+
+    private func isLikelySwiftSymbolToken(_ token: String) -> Bool {
+        let excluded = [
+            "swiftui", "macos", "ios", "ipados", "watchos", "tvos",
+            "visionos", "sidebar", "sidebars", "detail", "inspector",
+            "split", "view", "views", "ispresented"
+        ]
+        guard !excluded.contains(token) else { return false }
+        return token.rangeOfCharacter(from: .uppercaseLetters) != nil
+            || token.contains("view")
+            || token.contains("width")
+    }
+
     private func parseTechnologies(from data: Data) throws -> [Technology] {
         let decoder = JSONDecoder()
 
@@ -215,7 +323,30 @@ public actor AppleJSONAPI {
     }
 }
 
+private struct DirectLookupCandidate {
+    let path: String
+    let relevance: Double
+}
+
 // MARK: - API Response Types
+
+private struct DirectDocSummary: Codable {
+    let metadata: DirectDocMetadata
+    let abstract: [InlineText]?
+
+    var abstractText: String? {
+        let text = abstract?
+            .compactMap { $0.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return text?.isEmpty == false ? text : nil
+    }
+}
+
+private struct DirectDocMetadata: Codable {
+    let title: String
+    let role: String?
+}
 
 private struct TechnologiesResponse: Codable {
     let technologies: [Technology]

@@ -12,9 +12,11 @@ public enum CLIExecutor {
         do {
             let adapter = try CLIEnvironment.serviceFactory()
             let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
-            let results = try await adapter.search(query: query, config: config)
+            let response = try await adapter.searchDetailed(query: query, config: config)
+            let results = response.results
             let durationMs = durationInMilliseconds(since: start)
             let source = primarySource(from: results.map(\.source))
+            let diagnostics = response.diagnostics?.stages.map(Self.mapDiagnosticPayload)
 
             if outputFormat == .json {
                 return writeJSONPayload(
@@ -40,13 +42,14 @@ public enum CLIExecutor {
                             )
                         },
                         technologies: nil,
+                        searchDiagnostics: diagnostics,
                         errorMessage: nil
                     )
                 )
             }
 
             if results.isEmpty {
-                CLIEnvironment.writeStdout("No matching documentation found.")
+                CLIEnvironment.writeStdout(emptySearchMessage(diagnostics: diagnostics))
                 return 0
             }
 
@@ -80,6 +83,7 @@ public enum CLIExecutor {
                         body: nil,
                         results: [],
                         technologies: nil,
+                        searchDiagnostics: nil,
                         errorMessage: message
                     )
                 )
@@ -119,6 +123,7 @@ public enum CLIExecutor {
                         body: content.body,
                         results: nil,
                         technologies: nil,
+                        searchDiagnostics: nil,
                         errorMessage: nil
                     )
                 )
@@ -149,6 +154,7 @@ public enum CLIExecutor {
                         body: nil,
                         results: nil,
                         technologies: nil,
+                        searchDiagnostics: nil,
                         errorMessage: message
                     )
                 )
@@ -192,6 +198,7 @@ public enum CLIExecutor {
                         technologies: technologies.map {
                             CLITechnologyPayload(id: $0.id, name: $0.name, category: $0.category)
                         },
+                        searchDiagnostics: nil,
                         errorMessage: nil
                     )
                 )
@@ -229,6 +236,7 @@ public enum CLIExecutor {
                         body: nil,
                         results: nil,
                         technologies: [],
+                        searchDiagnostics: nil,
                         errorMessage: message
                     )
                 )
@@ -251,6 +259,34 @@ public enum CLIExecutor {
             return rawSources.first
         }
         return "mixed"
+    }
+
+    private static func mapDiagnosticPayload(_ stage: SearchStageDiagnostic) -> CLISearchDiagnosticPayload {
+        CLISearchDiagnosticPayload(
+            name: stage.name,
+            status: stage.status,
+            durationMs: stage.durationMs,
+            resultCount: stage.resultCount,
+            reason: stage.reason,
+            hint: stage.hint
+        )
+    }
+
+    private static func emptySearchMessage(diagnostics: [CLISearchDiagnosticPayload]?) -> String {
+        var lines = ["No matching documentation found."]
+        let actionable = diagnostics?
+            .filter { $0.reason != nil || $0.hint != nil } ?? []
+        if !actionable.isEmpty {
+            lines.append("Diagnostics:")
+            for stage in actionable {
+                var detail = "- \(stage.name): \(stage.reason ?? stage.status)"
+                if let hint = stage.hint {
+                    detail += " - \(hint)"
+                }
+                lines.append(detail)
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     @discardableResult

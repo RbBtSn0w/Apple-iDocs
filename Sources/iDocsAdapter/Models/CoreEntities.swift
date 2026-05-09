@@ -37,6 +37,58 @@ public struct SearchResult: Sendable, Equatable {
     }
 }
 
+public struct SearchStageDiagnostic: Sendable, Codable, Equatable {
+    public let name: String
+    public let status: String
+    public let durationMs: Double
+    public let resultCount: Int
+    public let reason: String?
+    public let hint: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case status
+        case durationMs = "duration_ms"
+        case resultCount = "result_count"
+        case reason
+        case hint
+    }
+
+    public init(
+        name: String,
+        status: String,
+        durationMs: Double,
+        resultCount: Int,
+        reason: String? = nil,
+        hint: String? = nil
+    ) {
+        self.name = name
+        self.status = status
+        self.durationMs = durationMs
+        self.resultCount = resultCount
+        self.reason = reason
+        self.hint = hint
+    }
+}
+
+public struct SearchDiagnostics: Sendable, Codable, Equatable {
+    public let stages: [SearchStageDiagnostic]
+
+    public init(stages: [SearchStageDiagnostic]) {
+        self.stages = stages
+    }
+}
+
+public struct DocumentationSearchResponse: Sendable, Equatable {
+    public let results: [SearchResult]
+    public let diagnostics: SearchDiagnostics?
+
+    public init(results: [SearchResult], diagnostics: SearchDiagnostics? = nil) {
+        self.results = results
+        self.diagnostics = diagnostics
+    }
+}
+
 public struct Technology: Sendable, Equatable {
     public let name: String
     public let id: String

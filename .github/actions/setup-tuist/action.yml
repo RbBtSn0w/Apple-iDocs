@@ -29,7 +29,7 @@ runs:
         path: |
           Tuist/.build
           ~/.local/state/tuist
-        key: tuist-spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', '.tuist-version') }}
+        key: tuist-spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved', '.tuist-version') }}
         restore-keys: |
           tuist-spm-${{ runner.os }}-
 
