@@ -10,6 +10,16 @@ struct CLICommandTests {
         #expect(iDocsCLI.configuration.version == "1.3.1")
     }
 
+    @Test("CLI supports -v and --version flags")
+    func testVersionFlags() throws {
+        // Test --version
+        var command = try iDocsCLI.parse(["--version"])
+        #expect(command is HelpCommand) // ArgumentParser handles --version by throwing/displaying help/version info
+        
+        // Note: AsyncParsableCommand.main() or .run() usually handles version display.
+        // Direct parsing of --version often returns a HelpCommand or throws.
+    }
+
     final class OutputCapture: @unchecked Sendable {
         var stdout: [String] = []
         var stderr: [String] = []

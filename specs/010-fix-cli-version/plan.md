@@ -12,7 +12,7 @@ Add `--version` support to the `idocs` CLI by explicitly setting the `version` p
 **Language/Version**: Swift 6.0
 **Primary Dependencies**: `swift-argument-parser`
 **Storage**: N/A
-**Testing**: XCTest (via `iDocsTests`)
+**Testing**: Swift Testing (via `iDocsTests`)
 **Target Platform**: macOS 13.0+
 **Project Type**: CLI
 **Performance Goals**: < 100ms output for `--version`

@@ -48,7 +48,7 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [x] T001 [P] [US1] Unit test `iDocsCLI.configuration.version` equals "1.3.1" in Tests/iDocsTests/iDocsCLITests.swift
+- [x] T001 [P] [US1] Unit test `iDocsCLI.configuration.version` equals "1.3.1" in Tests/iDocsTests/CLICommandTests.swift
 
 ### Implementation for User Story 1 & 2
 
