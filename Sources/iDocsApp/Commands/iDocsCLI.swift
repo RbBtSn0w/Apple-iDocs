@@ -22,8 +22,8 @@ public struct iDocsCLI: AsyncParsableCommand {
         }
     }
 
-    func emitVersion() {
-        CLIEnvironment.writeStdout(CLIVersion.current())
+    func emitVersion(_ resolvedVersion: String = CLIVersion.current()) {
+        CLIEnvironment.writeStdout(resolvedVersion)
     }
 }
 

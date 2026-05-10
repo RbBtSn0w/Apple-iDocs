@@ -31,9 +31,9 @@ struct CLICommandTests {
 
         CLIEnvironment.writeStdout = { capture.stdout.append($0) }
         let command = try iDocsCLI.parse(["--version"])
-        command.emitVersion()
+        command.emitVersion("9.8.7-test")
 
-        #expect(capture.stdout == [CLIVersion.current()])
+        #expect(capture.stdout == ["9.8.7-test"])
     }
 
     @Test("CLI version resolver prefers sidecar next to executable")
