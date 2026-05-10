@@ -21,7 +21,7 @@ struct CLICommandTests {
     }
 
     @Test("CLI version output uses injected stdout")
-    func cliVersionOutputUsesInjectedStdout() async throws {
+    func cliVersionOutputUsesInjectedStdout() throws {
         let capture = OutputCapture()
         let previousStdout = CLIEnvironment.writeStdout
 
@@ -31,7 +31,7 @@ struct CLICommandTests {
 
         CLIEnvironment.writeStdout = { capture.stdout.append($0) }
         let command = try iDocsCLI.parse(["--version"])
-        try await command.run()
+        command.emitVersion()
 
         #expect(capture.stdout == [CLIVersion.current()])
     }

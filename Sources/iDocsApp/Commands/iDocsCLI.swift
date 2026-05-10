@@ -16,10 +16,14 @@ public struct iDocsCLI: AsyncParsableCommand {
 
     public func run() async throws {
         if version {
-            CLIEnvironment.writeStdout(CLIVersion.current())
+            emitVersion()
         } else {
             throw CleanExit.helpRequest(self)
         }
+    }
+
+    func emitVersion() {
+        CLIEnvironment.writeStdout(CLIVersion.current())
     }
 }
 
