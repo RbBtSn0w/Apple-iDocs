@@ -15,8 +15,8 @@ LOG_FILE="${IDOCS_COVERAGE_LOG:-/tmp/idocs-coverage.log}"
 DERIVED_DATA_PATH="${IDOCS_COVERAGE_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex-coverage}"
 
 if [[ ! -d "$WORKSPACE" ]]; then
-  echo "Workspace missing: $WORKSPACE. Trying 'tuist generate'..."
-  tuist generate >/dev/null
+  echo "Workspace missing: $WORKSPACE. Trying 'tuist generate --no-open'..."
+  tuist generate --no-open >/dev/null
 fi
 
 rm -rf "$RESULT_BUNDLE"

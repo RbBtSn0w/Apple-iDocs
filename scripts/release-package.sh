@@ -15,7 +15,7 @@ VERSION_FILE="$BUNDLE_DIR/idocs.version"
 mkdir -p "$OUTPUT_DIR"
 
 if [[ ! -d "iDocs.xcworkspace" ]]; then
-  tuist generate >/dev/null
+  tuist generate --no-open >/dev/null
 fi
 
 xcodebuild build \

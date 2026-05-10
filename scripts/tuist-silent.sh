@@ -50,11 +50,11 @@ ensure_workspace() {
     return 0
   fi
 
-  if tuist_safe tuist generate >/dev/null; then
+  if tuist_safe tuist generate --no-open >/dev/null; then
     return 0
   fi
 
-  echo "Error: iDocs.xcworkspace is missing and 'tuist generate' failed." >&2
+  echo "Error: iDocs.xcworkspace is missing and 'tuist generate --no-open' failed." >&2
   return 1
 }
 
