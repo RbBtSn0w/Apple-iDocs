@@ -32,6 +32,10 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     }
 
     public func search(query: String, config: DocumentationConfig) async throws -> [SearchResult] {
+        try await searchDetailed(query: query, config: config).results
+    }
+
+    public func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
         let start = ContinuousClock.now
         do {
             let output = try await searchPerformer(query)
@@ -59,7 +63,12 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 config: config
             )
 
-            return results
+            return DocumentationSearchResponse(
+                results: results,
+                diagnostics: SearchDiagnostics(
+                    stages: output.instrumentation.stages.map(Self.mapStageDiagnostic)
+                )
+            )
         } catch {
             logger.log(level: .error, message: "Adapter search failed", context: ["query": query, "error": error.localizedDescription])
             let mappedError = mapError(error, fallbackID: query)
@@ -198,6 +207,17 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         guard adapterSemVer.isMajorCompatible(with: coreSemVer) else {
             throw DocumentationError.incompatibleVersion(adapter: adapterVersion, core: core)
         }
+    }
+
+    private static func mapStageDiagnostic(_ stage: DocumentationSearchStageTiming) -> SearchStageDiagnostic {
+        SearchStageDiagnostic(
+            name: stage.name,
+            status: stage.status.rawValue,
+            durationMs: stage.durationMs,
+            resultCount: stage.resultCount,
+            reason: stage.reason,
+            hint: stage.hint
+        )
     }
 
     private func mapError(_ error: Error, fallbackID: String) -> DocumentationError {

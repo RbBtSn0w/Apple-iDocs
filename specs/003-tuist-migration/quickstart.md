@@ -24,11 +24,12 @@ The project is split into two targets for better testability:
 
 ## Daily Development Workflow
 - **Build**: `./scripts/tuist-silent.sh build iDocs`
-- **Run Tests**: `./scripts/tuist-silent.sh test`
+- **Run Tests**: `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Quiet Run Tests**: `./scripts/tuist-silent.sh test`
 - **Clean**: `tuist clean`
 
 ## Verification Checklist
 - [x] `tuist generate` completes under 10s (SC-001).
 - [x] `tuist build` succeeds for the executable (SC-002).
-- [x] `tuist test` executes all unit tests correctly (SC-003).
+- [x] Headless `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing` executes all unit tests correctly (SC-003).
 - [x] Zero manual Xcode configuration required (SC-004).

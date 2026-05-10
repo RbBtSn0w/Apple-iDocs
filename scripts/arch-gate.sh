@@ -43,8 +43,8 @@ else
 fi
 
 # SC-006: App layer should not instantiate Common tools directly for search/fetch/list pathways.
-if search 'SearchDocsTool\(|FetchDocTool\(|BrowseTechnologiesTool\(' Sources/iDocs >/dev/null 2>&1; then
-  fail "SC-006 Access Gate: Sources/iDocs directly instantiates Common tool types"
+if search 'SearchDocsTool\(|FetchDocTool\(|BrowseTechnologiesTool\(' Sources/iDocsApp Sources/iDocsCLI >/dev/null 2>&1; then
+  fail "SC-006 Access Gate: CLI targets directly instantiate Common tool types"
 else
   pass "SC-006 Access Gate"
 fi
@@ -95,7 +95,7 @@ else
 fi
 
 # Capability guard: dual remote fallback primitive exists.
-if [[ ! -f "Sources/iDocs/DataSources/SosumiAPI.swift" ]]; then
+if [[ ! -f "Sources/iDocsKit/DataSources/SosumiAPI.swift" ]]; then
   fail "Capability Gate: sosumi datasource missing"
 else
   pass "Capability Gate: sosumi datasource present"

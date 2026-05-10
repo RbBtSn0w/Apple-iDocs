@@ -1,6 +1,11 @@
 # --- Swift & SPM ---
 .build/
 /Packages
+
+# This App/CLI repository uses Tuist for the project graph.
+# Keep Tuist/Package.swift and Tuist/Package.resolved tracked; root SwiftPM
+# manifests are local mistakes here. SDK repositories should not copy this rule.
+/Package.swift
 /Package.resolved
 *.swiftmodule
 *.swiftdoc

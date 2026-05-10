@@ -26,10 +26,11 @@ The primary interface for project management after migration will be the Tuist C
   - Produces an executable binary in the build directory.
 
 ### 4. Test Execution
-- **Command**: `tuist test [target]`
-- **Pre-condition**: Project has been generated.
-- **Outcome**: 
-  - Compiles and runs unit tests for the specified target (default: `iDocsTests`).
+- **Command**: `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Pre-condition**: `Project.swift` and `Tuist/Package.swift` are valid; the root `Package.swift` is intentionally absent for this App/CLI repository.
+- **Outcome**:
+  - Compiles and runs the shared `iDocs` scheme test targets headlessly.
+  - Parses results locally and avoids Tuist server upload or selective-testing state.
   - Reports pass/fail status for each test case.
 
 ## Schema for Target Definitions
