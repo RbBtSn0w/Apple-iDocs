@@ -48,12 +48,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T001 [P] [US1] Unit test `iDocsCLI.configuration.version` equals "1.3.1" in Tests/iDocsTests/iDocsCLITests.swift
+- [x] T001 [P] [US1] Unit test `iDocsCLI.configuration.version` equals "1.3.1" in Tests/iDocsTests/iDocsCLITests.swift
 
 ### Implementation for User Story 1 & 2
 
-- [ ] T002 [P] [US1] Bump package version to 1.3.1 in npm/package.json
-- [ ] T003 [US1] Update `iDocsCLI.configuration` in Sources/iDocs/Commands/iDocsCLI.swift to include `version: "1.3.1"`
+- [x] T002 [P] [US1] Bump package version to 1.3.1 in npm/package.json
+- [x] T003 [US1] Update `iDocsCLI.configuration` in Sources/iDocs/Commands/iDocsCLI.swift to include `version: "1.3.1"`
 
 **Checkpoint**: At this point, User Story 1 & 2 should be fully functional and testable independently
 
@@ -63,7 +63,7 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T004 [P] Run quickstart.md validation
+- [x] T004 [P] Run quickstart.md validation
 
 ---
 
