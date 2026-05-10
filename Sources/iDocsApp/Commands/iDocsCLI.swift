@@ -6,11 +6,21 @@ public struct iDocsCLI: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "idocs",
         abstract: "iDocs CLI",
-        version: "1.3.1",
         subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self]
     )
 
+    @Flag(name: .shortAndLong, help: "Show the version.")
+    var version = false
+
     public init() {}
+
+    public func run() async throws {
+        if version {
+            print("1.3.1")
+        } else {
+            throw CleanExit.helpRequest(self)
+        }
+    }
 }
 
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)

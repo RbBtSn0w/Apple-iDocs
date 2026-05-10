@@ -5,19 +5,19 @@ import iDocsAdapter
 
 @Suite("CLI Command Tests", .serialized)
 struct CLICommandTests {
-    @Test("CLI version is 1.3.1")
-    func testCLIVersion() {
-        #expect(iDocsCLI.configuration.version == "1.3.1")
+    @Test("CLI version flag is recognized")
+    func testCLIVersionFlag() throws {
+        let command = try iDocsCLI.parse(["--version"])
+        #expect(command.version == true)
+        
+        let commandShort = try iDocsCLI.parse(["-v"])
+        #expect(commandShort.version == true)
     }
 
-    @Test("CLI supports -v and --version flags")
-    func testVersionFlags() throws {
-        // Test --version
-        var command = try iDocsCLI.parse(["--version"])
-        #expect(command is HelpCommand) // ArgumentParser handles --version by throwing/displaying help/version info
-        
-        // Note: AsyncParsableCommand.main() or .run() usually handles version display.
-        // Direct parsing of --version often returns a HelpCommand or throws.
+    @Test("CLI default behavior is help when no arguments")
+    func testCLIDefaultBehavior() throws {
+        let command = try iDocsCLI.parse([])
+        #expect(command.version == false)
     }
 
     final class OutputCapture: @unchecked Sendable {
