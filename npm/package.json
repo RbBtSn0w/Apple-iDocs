@@ -37,7 +37,7 @@
     "smoke": "idocs --help"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.8.1"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

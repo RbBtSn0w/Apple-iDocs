@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = process.env.ROOT_DIR;
+const expectedNodeEngine = ">=20.8.1";
 
 function fail(message) {
   console.error(`[FAIL] ${message}`);
@@ -19,6 +20,8 @@ function pluginName(plugin) {
 }
 
 const releaseConfig = JSON.parse(fs.readFileSync(path.join(root, "npm/.releaserc.json"), "utf8"));
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, "npm/package.json"), "utf8"));
+const packageLock = JSON.parse(fs.readFileSync(path.join(root, "npm/package-lock.json"), "utf8"));
 const plugins = releaseConfig.plugins ?? [];
 const names = plugins.map(pluginName);
 
@@ -48,6 +51,13 @@ if (!workflow.includes("@semantic-release/exec")) {
 }
 if (workflow.includes("Stage GitHub Release Assets")) {
   fail("release workflow must not stage assets before semantic-release computes nextRelease.version");
+}
+
+if (packageJson.engines?.node !== expectedNodeEngine) {
+  fail(`npm package must require Node ${expectedNodeEngine} for @semantic-release/exec`);
+}
+if (packageLock.packages?.[""]?.engines?.node !== expectedNodeEngine) {
+  fail(`npm package lock must require Node ${expectedNodeEngine} for @semantic-release/exec`);
 }
 
 console.log("[PASS] release configuration preserves versioned asset packaging order.");
