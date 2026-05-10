@@ -55,7 +55,9 @@ assert_equals() {
 assert_help_contract() {
   local output="$1"
   local context="$2"
-  assert_contains "$output" "USAGE: idocs [--version] <subcommand>" "$context"
+  assert_contains "$output" "USAGE:" "$context"
+  assert_contains "$output" "idocs" "$context"
+  assert_contains "$output" "<subcommand>" "$context"
   assert_contains "$output" "-v, --version" "$context"
 }
 

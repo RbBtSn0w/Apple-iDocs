@@ -52,7 +52,8 @@ if (!sourcePath) {
 mkdirSync(distDir, { recursive: true });
 copyFileSync(sourcePath, targetPath);
 chmodSync(targetPath, 0o755);
-writeFileSync(versionPath, `${JSON.parse(readFileSync(resolve(npmRoot, "package.json"), "utf8")).version}\n`);
+const pkg = JSON.parse(readFileSync(resolve(npmRoot, "package.json"), "utf8"));
+writeFileSync(versionPath, `${pkg.version}\n`);
 
 const sourceDir = dirname(sourcePath);
 rmSync(frameworksTargetDir, { recursive: true, force: true });

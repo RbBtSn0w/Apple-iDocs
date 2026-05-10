@@ -4,6 +4,10 @@ enum CLIVersion {
     private static let sidecarFilename = "idocs.version"
     private static let fallbackVersion = "0.0.0-dev"
 
+    private struct PackageManifest: Decodable {
+        let version: String
+    }
+
     static func current(
         executableURL: URL? = defaultExecutableURL(),
         currentDirectoryURL: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
@@ -80,11 +84,10 @@ enum CLIVersion {
     private static func readPackageVersion(at url: URL, fileManager: FileManager) -> String? {
         guard fileManager.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let version = object["version"] as? String else {
+              let manifest = try? JSONDecoder().decode(PackageManifest.self, from: data) else {
             return nil
         }
-        return normalizedVersion(version)
+        return normalizedVersion(manifest.version)
     }
 
     private static func normalizedVersion(_ value: String?) -> String? {

@@ -14,10 +14,26 @@ struct CLICommandTests {
         #expect(commandShort.version == true)
     }
 
-    @Test("CLI default behavior is help when no arguments")
-    func testCLIDefaultBehavior() throws {
+    @Test("CLI default parse leaves version flag disabled")
+    func testCLIDefaultVersionFlag() throws {
         let command = try iDocsCLI.parse([])
         #expect(command.version == false)
+    }
+
+    @Test("CLI version output uses injected stdout")
+    func cliVersionOutputUsesInjectedStdout() async throws {
+        let capture = OutputCapture()
+        let previousStdout = CLIEnvironment.writeStdout
+
+        defer {
+            CLIEnvironment.writeStdout = previousStdout
+        }
+
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        let command = try iDocsCLI.parse(["--version"])
+        try await command.run()
+
+        #expect(capture.stdout == [CLIVersion.current()])
     }
 
     @Test("CLI version resolver prefers sidecar next to executable")
