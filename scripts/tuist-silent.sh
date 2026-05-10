@@ -58,6 +58,10 @@ ensure_workspace() {
   return 1
 }
 
+tuist_supports_inspect_mode() {
+  tuist test --help 2>&1 | grep -q -- "--inspect-mode"
+}
+
 run_xcodebuild_silent() {
   local tmp
   tmp="$(mktemp)"
@@ -137,16 +141,21 @@ build_quiet() {
 run_tuist_test_silent() {
   local test_target="$1"
   local tmp
+  local -a inspect_mode_args=()
   tmp="$(mktemp)"
 
   rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
+
+  if tuist_supports_inspect_mode; then
+    inspect_mode_args=(--inspect-mode local)
+  fi
 
   if tuist_safe env \
     GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
     IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
     IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}" \
     tuist test "$TUIST_TEST_SCHEME" \
-      --inspect-mode local \
+      "${inspect_mode_args[@]}" \
       --no-upload \
       --no-selective-testing \
       --test-targets "$test_target" \
