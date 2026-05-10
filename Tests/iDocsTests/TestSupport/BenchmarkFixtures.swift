@@ -1,6 +1,8 @@
 import Foundation
 
 enum BenchmarkFixtures {
+    private final class BundleToken {}
+
     static func repositoryRoot(file: StaticString = #filePath) -> URL {
         var url = URL(fileURLWithPath: "\(file)")
         while url.pathComponents.count > 1 {
@@ -13,7 +15,11 @@ enum BenchmarkFixtures {
     }
 
     static func fixtureURL(_ relativePath: String) -> URL {
-        repositoryRoot().appendingPathComponent(relativePath)
+        let fileName = URL(fileURLWithPath: relativePath).lastPathComponent
+        if let bundledURL = Bundle(for: BundleToken.self).url(forResource: fileName, withExtension: nil) {
+            return bundledURL
+        }
+        return repositoryRoot().appendingPathComponent(relativePath)
     }
 
     static func fixtureData(_ relativePath: String) throws -> Data {

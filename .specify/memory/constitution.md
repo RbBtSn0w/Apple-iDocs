@@ -1,16 +1,11 @@
 <!--
 ## 同步影响报告 (Sync Impact Report)
 
-- **版本变更**: 1.1.0 → 2.0.0 (CLI-only 方向收口)
+- **版本变更**: 2.0.0 → 2.0.1 (Tuist/SPM 边界澄清)
 - **新增原则**: 无
-- **修改原则**:
-  - II. 无状态命令与适配层设计 (由 MCP 工具设计改为 CLI-only 运行时边界)
-  - IV. 可观测性 (移除 MCP `server.log()` 依赖)
-  - V. 极简主义 (由 7 个 MCP 工具改为聚焦 CLI 命令面)
-  - VI. Swift 原生优先 (移除 MCP SDK / Transport 作为主产品依赖)
-  - VII. 类型安全 (错误契约由 `MCPError` 调整为 CLI/Adapter 语义错误)
-- **新增章节**:
-  - 无
+- **修改原则**: 无
+- **修改章节**:
+  - 技术约束: 明确 App/CLI/main 仓库由 Tuist 拥有工程图谱，`Tuist/Package.swift` 仅作为第三方依赖入口；根目录 `Package.swift` 仅保留给 SDK/library 发布仓库。
 - **模板同步状态**:
   - `.specify/templates/plan-template.md` — ✅ Constitution Check 章节已与原则对齐
   - `.specify/templates/spec-template.md` — ✅ 需求/场景模板可兼容当前原则
@@ -113,7 +108,7 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
 ## 技术约束 (Technical Constraints)
 
 - **语言版本**: Swift 6.x，使用 Structured Concurrency（`async/await` + `actor`）实现并发访问
-- **包管理**: Swift Package Manager (SPM) 负责依赖声明 + Tuist 负责 Xcode 工程生成与编译缓存
+- **包管理 / 工程图谱**: App/CLI/main 仓库由 Tuist (`Project.swift`) 负责工程图谱与构建入口；`Tuist/Package.swift` 仅声明第三方 SwiftPM 依赖并通过 `.external(...)` 接入。根目录 `Package.swift` 仅允许 SDK/library 仓库作为对外 SwiftPM 发布协议存在。
 - **核心依赖**:
   | 依赖 | 版本 | 用途 |
   |------|------|------|
@@ -150,4 +145,4 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
   - PATCH: 措辞澄清、错别字修正、非语义性优化
 - **合规检查**: 每个 Plan 阶段 **必须 (MUST)** 执行 Constitution Check 以验证设计决策符合原则
 
-**Version**: 2.0.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-04-15
+**Version**: 2.0.1 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-05-10

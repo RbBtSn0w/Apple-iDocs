@@ -12,11 +12,22 @@ ARCHIVE_PATH="$INSTALL_ROOT/tuist-$VERSION.zip"
 
 mkdir -p "$VERSION_DIR" "$BIN_DIR"
 
-if [[ ! -x "$VERSION_DIR/tuist" ]]; then
+installed_version() {
+  if [[ -x "$VERSION_DIR/tuist" ]]; then
+    "$VERSION_DIR/tuist" version 2>/dev/null | tr -d '[:space:]' || true
+  fi
+}
+
+if [[ ! -x "$VERSION_DIR/tuist" || "$(installed_version)" != "$VERSION" ]]; then
   curl -fsSL "https://github.com/tuist/tuist/releases/download/${VERSION}/tuist.zip" -o "$ARCHIVE_PATH"
   rm -rf "$VERSION_DIR"/*
   unzip -q "$ARCHIVE_PATH" -d "$VERSION_DIR"
   chmod +x "$VERSION_DIR/tuist"
+fi
+
+if [[ "$(installed_version)" != "$VERSION" ]]; then
+  echo "Error: installed Tuist version does not match $VERSION" >&2
+  exit 1
 fi
 
 ln -sf "../$VERSION/tuist" "$BIN_DIR/tuist"

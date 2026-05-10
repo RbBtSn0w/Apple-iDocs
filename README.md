@@ -45,13 +45,13 @@ Setup and build:
    ```bash
    tuist install
    ```
-3. Generate project:
+3. Build through Tuist:
+   ```bash
+   tuist build
+   ```
+4. Generate project when you need Xcode:
    ```bash
    tuist generate
-   ```
-4. Build:
-   ```bash
-   ./scripts/tuist-silent.sh build iDocs
    ```
 
 The binary will be located in the build directory.
@@ -139,6 +139,8 @@ idocs list
 
 Notes:
 - Search output includes source markers like `{source: apple}`.
+- Empty search output includes structured diagnostics when fallback stages miss or fail.
+- JSON search output includes `search_diagnostics` with stage `reason` and `hint` fields.
 - Fetch output includes a source header like `[source: local|apple|sosumi|cache]`.
 - For source-checkout workflows, replace `idocs` with `./scripts/tuist-silent.sh run idocs --`.
 - Agent and benchmark workflows can override cache or usage-log locations with `IDOCS_CACHE_PATH` and `IDOCS_USAGE_LOG_PATH`.
@@ -148,6 +150,7 @@ Notes:
 Default tests (offline, no external network):
 
 ```bash
+tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
 ./scripts/tuist-silent.sh test
 ```
 
@@ -164,14 +167,13 @@ Integration tests (explicitly enabled):
 IDOCS_INTEGRATION_TESTS=1 ./scripts/tuist-silent.sh test
 ```
 
-```bash
-swift test --filter IntegrationTests
-```
-
 Notes:
 - Default tests do not access external networks
 - Default tests cover both CLI and Adapter test targets
 - Integration tests validate live endpoints and may fail if services are unavailable
+- Tuist owns the project graph through `Project.swift`; `Tuist/Package.swift` is only the third-party SwiftPM dependency entry point for `.external(...)` dependencies.
+- Tuist test commands should run headlessly with the shared `iDocs` scheme, local inspect mode, `--no-upload`, `--no-selective-testing`, and an explicit macOS destination.
+- SDK repositories are the case that should expose a root `Package.swift` as their SwiftPM release contract.
 
 ## Quality Gates
 

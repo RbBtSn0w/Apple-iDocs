@@ -82,9 +82,7 @@ struct LatencyGateScriptTests {
         }
         try (lines.joined(separator: "\n") + "\n").write(to: usageLog, atomically: true, encoding: .utf8)
 
-        let scriptPath = findProjectRoot()
-            .appendingPathComponent("scripts/benchmark/evaluate-cli-latency.swift")
-            .path
+        let scriptPath = BenchmarkFixtures.fixtureURL("scripts/benchmark/evaluate-cli-latency.swift").path
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -101,17 +99,6 @@ struct LatencyGateScriptTests {
         let stdout = String(decoding: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         let stderr = String(decoding: stderrPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         return (process.terminationStatus, (stdout + stderr).trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private func findProjectRoot() -> URL {
-        var current = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while current.path != "/" {
-            if FileManager.default.fileExists(atPath: current.appendingPathComponent("Project.swift").path) {
-                return current
-            }
-            current.deleteLastPathComponent()
-        }
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     }
 
     private func makeTemporaryDirectory() throws -> URL {

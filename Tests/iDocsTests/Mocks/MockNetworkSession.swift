@@ -8,6 +8,7 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
     public private(set) var requestCount: Int = 0
     public private(set) var requestedURLs: [URL] = []
     private var urlResponses: [URL: (Data, URLResponse)] = [:]
+    private var urlErrors: [URL: Error] = [:]
     
     public init(stubbedData: Data? = nil, stubbedResponse: URLResponse? = nil, stubbedError: Error? = nil) {
         self.stubbedData = stubbedData
@@ -22,6 +23,10 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
         }
 
         if let error = stubbedError {
+            throw error
+        }
+
+        if let url = request.url, let error = urlErrors[url] {
             throw error
         }
 
@@ -43,9 +48,14 @@ public final class MockNetworkSession: NetworkSession, @unchecked Sendable {
         requestCount = 0
         requestedURLs.removeAll()
         urlResponses.removeAll()
+        urlErrors.removeAll()
     }
 
     public func setResponse(for url: URL, data: Data, response: URLResponse) {
         urlResponses[url] = (data, response)
+    }
+
+    public func setError(for url: URL, error: Error) {
+        urlErrors[url] = error
     }
 }

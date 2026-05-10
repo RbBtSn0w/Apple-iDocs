@@ -23,6 +23,12 @@ enum MockPayloads {
     }
     """.data(using: .utf8)!
 
+    static let emptySearchJSON = """
+    {
+        "references": {}
+    }
+    """.data(using: .utf8)!
+
     static let technologiesJSON = """
     {
         "technologies": [
@@ -73,6 +79,32 @@ enum MockPayloads {
         ]
     }
     """.data(using: .utf8)!
+
+    static let emptySosumiSearchJSON = """
+    {
+        "query": "Empty",
+        "results": []
+    }
+    """.data(using: .utf8)!
+
+    static func docCJSON(title: String, identifier: String, abstract: String) -> Data {
+        """
+        {
+            "identifier": "\(identifier)",
+            "metadata": {
+                "title": "\(title)",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                {
+                    "type": "text",
+                    "text": "\(abstract)"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+    }
 
     static let externalDocCJSON = """
     {

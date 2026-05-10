@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 DERIVED_DATA_PATH="${IDOCS_DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex}"
+TUIST_TEST_SCHEME="${IDOCS_TUIST_TEST_SCHEME:-iDocs}"
+TUIST_TEST_DESTINATION="${IDOCS_TUIST_TEST_DESTINATION:-platform=macOS,name=My Mac}"
 
 search_file() {
   local pattern="$1"
@@ -54,6 +56,10 @@ ensure_workspace() {
 
   echo "Error: iDocs.xcworkspace is missing and 'tuist generate' failed." >&2
   return 1
+}
+
+tuist_supports_inspect_mode() {
+  tuist test --help 2>&1 | grep -q -- "--inspect-mode"
 }
 
 run_xcodebuild_silent() {
@@ -132,36 +138,57 @@ build_quiet() {
     -destination "platform=macOS,arch=arm64"
 }
 
+run_tuist_test_silent() {
+  local test_target="$1"
+  local tmp
+  local -a inspect_mode_args=()
+  tmp="$(mktemp)"
+
+  rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
+
+  if tuist_supports_inspect_mode; then
+    inspect_mode_args=(--inspect-mode local)
+  fi
+
+  if tuist_safe env \
+    GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
+    IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
+    IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}" \
+    tuist test "$TUIST_TEST_SCHEME" \
+      ${inspect_mode_args[@]+"${inspect_mode_args[@]}"} \
+      --no-upload \
+      --no-selective-testing \
+      --test-targets "$test_target" \
+      -- \
+      -destination "$TUIST_TEST_DESTINATION" \
+      -parallel-testing-enabled NO >"$tmp" 2>&1; then
+    if ! search_file "^\\*\\* TEST SUCCEEDED \\*\\*$|^✔ Test run with .* passed.*$|passed after .* seconds" "$tmp" | sed -E 's/^[0-9]+://'; then
+      tail -n 20 "$tmp"
+    fi
+    rm -f "$tmp"
+    return 0
+  fi
+
+  echo "tuist test failed for $test_target; showing failure details:" >&2
+  if grep -E "✘|error:|fail:|failed" "$tmp" >/dev/null 2>&1; then
+     grep -B 2 -A 10 -E "✘|error:|fail:|failed" "$tmp" | head -n 100 >&2
+  else
+     tail -n 120 "$tmp" >&2
+  fi
+
+  rm -f "$tmp"
+  return 1
+}
+
 run_test_target() {
   local test_target="$1"
 
-  ensure_workspace
-  rm -rf /var/tmp/test-session-systemlogs-*.logarchive 2>/dev/null || true
-
   case "$test_target" in
     iDocsTests)
-      run_xcodebuild_silent \
-        test \
-        -workspace iDocs.xcworkspace \
-        -scheme iDocs \
-        -destination "platform=macOS,arch=arm64" \
-        -parallel-testing-enabled NO \
-        -only-testing:iDocsTests \
-        GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
-        IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
-        IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
+      run_tuist_test_silent iDocsTests
       ;;
     iDocsAdapterTests)
-      run_xcodebuild_silent \
-        test \
-        -workspace iDocs.xcworkspace \
-        -scheme iDocsAdapter \
-        -destination "platform=macOS,arch=arm64" \
-        -parallel-testing-enabled NO \
-        -only-testing:iDocsAdapterTests \
-        GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
-        IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
-        IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}"
+      run_tuist_test_silent iDocsAdapterTests
       ;;
     *)
       echo "Error: unsupported test target '$test_target' (supported: iDocsTests, iDocsAdapterTests)" >&2
