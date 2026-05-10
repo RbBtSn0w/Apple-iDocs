@@ -6,6 +6,7 @@ public struct iDocsCLI: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "idocs",
         abstract: "iDocs CLI",
+        version: "1.3.1",
         subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self]
     )
 

@@ -5,6 +5,11 @@ import iDocsAdapter
 
 @Suite("CLI Command Tests")
 struct CLICommandTests {
+    @Test("CLI version is 1.3.1")
+    func testCLIVersion() {
+        #expect(iDocsCLI.configuration.version == "1.3.1")
+    }
+
     final class OutputCapture: @unchecked Sendable {
         var stdout: [String] = []
         var stderr: [String] = []
