@@ -12,7 +12,7 @@
 ## Changes to `--help`
 
 ```text
-USAGE: idocs <subcommand>
+USAGE: idocs [--version] <subcommand>
 
 OPTIONS:
   -v, --version           Show the version.
