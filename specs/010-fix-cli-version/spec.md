@@ -38,7 +38,7 @@ As a new user, I want to see the version command listed when I run `idocs --help
 
 ### Edge Cases
 
-- **Version formatting**: Ensure the output is clean (just the version number or a short prefix like "idocs version 1.3.1") to be easily parsable by other scripts.
+- **Version formatting**: Ensure the output is exactly the version string (e.g., `1.3.1`) without any prefixes or suffixes, making it cleanly parsable by other scripts.
 - **Pre-release versions**: Ensure that if a pre-release version is installed (e.g., 1.3.2-alpha.1), it is correctly reported.
 
 ## Requirements *(mandatory)*
