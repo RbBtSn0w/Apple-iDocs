@@ -1,6 +1,6 @@
 {
   "name": "@rbbtsn0w/idocs",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -45,7 +45,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.6",
     "@semantic-release/npm": "^12.0.2",
-    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "semantic-release": "^25.0.3"
   }
 }
