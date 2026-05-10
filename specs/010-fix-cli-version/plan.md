@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add `--version` support to the `idocs` CLI by explicitly setting the `version` parameter in the `ArgumentParser`'s `CommandConfiguration` for `iDocsCLI`. This effectively decouples the CLI version from the internal `coreVersion` and ensures native support for both `-v` and `--version` flags. The npm `package.json` version will also be bumped to 1.3.1 to match.
+Add `--version` support to the `idocs` CLI with an explicit global flag on `iDocsCLI`. The displayed value is resolved from release metadata (`idocs.version` sidecar in packaged builds, `npm/package.json` in local development) so it stays decoupled from the internal `coreVersion` ABI gate.
 
 ## Technical Context
 
@@ -22,8 +22,8 @@ Add `--version` support to the `idocs` CLI by explicitly setting the `version` p
 ## Constitution Check
 
 *GATE: Passed*
-- **II. Stateless CLI/Adapter Design**: Does not add state or affect current command lifecycle.
-- **V. Simplicity**: Uses existing `ArgumentParser` feature.
+- **II. Stateless CLI/Adapter Design**: Does not add mutable state or affect current command lifecycle.
+- **V. Simplicity**: Uses a small metadata sidecar instead of a custom build plugin.
 - **VI. Native Swift First**: Uses `swift-argument-parser` over npm wrapping.
 
 ## Project Structure
@@ -43,11 +43,17 @@ specs/010-fix-cli-version/
 ### Source Code (repository root)
 
 ```text
-Sources/iDocs/Commands/
-└── iDocsCLI.swift       # Configuration update
+Sources/iDocsApp/Commands/
+├── iDocsCLI.swift       # Global --version flag
+└── CLIVersion.swift     # Version metadata resolver
 
 npm/
-└── package.json         # Version bump
+├── package.json         # Distribution manifest
+└── scripts/             # Local link and install sidecar handling
+
+scripts/
+├── release-package.sh   # Writes idocs.version into release bundle
+└── test-release-config.sh
 ```
 
 ## Complexity Tracking

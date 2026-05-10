@@ -42,18 +42,20 @@
 
 **Goal**: As a developer, I want to be able to run `idocs --version` and see `--version` listed in `idocs --help`.
 
-**Independent Test**: Can be tested by running `idocs --version` or `idocs -v` to see "1.3.1" and `idocs --help` to see the version option listed.
+**Independent Test**: Can be tested by running `idocs --version` or `idocs -v` and confirming the output matches the package/release metadata, plus `idocs --help` to see the version option listed.
 
 ### Tests for User Story 1 & 2 (TDD) ⚠️
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [x] T001 [P] [US1] Unit test `iDocsCLI.configuration.version` equals "1.3.1" in Tests/iDocsTests/CLICommandTests.swift
+- [x] T001 [P] [US1] Unit test `CLIVersion` resolves sidecar metadata before manifest fallback in Tests/iDocsTests/CLICommandTests.swift
 
 ### Implementation for User Story 1 & 2
 
 - [x] T002 [P] [US1] Bump package version to 1.3.1 in npm/package.json
-- [x] T003 [US1] Update `iDocsCLI.configuration` in Sources/iDocs/Commands/iDocsCLI.swift to include `version: "1.3.1"`
+- [x] T003 [US1] Update `iDocsCLI` in Sources/iDocsApp/Commands/iDocsCLI.swift to expose `--version` and print `CLIVersion.current()`
+- [x] T005 [US1] Add release-bundle `idocs.version` sidecar generation in scripts/release-package.sh
+- [x] T006 [US1] Preserve sidecar metadata through npm link-local and postinstall flows
 
 **Checkpoint**: At this point, User Story 1 & 2 should be fully functional and testable independently
 
@@ -64,6 +66,7 @@
 **Purpose**: Improvements that affect multiple user stories
 
 - [x] T004 [P] Run quickstart.md validation
+- [x] T007 [P] Add CI release configuration guard to ensure semantic-release packages assets with `${nextRelease.version}`
 
 ---
 

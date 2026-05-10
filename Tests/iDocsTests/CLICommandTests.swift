@@ -9,7 +9,7 @@ struct CLICommandTests {
     func testCLIVersionFlag() throws {
         let command = try iDocsCLI.parse(["--version"])
         #expect(command.version == true)
-        
+
         let commandShort = try iDocsCLI.parse(["-v"])
         #expect(commandShort.version == true)
     }
@@ -18,6 +18,50 @@ struct CLICommandTests {
     func testCLIDefaultBehavior() throws {
         let command = try iDocsCLI.parse([])
         #expect(command.version == false)
+    }
+
+    @Test("CLI version resolver prefers sidecar next to executable")
+    func cliVersionResolverPrefersSidecar() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let binary = root.appendingPathComponent("idocs")
+        let sidecar = root.appendingPathComponent("idocs.version")
+        try Data().write(to: binary)
+        try "9.8.7\n".write(to: sidecar, atomically: true, encoding: .utf8)
+
+        let version = CLIVersion.current(
+            executableURL: binary,
+            currentDirectoryURL: root.appendingPathComponent("work", isDirectory: true),
+            environment: [:]
+        )
+
+        #expect(version == "9.8.7")
+    }
+
+    @Test("CLI version resolver falls back to npm package manifest")
+    func cliVersionResolverFallsBackToNPMManifest() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let npmDirectory = root.appendingPathComponent("npm", isDirectory: true)
+        let nestedDirectory = root.appendingPathComponent("nested/work", isDirectory: true)
+        try FileManager.default.createDirectory(at: npmDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+        try """
+        {
+          "name": "@rbbtsn0w/idocs",
+          "version": "2.3.4"
+        }
+        """.write(to: npmDirectory.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+
+        let version = CLIVersion.current(
+            executableURL: root.appendingPathComponent("missing-idocs"),
+            currentDirectoryURL: nestedDirectory,
+            environment: [:]
+        )
+
+        #expect(version == "2.3.4")
     }
 
     final class OutputCapture: @unchecked Sendable {
@@ -541,4 +585,11 @@ struct CLICommandTests {
         #expect(content.contains("`--json`"))
         #expect(content.contains("`--caller <opaque-id>`"))
     }
+}
+
+private func makeTemporaryDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("idocs-cli-tests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
 }

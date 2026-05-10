@@ -7,6 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const npmRoot = resolve(here, "..");
 const distDir = resolve(npmRoot, "dist");
 const binaryPath = resolve(distDir, "idocs");
+const versionPath = resolve(distDir, "idocs.version");
 const frameworksPath = resolve(distDir, "Frameworks");
 const tmpArchive = resolve(distDir, "idocs-darwin-arm64.tar.gz");
 const extractedBundleDir = resolve(distDir, "idocs-darwin-arm64");
@@ -33,6 +34,10 @@ function getVersion() {
   return pkg.version;
 }
 
+function writeVersionSidecar(version = getVersion()) {
+  writeFileSync(versionPath, `${version}\n`);
+}
+
 function releaseBaseURL(version) {
   const configured = process.env.IDOCS_RELEASE_BASE_URL;
   if (configured && configured.trim().length > 0) {
@@ -51,6 +56,10 @@ function normalizeExtractedLayout(root) {
     cpSync(resolve(bundleDir, "idocs"), binaryPath);
   }
 
+  if (existsSync(resolve(bundleDir, "idocs.version"))) {
+    cpSync(resolve(bundleDir, "idocs.version"), versionPath);
+  }
+
   const frameworksDir = resolve(bundleDir, "Frameworks");
   if (existsSync(frameworksDir)) {
     rmSync(frameworksPath, { recursive: true, force: true });
@@ -65,11 +74,17 @@ async function main() {
 
   if (process.env.IDOCS_LOCAL_BINARY && existsSync(process.env.IDOCS_LOCAL_BINARY)) {
     log("IDOCS_LOCAL_BINARY found; skipping download.");
+    if (existsSync(binaryPath) && !existsSync(versionPath)) {
+      writeVersionSidecar();
+    }
     return;
   }
 
   if (!force && existsSync(binaryPath)) {
     chmodSync(binaryPath, 0o755);
+    if (!existsSync(versionPath)) {
+      writeVersionSidecar();
+    }
     log("Binary already present; skipping download.");
     return;
   }
@@ -111,6 +126,9 @@ async function main() {
     }
 
     chmodSync(binaryPath, 0o755);
+    if (!existsSync(versionPath)) {
+      writeVersionSidecar(version);
+    }
     unlinkSync(tmpArchive);
     log("Binary installed successfully.");
   } catch (error) {

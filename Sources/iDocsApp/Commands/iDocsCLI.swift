@@ -16,7 +16,7 @@ public struct iDocsCLI: AsyncParsableCommand {
 
     public func run() async throws {
         if version {
-            print("1.3.1")
+            print(CLIVersion.current())
         } else {
             throw CleanExit.helpRequest(self)
         }

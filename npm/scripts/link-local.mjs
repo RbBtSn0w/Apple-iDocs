@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -8,6 +8,7 @@ const npmRoot = resolve(here, "..");
 const repoRoot = resolve(npmRoot, "..");
 const distDir = resolve(npmRoot, "dist");
 const targetPath = resolve(distDir, "idocs");
+const versionPath = resolve(distDir, "idocs.version");
 const frameworksTargetDir = resolve(distDir, "Frameworks");
 
 function info(msg) {
@@ -51,6 +52,7 @@ if (!sourcePath) {
 mkdirSync(distDir, { recursive: true });
 copyFileSync(sourcePath, targetPath);
 chmodSync(targetPath, 0o755);
+writeFileSync(versionPath, `${JSON.parse(readFileSync(resolve(npmRoot, "package.json"), "utf8")).version}\n`);
 
 const sourceDir = dirname(sourcePath);
 rmSync(frameworksTargetDir, { recursive: true, force: true });

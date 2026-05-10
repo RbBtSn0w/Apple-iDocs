@@ -5,8 +5,9 @@ Add missing --version support in idocs CLI and decouple it from coreVersion
 All requirements from the spec are fully implemented and verified via unit tests and CLI integration checks.
 
 ## Verification Evidence
-- Test suite: 67 tests executed, all passing
-- Unit Tests: `iDocsCLITests.swift` verifies the `CommandConfiguration.version` matches `1.3.1`
+- Test suite: Swift tests plus offline CLI E2E
+- Unit Tests: `CLICommandTests.swift` verifies sidecar and package-manifest version resolution
+- E2E: `scripts/e2e-cli.sh offline` verifies `idocs --version` matches `npm/package.json`
 - Spec coverage: 100% requirements verified
 
 ## Review

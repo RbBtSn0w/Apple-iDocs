@@ -7,7 +7,7 @@
 ```text
 1.3.1
 ```
-(Or whatever the string provided in `CommandConfiguration.version` is). It will be printed to stdout.
+The value is printed to stdout and MUST match the distribution metadata for the built artifact: `idocs.version` for release bundles or `npm/package.json` for local development builds.
 
 ## Changes to `--help`
 
