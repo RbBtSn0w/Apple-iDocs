@@ -10,11 +10,12 @@ DERIVED_DATA_PATH="${IDOCS_RELEASE_DERIVED_DATA:-$HOME/Library/Developer/Xcode/D
 BUILD_LOG="${IDOCS_RELEASE_BUILD_LOG:-/tmp/idocs-release-build.log}"
 ASSET_NAME="idocs-darwin-arm64.tar.gz"
 BUNDLE_DIR="$OUTPUT_DIR/idocs-darwin-arm64"
+VERSION_FILE="$BUNDLE_DIR/idocs.version"
 
 mkdir -p "$OUTPUT_DIR"
 
 if [[ ! -d "iDocs.xcworkspace" ]]; then
-  tuist generate >/dev/null
+  tuist generate --no-open >/dev/null
 fi
 
 xcodebuild build \
@@ -38,6 +39,7 @@ rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/Frameworks"
 cp "$BIN" "$BUNDLE_DIR/idocs"
 chmod +x "$BUNDLE_DIR/idocs"
+printf '%s\n' "$VERSION" > "$VERSION_FILE"
 
 PRODUCTS_DIR="$DERIVED_DATA_PATH/Build/Products/Release"
 for framework in "$PRODUCTS_DIR"/*.framework; do

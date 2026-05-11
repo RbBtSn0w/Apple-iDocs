@@ -12,6 +12,7 @@ fi
 
 DERIVED_DATA_PATH="${IDOCS_DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/iDocs-codex}"
 IDOCS_LOCAL_BINARY_DEFAULT="$DERIVED_DATA_PATH/Build/Products/Debug/idocs"
+PACKAGE_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('npm/package.json','utf8')).version")"
 TMP_DIRS=()
 
 cleanup() {
@@ -39,6 +40,25 @@ assert_contains() {
     echo "--------------------" >&2
     exit 1
   fi
+}
+
+assert_equals() {
+  local actual="$1"
+  local expected="$2"
+  local context="$3"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "[FAIL] $context: expected '$expected', got '$actual'" >&2
+    exit 1
+  fi
+}
+
+assert_help_contract() {
+  local output="$1"
+  local context="$2"
+  assert_contains "$output" "USAGE:" "$context"
+  assert_contains "$output" "idocs" "$context"
+  assert_contains "$output" "<subcommand>" "$context"
+  assert_contains "$output" "-v, --version" "$context"
 }
 
 assert_search_observability_or_no_result() {
@@ -114,7 +134,10 @@ fi
 
 run_cmd_capture idocs --help
 assert_exit_zero "$RUN_CODE" "idocs --help (link flow)"
-assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (link flow)"
+assert_help_contract "$RUN_OUTPUT" "idocs --help (link flow)"
+run_cmd_capture idocs --version
+assert_exit_zero "$RUN_CODE" "idocs --version (link flow)"
+assert_equals "$RUN_OUTPUT" "$PACKAGE_VERSION" "idocs --version (link flow)"
 
 echo "[E2E] Path A0: failed fetch-binary preserves existing linked binary"
 run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$ROOT_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm --prefix npm run fetch-binary"
@@ -127,7 +150,10 @@ fi
 
 run_cmd_capture idocs --help
 assert_exit_zero "$RUN_CODE" "idocs --help after failed fetch-binary"
-assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help after failed fetch-binary"
+assert_help_contract "$RUN_OUTPUT" "idocs --help after failed fetch-binary"
+run_cmd_capture idocs --version
+assert_exit_zero "$RUN_CODE" "idocs --version after failed fetch-binary"
+assert_equals "$RUN_OUTPUT" "$PACKAGE_VERSION" "idocs --version after failed fetch-binary"
 
 if [[ "$MODE" == "live" ]]; then
   run_cmd_capture idocs search "Combine Publisher"
@@ -199,7 +225,10 @@ fi
 
 run_cmd_capture "$BIN" --help
 assert_exit_zero "$RUN_CODE" "idocs --help (pack flow)"
-assert_contains "$RUN_OUTPUT" "USAGE: idocs <subcommand>" "idocs --help (pack flow)"
+assert_help_contract "$RUN_OUTPUT" "idocs --help (pack flow)"
+run_cmd_capture "$BIN" --version
+assert_exit_zero "$RUN_CODE" "idocs --version (pack flow)"
+assert_equals "$RUN_OUTPUT" "$PACKAGE_VERSION" "idocs --version (pack flow)"
 
 if [[ "$MODE" == "live" ]]; then
   run_cmd_capture "$BIN" search "SwiftUI"

@@ -51,7 +51,7 @@ Setup and build:
    ```
 4. Generate project when you need Xcode:
    ```bash
-   tuist generate
+   tuist generate --no-open
    ```
 
 The binary will be located in the build directory.
@@ -118,7 +118,7 @@ Use the helper script to run build/test/run quietly from terminal:
 Notes:
 - This workflow wraps `xcodebuild` directly and prints only summary lines on success.
 - `./scripts/tuist-silent.sh test` runs the full default suite (`iDocsTests` + `iDocsAdapterTests`).
-- If `iDocs.xcworkspace` is missing, it attempts `tuist generate` automatically.
+- If `iDocs.xcworkspace` is missing, it attempts `tuist generate --no-open` automatically.
 - It does not require opening Xcode IDE.
 - On failures, it prints recent logs for quick diagnostics.
 - `./scripts/tuist-silent.sh test` and benchmark scripts should run serially unless you set a separate `IDOCS_DERIVED_DATA_PATH`, otherwise Xcode may lock `build.db`.

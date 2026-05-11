@@ -46,6 +46,9 @@ jobs:
       - name: Verify npm publish script
         run: bash ./scripts/test-publish-npm-package.sh
 
+      - name: Verify release configuration
+        run: bash ./scripts/test-release-config.sh
+
   e2e-cli-offline:
     timeout-minutes: 30
     runs-on: macos-15
@@ -101,15 +104,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: npm/package-lock.json
 
-      - name: Stage GitHub Release Assets
-        run: ./scripts/release-package.sh staged "$GITHUB_WORKSPACE/dist/release/staged"
-
-      - name: Verify Staged Release Assets
-        run: |
-          ls -l "$GITHUB_WORKSPACE/dist/release/staged"
-          test -f "$GITHUB_WORKSPACE/dist/release/staged/idocs-darwin-arm64.tar.gz"
-          test -f "$GITHUB_WORKSPACE/dist/release/staged/idocs-darwin-arm64.sha256"
-
       - name: Install Release Plugins
         run: |
           cd npm
@@ -118,6 +112,7 @@ jobs:
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
             @semantic-release/changelog \
+            @semantic-release/exec \
             @semantic-release/npm \
             @semantic-release/github \
             @semantic-release/git

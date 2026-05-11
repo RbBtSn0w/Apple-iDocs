@@ -21,16 +21,16 @@ Tuist/
 ## Commands
 
 # Add commands for Swift 6.0（项目设置）+ shell scripts
-- **Build**: `tuist build`
+- **Build**: `tuist build` or `swift build`
 - **Test**: `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
-- **Generate Project**: `tuist generate`
+- **Generate Project**: `tuist generate --no-open`
 
 ## Code Style
 
 Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 
 ## Infrastructure Guidelines
-- **Project Generation**: This project uses Tuist (`Project.swift`, `Tuist.swift`) for project generation and management. Run `tuist generate` to generate Xcode workspace.
+- **Project Generation**: This project uses Tuist (`Project.swift`, `Tuist.swift`) for project generation and management. Run `tuist generate --no-open` to generate Xcode workspace without launching Xcode IDE.
 - **Dependency Management**: Tuist owns the project graph in `Project.swift`; Swift Package Manager is used only for third-party dependencies declared in `Tuist/Package.swift` and consumed through `.external(...)`.
 - **SPM Boundary**: For App/CLI/main products, `Tuist/Package.swift` is a dependency entry point, not a repository identity manifest. Only SDK/library repositories that publish through SwiftPM should use a root `Package.swift`, because that manifest is their external release contract.
 - **Headless Tests**: Tuist test runs should use the shared `iDocs` scheme with local inspect mode, `--no-upload`, `--no-selective-testing`, and an explicit macOS destination so they do not depend on opening Xcode, remote result inspection, or Tuist server state.
@@ -46,5 +46,5 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/009-search-fallback-diagnostics/plan.md
+specs/010-fix-cli-version/plan.md
 <!-- SPECKIT END -->

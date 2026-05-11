@@ -9,7 +9,22 @@ public struct iDocsCLI: AsyncParsableCommand {
         subcommands: [SearchCommand.self, FetchCommand.self, ListCommand.self]
     )
 
+    @Flag(name: .shortAndLong, help: "Show the version.")
+    var version = false
+
     public init() {}
+
+    public func run() async throws {
+        if version {
+            emitVersion()
+        } else {
+            throw CleanExit.helpRequest(self)
+        }
+    }
+
+    func emitVersion(_ resolvedVersion: String = CLIVersion.current()) {
+        CLIEnvironment.writeStdout(resolvedVersion)
+    }
 }
 
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)

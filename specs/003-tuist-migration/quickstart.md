@@ -1,7 +1,7 @@
 # Quickstart: Working with the Tuist-Managed iDocs Project
 
 ## Prerequisites
-- **Tuist 4.158.2**: The version is pinned via `.tuist-version`. Install via `curl -Ls https://install.tuist.io | bash`.
+- **Tuist 4.185.1**: The version is pinned via `.tuist-version`. Install via `curl -Ls https://install.tuist.io | bash`.
 - **Xcode 15.0+**: Required for Swift 6 support.
 
 ## Initial Setup
