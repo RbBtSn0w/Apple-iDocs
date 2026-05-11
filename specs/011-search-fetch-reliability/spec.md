@@ -2,7 +2,7 @@
 
 **Feature Branch**: `011-search-fetch-reliability`  
 **Created**: Monday, May 11, 2026  
-**Status**: Verified
+**Status**: In Review
 **Input**: User description: "GitHub issue #8: Improve idocs search/fetch reliability for mixed Apple documentation sources"
 
 ## User Scenarios & Testing *(mandatory)*
