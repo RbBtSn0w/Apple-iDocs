@@ -38,7 +38,11 @@ public enum CLIExecutor {
                                 title: $0.title,
                                 snippet: $0.snippet,
                                 technology: $0.technology,
-                                source: $0.source?.rawValue
+                                source: $0.source?.rawValue,
+                                sourceKind: $0.sourceKind,
+                                fetchSupported: $0.fetchSupported,
+                                fetchSupportReason: $0.fetchSupportReason,
+                                queryAttempt: $0.queryAttempt ?? query
                             )
                         },
                         technologies: nil,
@@ -56,7 +60,8 @@ public enum CLIExecutor {
             var lines: [String] = ["### Apple Documentation Search Results", ""]
             for item in results {
                 let source = item.source?.rawValue ?? "unknown"
-                lines.append("- \(item.title) [\(item.technology)] {source: \(source)}")
+                let fetch = item.fetchSupported ? "supported" : "unsupported"
+                lines.append("- \(item.title) [\(item.technology)] {source: \(source), kind: \(item.sourceKind), fetch: \(fetch)}")
                 lines.append("  - ID: \(item.id)")
                 if let snippet = item.snippet {
                     lines.append("  - Snippet: \(snippet)")
@@ -124,13 +129,21 @@ public enum CLIExecutor {
                         results: nil,
                         technologies: nil,
                         searchDiagnostics: nil,
+                        fetchDiagnostics: content.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
                         errorMessage: nil
                     )
                 )
             }
 
             if let source {
-                CLIEnvironment.writeStdout("[source: \(source)]\n\(content.body)")
+                var prefix = "[source: \(source)]"
+                if let fetchDiagnostics = content.fetchDiagnostics, fetchDiagnostics.count > 1 {
+                    let attempts = fetchDiagnostics
+                        .map { "\($0.source)=\($0.reason ?? $0.status)" }
+                        .joined(separator: ", ")
+                    prefix += "\n[attempts: \(attempts)]"
+                }
+                CLIEnvironment.writeStdout("\(prefix)\n\(content.body)")
             } else {
                 CLIEnvironment.writeStdout(content.body)
             }
@@ -155,6 +168,7 @@ public enum CLIExecutor {
                         results: nil,
                         technologies: nil,
                         searchDiagnostics: nil,
+                        fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
                         errorMessage: message
                     )
                 )
@@ -268,7 +282,19 @@ public enum CLIExecutor {
             durationMs: stage.durationMs,
             resultCount: stage.resultCount,
             reason: stage.reason,
-            hint: stage.hint
+            hint: stage.hint,
+            queryAttempt: stage.queryAttempt
+        )
+    }
+
+    private static func mapFetchDiagnosticPayload(_ attempt: FetchAttemptDiagnostic) -> CLIFetchDiagnosticPayload {
+        CLIFetchDiagnosticPayload(
+            source: attempt.source,
+            status: attempt.status,
+            reason: attempt.reason,
+            contentType: attempt.contentType,
+            statusCode: attempt.statusCode,
+            hint: attempt.hint
         )
     }
 

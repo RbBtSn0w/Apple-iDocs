@@ -101,4 +101,146 @@ struct FetchDocToolTests {
         #expect(output.source == .sosumi)
         #expect(output.markdown.contains("# Sosumi View"))
     }
+
+    @Test("FetchDocTool fetches App Store Connect Help HTML as markdown")
+    func appStoreConnectHelpFetch() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-help", fileManager: mockFS)
+        let paths = [
+            "/help/app-store-connect/manage-builds/upload-builds",
+            "/help/app-store-connect/test-a-beta-version/testflight-overview"
+        ]
+
+        let helpSession = MockNetworkSession()
+        for path in paths {
+            let helpURL = try #require(URLHelpers.appleHelpURL(for: path))
+            helpSession.setResponse(
+                for: helpURL,
+                data: MockPayloads.appStoreConnectHelpHTML,
+                response: MockPayloads.httpResponse(url: helpURL, contentType: "text/html")
+            )
+        }
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout)),
+            sosumiAPI: SosumiAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout)),
+            helpAPI: AppleHelpAPI(session: helpSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        for path in paths {
+            let output = try await tool.runDetailed(path: path)
+
+            #expect(output.source == .help)
+            #expect(output.markdown.contains("# Upload builds"))
+            #expect(output.markdown.contains("Before you begin"))
+            #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .help])
+            #expect(output.sourceAttempts.last?.status == .hit)
+        }
+    }
+
+    @Test("FetchDocTool rejects unsupported real Apple page families without NOT_FOUND")
+    func unsupportedApplePageFamily() async throws {
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout)),
+            sosumiAPI: SosumiAPI(session: MockNetworkSession(stubbedError: MockError.networkTimeout)),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: DiskCache(name: "docs-test-unsupported", fileManager: MockFileSystem())
+        )
+
+        for path in ["/videos/play/wwdc2024/10123", "/news", "/app-store-connect/api"] {
+            do {
+                _ = try await tool.runDetailed(path: path)
+                Issue.record("Expected unsupported source type for \(path).")
+            } catch let error as iDocsError {
+                #expect(error.reason == "unsupported_source_type")
+                #expect(error.fetchAttempts.map(\.reason).contains("unsupported_source_type"))
+            }
+        }
+    }
+
+    @Test("FetchDocTool records primary decode failure and successful fallback")
+    func fetchFallbackProvenance() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-provenance", fileManager: mockFS)
+        let paths = [
+            "/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution",
+            "/documentation/xcode/developing-a-workflow-strategy-for-xcode-cloud",
+            "/documentation/xcode/environment-variable-reference"
+        ]
+
+        let appleSession = MockNetworkSession()
+        let sosumiSession = MockNetworkSession()
+        for path in paths {
+            let appleURL = try #require(URLHelpers.dataURL(for: path))
+            appleSession.setResponse(
+                for: appleURL,
+                data: Data("{\"not\":\"docc\"}".utf8),
+                response: MockPayloads.httpResponse(url: appleURL)
+            )
+
+            let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+            sosumiSession.setResponse(
+                for: sosumiURL,
+                data: Data("# Environment variable reference\n\nFallback content.".utf8),
+                response: MockPayloads.httpResponse(url: sosumiURL, contentType: "text/markdown")
+            )
+        }
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        for path in paths {
+            let output = try await tool.runDetailed(path: path)
+
+            #expect(output.source == .sosumi)
+            #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
+            #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+            #expect(output.sourceAttempts.last?.status == .hit)
+        }
+    }
+
+    @Test("FetchDocTool aggregate failure includes ordered source attempts")
+    func aggregateFetchFailureIncludesSourceAttempts() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-aggregate", fileManager: mockFS)
+        let path = "/documentation/appstoreconnectapi"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.dataURL(for: path))
+        appleSession.setResponse(
+            for: appleURL,
+            data: Data("{\"not\":\"docc\"}".utf8),
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data("server error".utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL, statusCode: 500)
+        )
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        do {
+            _ = try await tool.runDetailed(path: path)
+            Issue.record("Expected aggregate fetch failure.")
+        } catch let error as iDocsError {
+            #expect(error.fetchAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
+            #expect(error.fetchAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+            #expect(error.fetchAttempts.first { $0.source == .sosumi }?.reason == "http_500")
+        }
+    }
 }

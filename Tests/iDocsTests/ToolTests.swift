@@ -184,6 +184,90 @@ struct ToolTests {
         #expect(result.first?.source == .sosumi)
     }
 
+    @Test("SearchDocsTool classifies mixed Apple page families and fetch support")
+    func searchToolClassifiesMixedApplePageFamilies() async throws {
+        let query = "Xcode Cloud TestFlight App Store Connect"
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.mixedSosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+        let byPath = Dictionary(uniqueKeysWithValues: output.results.map { ($0.path, $0) })
+
+        #expect(byPath["/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution"]?.sourceKind == .documentation)
+        #expect(byPath["/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution"]?.fetchSupported == true)
+        #expect(byPath["/help/app-store-connect/manage-builds/upload-builds"]?.sourceKind == .help)
+        #expect(byPath["/help/app-store-connect/manage-builds/upload-builds"]?.fetchSupported == true)
+        #expect(byPath["/videos/play/wwdc2024/10123"]?.sourceKind == .video)
+        #expect(byPath["/videos/play/wwdc2024/10123"]?.fetchSupported == false)
+        #expect(byPath["/news"]?.sourceKind == .news)
+        #expect(byPath["/news"]?.fetchSupported == false)
+        #expect(byPath["/app-store-connect/api"]?.sourceKind == .marketing)
+        #expect(byPath["/app-store-connect/api"]?.fetchSupported == false)
+        #expect(output.results.allSatisfy { $0.queryAttempt == query })
+    }
+
+    @Test("SearchDocsTool preserves original and derived query attempts for broad fallback")
+    func searchToolPreservesBroadQueryFallbackAttempt() async throws {
+        let query = "How do I upload an Xcode Cloud build to TestFlight in App Store Connect?"
+        let derivedQuery = "upload Xcode Cloud TestFlight App Store Connect"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let originalSosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: originalSosumiURL,
+            data: MockPayloads.emptySosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: originalSosumiURL)
+        )
+        let derivedSosumiURL = try #require(URLHelpers.sosumiSearchURL(query: derivedQuery))
+        sosumiSession.setResponse(
+            for: derivedSosumiURL,
+            data: MockPayloads.mixedSosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: derivedSosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(!output.results.isEmpty)
+        #expect(output.results.allSatisfy { $0.queryAttempt == derivedQuery })
+        #expect(output.instrumentation.stages.contains { $0.queryAttempt == query })
+        #expect(output.instrumentation.stages.contains { $0.queryAttempt == derivedQuery })
+    }
+
     @Test("SearchDocsTool prefers local results over remote")
     func searchToolPrefersLocal() async throws {
         let apiSession = MockNetworkSession(stubbedError: MockError.networkTimeout)

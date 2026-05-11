@@ -49,6 +49,10 @@ public struct XcodeLocalDocs {
         return sdks
     }
 
+    public func isDocumentationCacheAvailable() -> Bool {
+        fileManager.fileExists(atPath: cacheDirectory.path)
+    }
+
     private func discoverSDKDirectories(from root: URL, depth: Int) throws -> [URL] {
         guard depth >= 0 else { return [] }
 

@@ -34,6 +34,13 @@ public struct URLHelpers {
         let cleanPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return URL(string: "https://developer.apple.com/\(cleanPath)")
     }
+
+    public static func appleHelpURL(for path: String) -> URL? {
+        let normalized = normalizePath(path)
+        guard normalized.hasPrefix("/help/") else { return nil }
+        let cleanPath = normalized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return URL(string: "https://developer.apple.com/\(cleanPath)/")
+    }
     
     public static func normalizePath(_ path: String) -> String {
         var normalized = path.trimmingCharacters(in: .whitespacesAndNewlines)

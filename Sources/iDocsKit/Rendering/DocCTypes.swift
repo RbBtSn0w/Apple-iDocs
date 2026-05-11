@@ -18,7 +18,78 @@ public enum DataSource: String, Codable, Sendable {
     case cache       // 内存或磁盘缓存命中
     case local       // Xcode 本地文档命中
     case apple       // Apple 官方远程源
+    case help        // Apple Help HTML source
     case sosumi      // sosumi 远程源
+    case unsupported // Real Apple page family that idocs does not fetch
+}
+
+public enum AppleSourceKind: String, Codable, Sendable, Equatable {
+    case documentation
+    case help
+    case video
+    case news
+    case marketing
+    case unknown
+
+    public init(path: String) {
+        let normalized = URLHelpers.normalizePath(path).lowercased()
+        if normalized.hasPrefix("/documentation/") || normalized == "/documentation" {
+            self = .documentation
+        } else if normalized.hasPrefix("/help/") || normalized == "/help" {
+            self = .help
+        } else if normalized.hasPrefix("/videos/") || normalized == "/videos" {
+            self = .video
+        } else if normalized == "/news" || normalized.hasPrefix("/news/") {
+            self = .news
+        } else if normalized.hasPrefix("/app-store-connect/") || normalized == "/app-store-connect" {
+            self = .marketing
+        } else {
+            self = .unknown
+        }
+    }
+
+    public var fetchSupportedByIDocs: Bool {
+        switch self {
+        case .documentation, .help:
+            return true
+        case .video, .news, .marketing, .unknown:
+            return false
+        }
+    }
+}
+
+public struct FetchSourceAttempt: Codable, Sendable, Equatable {
+    public let source: DataSource
+    public let status: DocumentationSearchStageStatus
+    public let reason: String?
+    public let contentType: String?
+    public let statusCode: Int?
+    public let hint: String?
+
+    enum CodingKeys: String, CodingKey {
+        case source
+        case status
+        case reason
+        case contentType = "content_type"
+        case statusCode = "status_code"
+        case hint
+    }
+
+    public init(
+        source: DataSource,
+        status: DocumentationSearchStageStatus,
+        reason: String? = nil,
+        contentType: String? = nil,
+        statusCode: Int? = nil,
+        hint: String? = nil
+    ) {
+        self.source = source
+        self.status = status
+        self.reason = reason
+        self.contentType = contentType
+        self.statusCode = statusCode
+        self.hint = hint
+    }
 }
 
 // MARK: - Core Entities
@@ -48,14 +119,35 @@ public struct SearchResult: Codable, Sendable {
     public let kind: DocumentKind
     public let source: DataSource
     public let relevance: Double?
+    public let sourceKind: AppleSourceKind
+    public let fetchSupported: Bool
+    public let fetchSupportReason: String?
+    public let queryAttempt: String?
     
-    public init(title: String, abstract: String?, path: String, kind: DocumentKind, source: DataSource, relevance: Double? = nil) {
+    public init(
+        title: String,
+        abstract: String?,
+        path: String,
+        kind: DocumentKind,
+        source: DataSource,
+        relevance: Double? = nil,
+        sourceKind: AppleSourceKind? = nil,
+        fetchSupported: Bool? = nil,
+        fetchSupportReason: String? = nil,
+        queryAttempt: String? = nil
+    ) {
+        let resolvedSourceKind = sourceKind ?? AppleSourceKind(path: path)
+        let resolvedFetchSupported = fetchSupported ?? resolvedSourceKind.fetchSupportedByIDocs
         self.title = title
         self.abstract = abstract
         self.path = path
         self.kind = kind
         self.source = source
         self.relevance = relevance
+        self.sourceKind = resolvedSourceKind
+        self.fetchSupported = resolvedFetchSupported
+        self.fetchSupportReason = fetchSupportReason ?? (resolvedFetchSupported ? nil : "unsupported_source_type")
+        self.queryAttempt = queryAttempt
     }
 }
 
