@@ -3,6 +3,11 @@ import Logging
 
 public struct SearchDocsTool {
     private let logger = Logger(label: "com.snow.idocs-search-tool")
+    private static let keywordFallbackStopWords: Set<String> = [
+        "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
+        "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
+        "build", "builds"
+    ]
     private let appleAPI: AppleJSONAPI
     private let sosumiAPI: SosumiAPI
     private let xcodeDocs: XcodeLocalDocs
@@ -297,15 +302,10 @@ public struct SearchDocsTool {
     }
 
     private func keywordFallbackQuery(for query: String) -> String? {
-        let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
-        let stopWords: Set<String> = [
-            "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
-            "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
-            "build", "builds"
-        ]
+        let tokens = query.split { !$0.isLetter && !$0.isNumber }
         let keywords = tokens.filter { token in
             let lower = token.lowercased()
-            return (token.count >= 4 || token == "App") && !stopWords.contains(lower)
+            return (token.count >= 4 || lower == "app") && !Self.keywordFallbackStopWords.contains(lower)
         }
         guard keywords.count >= 3 else { return nil }
         return keywords.prefix(7).joined(separator: " ")
@@ -363,6 +363,10 @@ public struct SearchDocsTool {
                 return "remote_network_failure"
             case .invalidURL:
                 return "remote_invalid_url"
+            case .invalidResponse:
+                return "remote_invalid_response"
+            case .emptyResponse:
+                return "remote_empty_body"
             case .unsupportedSourceType, .aggregateFetchFailure:
                 return idocsError.reason
             }

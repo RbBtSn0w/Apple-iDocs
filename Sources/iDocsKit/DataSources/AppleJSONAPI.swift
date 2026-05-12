@@ -458,6 +458,8 @@ public enum iDocsError: Error {
     case httpError(statusCode: Int)
     case maxRetriesReached
     case invalidURL
+    case invalidResponse
+    case emptyResponse
     case unsupportedSourceType(path: String, sourceKind: AppleSourceKind, attempts: [FetchSourceAttempt])
     case aggregateFetchFailure(path: String, attempts: [FetchSourceAttempt])
 
@@ -466,7 +468,7 @@ public enum iDocsError: Error {
         case .unsupportedSourceType(_, _, let attempts),
              .aggregateFetchFailure(_, let attempts):
             return attempts
-        case .httpError, .maxRetriesReached, .invalidURL:
+        case .httpError, .maxRetriesReached, .invalidURL, .invalidResponse, .emptyResponse:
             return []
         }
     }
@@ -479,6 +481,10 @@ public enum iDocsError: Error {
             return "max_retries_reached"
         case .invalidURL:
             return "invalid_url"
+        case .invalidResponse:
+            return "invalid_response"
+        case .emptyResponse:
+            return "empty_body"
         case .unsupportedSourceType:
             return "unsupported_source_type"
         case .aggregateFetchFailure(_, let attempts):

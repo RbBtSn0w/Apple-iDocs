@@ -256,6 +256,10 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 return .networkError(message: "HTTP status \(statusCode)")
             case .maxRetriesReached:
                 return .networkError(message: "Max retries reached")
+            case .invalidResponse:
+                return .networkError(message: "Invalid response")
+            case .emptyResponse:
+                return .parsingError(reason: "Empty response")
             case .unsupportedSourceType(let path, let sourceKind, let attempts):
                 return .unsupportedSourceType(
                     id: path,
@@ -310,7 +314,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         case .sosumi:
             return .sosumi
         case .unsupported:
-            return .sosumi
+            return .unsupported
         }
     }
 

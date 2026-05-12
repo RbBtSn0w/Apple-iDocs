@@ -6,6 +6,7 @@ public enum RetrievalSource: String, Sendable, Equatable {
     case apple
     case help
     case sosumi
+    case unsupported
 }
 
 public struct FetchAttemptDiagnostic: Sendable, Codable, Equatable {
