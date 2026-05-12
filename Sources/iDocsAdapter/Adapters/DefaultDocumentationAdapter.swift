@@ -45,7 +45,11 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     title: $0.title,
                     snippet: $0.abstract,
                     technology: technologyName(from: $0.path),
-                    source: mapSource($0.source)
+                    source: mapSource($0.source),
+                    sourceKind: $0.sourceKind.rawValue,
+                    fetchSupported: $0.fetchSupported,
+                    fetchSupportReason: $0.fetchSupportReason,
+                    queryAttempt: $0.queryAttempt
                 )
             }
             await recordUsageIfConfigured(
@@ -115,7 +119,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     "locale": config.locale.identifier,
                     "source": output.source.rawValue
                 ],
-                url: URLHelpers.webURL(for: id) ?? URL(string: "https://developer.apple.com\(id)")!
+                url: URLHelpers.webURL(for: id) ?? URL(string: "https://developer.apple.com\(id)")!,
+                fetchDiagnostics: output.sourceAttempts.map(Self.mapFetchAttemptDiagnostic)
             )
             await recordUsageIfConfigured(
                 DocumentationUsageLogEntry(
@@ -216,7 +221,19 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             durationMs: stage.durationMs,
             resultCount: stage.resultCount,
             reason: stage.reason,
-            hint: stage.hint
+            hint: stage.hint,
+            queryAttempt: stage.queryAttempt
+        )
+    }
+
+    private static func mapFetchAttemptDiagnostic(_ attempt: FetchSourceAttempt) -> FetchAttemptDiagnostic {
+        FetchAttemptDiagnostic(
+            source: attempt.source.rawValue,
+            status: attempt.status.rawValue,
+            reason: attempt.reason,
+            contentType: attempt.contentType,
+            statusCode: attempt.statusCode,
+            hint: attempt.hint
         )
     }
 
@@ -239,6 +256,26 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 return .networkError(message: "HTTP status \(statusCode)")
             case .maxRetriesReached:
                 return .networkError(message: "Max retries reached")
+            case .invalidResponse:
+                return .networkError(message: "Invalid response")
+            case .emptyResponse:
+                return .parsingError(reason: "Empty response")
+            case .unsupportedSourceType(let path, let sourceKind, let attempts):
+                return .unsupportedSourceType(
+                    id: path,
+                    sourceKind: sourceKind.rawValue,
+                    attempts: attempts.map(Self.mapFetchAttemptDiagnostic)
+                )
+            case .aggregateFetchFailure(let path, let attempts):
+                let summary = attempts
+                    .filter { $0.status == .error || $0.status == .unsupported }
+                    .map { "\($0.source.rawValue): \($0.reason ?? $0.status.rawValue)" }
+                    .joined(separator: "; ")
+                return .aggregateFetchFailure(
+                    id: path,
+                    message: summary.isEmpty ? "Fetch failed for \(path)" : summary,
+                    attempts: attempts.map(Self.mapFetchAttemptDiagnostic)
+                )
             }
         }
 
@@ -272,8 +309,12 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             return .local
         case .apple:
             return .apple
+        case .help:
+            return .help
         case .sosumi:
             return .sosumi
+        case .unsupported:
+            return .unsupported
         }
     }
 
@@ -326,6 +367,10 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             return "VERSION_MISMATCH"
         case .internalError:
             return "INTERNAL"
+        case .unsupportedSourceType:
+            return "CONFIG"
+        case .aggregateFetchFailure:
+            return "NETWORK"
         }
     }
 }

@@ -8,6 +8,8 @@ public enum DocumentationError: Error, LocalizedError, Sendable, Equatable {
     case invalidConfiguration(message: String)
     case incompatibleVersion(adapter: String, core: String)
     case internalError(message: String)
+    case unsupportedSourceType(id: String, sourceKind: String, attempts: [FetchAttemptDiagnostic])
+    case aggregateFetchFailure(id: String, message: String, attempts: [FetchAttemptDiagnostic])
 
     public var errorDescription: String? {
         switch self {
@@ -25,6 +27,20 @@ public enum DocumentationError: Error, LocalizedError, Sendable, Equatable {
             return "Incompatible adapter/core versions. adapter=\(adapter), core=\(core)"
         case .internalError(let message):
             return "Internal error: \(message)"
+        case .unsupportedSourceType(let id, let sourceKind, _):
+            return "Unsupported Apple source type '\(sourceKind)' for '\(id)'."
+        case .aggregateFetchFailure(_, let message, _):
+            return message
+        }
+    }
+
+    public var fetchDiagnostics: [FetchAttemptDiagnostic]? {
+        switch self {
+        case .unsupportedSourceType(_, _, let attempts),
+             .aggregateFetchFailure(_, _, let attempts):
+            return attempts
+        default:
+            return nil
         }
     }
 }

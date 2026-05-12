@@ -3,6 +3,11 @@ import Logging
 
 public struct SearchDocsTool {
     private let logger = Logger(label: "com.snow.idocs-search-tool")
+    private static let keywordFallbackStopWords: Set<String> = [
+        "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
+        "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
+        "build", "builds"
+    ]
     private let appleAPI: AppleJSONAPI
     private let sosumiAPI: SosumiAPI
     private let xcodeDocs: XcodeLocalDocs
@@ -40,7 +45,11 @@ public struct SearchDocsTool {
                     path: result.path,
                     kind: result.kind,
                     source: .cache,
-                    relevance: result.relevance
+                    relevance: result.relevance,
+                    sourceKind: result.sourceKind,
+                    fetchSupported: result.fetchSupported,
+                    fetchSupportReason: result.fetchSupportReason,
+                    queryAttempt: result.queryAttempt ?? query
                 )
             }
             stages.append(
@@ -48,7 +57,8 @@ public struct SearchDocsTool {
                     name: "cache",
                     status: .hit,
                     durationMs: durationInMilliseconds(since: cacheStart),
-                    resultCount: mapped.count
+                    resultCount: mapped.count,
+                    queryAttempt: query
                 )
             )
             logger.info("Memory cache hit for: \(query)")
@@ -64,7 +74,8 @@ public struct SearchDocsTool {
                 status: .miss,
                 durationMs: durationInMilliseconds(since: cacheStart),
                 resultCount: 0,
-                reason: "cache_miss"
+                reason: "cache_miss",
+                queryAttempt: query
             )
         )
         
@@ -73,30 +84,36 @@ public struct SearchDocsTool {
         do {
             let localResults = try await xcodeDocs.search(query: query)
             if !localResults.isEmpty {
+                let mapped = annotateResults(localResults, queryAttempt: query)
                 stages.append(
                     DocumentationSearchStageTiming(
                         name: "local",
                         status: .hit,
                         durationMs: durationInMilliseconds(since: localStart),
-                        resultCount: localResults.count
+                        resultCount: mapped.count,
+                        queryAttempt: query
                     )
                 )
-                logger.info("Found \(localResults.count) matches in local Xcode documentation.")
-                await memoryCache.set(query, value: localResults)
+                logger.info("Found \(mapped.count) matches in local Xcode documentation.")
+                await memoryCache.set(query, value: mapped)
                 return buildOutput(
-                    results: localResults,
+                    results: mapped,
                     stages: stages,
                     totalStart: totalStart
                 )
             }
+            let localUnavailable = !xcodeDocs.isDocumentationCacheAvailable()
             stages.append(
                 DocumentationSearchStageTiming(
                     name: "local",
                     status: .miss,
                     durationMs: durationInMilliseconds(since: localStart),
                     resultCount: 0,
-                    reason: "local_no_results",
-                    hint: "Local Xcode documentation did not return a match; remote Apple and sosumi fallbacks will be attempted."
+                    reason: localUnavailable ? "local_docs_unavailable" : "local_no_results",
+                    hint: localUnavailable
+                        ? "Xcode local documentation is unavailable; this run is remote-only until the local DocumentationCache is restored."
+                        : "Local Xcode documentation did not return a match; remote Apple and sosumi fallbacks will be attempted.",
+                    queryAttempt: query
                 )
             )
         } catch {
@@ -107,7 +124,8 @@ public struct SearchDocsTool {
                     durationMs: durationInMilliseconds(since: localStart),
                     resultCount: 0,
                     reason: "local_error",
-                    hint: "Local Xcode documentation search failed; remote Apple and sosumi fallbacks will be attempted."
+                    hint: "Local Xcode documentation search failed; remote Apple and sosumi fallbacks will be attempted.",
+                    queryAttempt: query
                 )
             )
             logger.warning("Local Xcode search failed: \(error.localizedDescription)")
@@ -122,17 +140,19 @@ public struct SearchDocsTool {
                 try await appleAPI.search(query: query)
             }
             if !appleResults.isEmpty {
+                let mapped = annotateResults(appleResults, queryAttempt: query)
                 stages.append(
                     DocumentationSearchStageTiming(
                         name: "apple",
                         status: .hit,
                         durationMs: durationInMilliseconds(since: appleStart),
-                        resultCount: appleResults.count
+                        resultCount: mapped.count,
+                        queryAttempt: query
                     )
                 )
-                await memoryCache.set(query, value: appleResults)
+                await memoryCache.set(query, value: mapped)
                 return buildOutput(
-                    results: appleResults,
+                    results: mapped,
                     stages: stages,
                     totalStart: totalStart
                 )
@@ -144,7 +164,8 @@ public struct SearchDocsTool {
                     durationMs: durationInMilliseconds(since: appleStart),
                     resultCount: 0,
                     reason: "remote_no_results",
-                    hint: searchQualityMissHint(stage: "apple")
+                    hint: searchQualityMissHint(stage: "apple"),
+                    queryAttempt: query
                 )
             )
             logger.info("Apple remote returned no results, trying sosumi fallback.")
@@ -156,7 +177,8 @@ public struct SearchDocsTool {
                     durationMs: durationInMilliseconds(since: appleStart),
                     resultCount: 0,
                     reason: remoteErrorReason(for: error),
-                    hint: remoteErrorHint(for: error)
+                    hint: remoteErrorHint(for: error),
+                    queryAttempt: query
                 )
             )
             logger.warning("Apple remote search failed: \(error.localizedDescription). Trying sosumi fallback.")
@@ -169,22 +191,54 @@ public struct SearchDocsTool {
             let sosumiResults = try await withRemoteSearchTimeout(stage: "sosumi") {
                 try await sosumiAPI.search(query: query)
             }
+            let mapped = annotateResults(sosumiResults, queryAttempt: query)
             stages.append(
                 DocumentationSearchStageTiming(
                     name: "sosumi",
-                    status: sosumiResults.isEmpty ? .miss : .hit,
+                    status: mapped.isEmpty ? .miss : .hit,
                     durationMs: durationInMilliseconds(since: sosumiStart),
-                    resultCount: sosumiResults.count,
-                    reason: sosumiResults.isEmpty ? "remote_no_results" : nil,
-                    hint: sosumiResults.isEmpty ? searchQualityMissHint(stage: "sosumi") : nil
+                    resultCount: mapped.count,
+                    reason: mapped.isEmpty ? "remote_no_results" : nil,
+                    hint: mapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : nil,
+                    queryAttempt: query
                 )
             )
-            await memoryCache.set(query, value: sosumiResults)
-            return buildOutput(
-                results: sosumiResults,
-                stages: stages,
-                totalStart: totalStart
-            )
+            if !mapped.isEmpty {
+                await memoryCache.set(query, value: mapped)
+                return buildOutput(
+                    results: mapped,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
+            if let fallbackQuery = keywordFallbackQuery(for: query), fallbackQuery != query {
+                let fallbackStart = ContinuousClock.now
+                let fallbackResults = try await withRemoteSearchTimeout(stage: "sosumi") {
+                    try await sosumiAPI.search(query: fallbackQuery)
+                }
+                let fallbackMapped = annotateResults(fallbackResults, queryAttempt: fallbackQuery)
+                stages.append(
+                    DocumentationSearchStageTiming(
+                        name: "sosumi",
+                        status: fallbackMapped.isEmpty ? .miss : .hit,
+                        durationMs: durationInMilliseconds(since: fallbackStart),
+                        resultCount: fallbackMapped.count,
+                        reason: fallbackMapped.isEmpty ? "remote_no_results" : nil,
+                        hint: fallbackMapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : nil,
+                        queryAttempt: fallbackQuery
+                    )
+                )
+                await memoryCache.set(query, value: fallbackMapped)
+                return buildOutput(
+                    results: fallbackMapped,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
+            await memoryCache.set(query, value: mapped)
+            return buildOutput(results: mapped, stages: stages, totalStart: totalStart)
         } catch {
             stages.append(
                 DocumentationSearchStageTiming(
@@ -193,7 +247,8 @@ public struct SearchDocsTool {
                     durationMs: durationInMilliseconds(since: sosumiStart),
                     resultCount: 0,
                     reason: remoteErrorReason(for: error),
-                    hint: remoteErrorHint(for: error)
+                    hint: remoteErrorHint(for: error),
+                    queryAttempt: query
                 )
             )
             logger.warning("Sosumi search failed: \(error.localizedDescription). Returning empty results.")
@@ -227,6 +282,33 @@ public struct SearchDocsTool {
             return sources.first
         }
         return "mixed"
+    }
+
+    private func annotateResults(_ results: [SearchResult], queryAttempt: String) -> [SearchResult] {
+        results.map { result in
+            SearchResult(
+                title: result.title,
+                abstract: result.abstract,
+                path: result.path,
+                kind: result.kind,
+                source: result.source,
+                relevance: result.relevance,
+                sourceKind: result.sourceKind,
+                fetchSupported: result.fetchSupported,
+                fetchSupportReason: result.fetchSupportReason,
+                queryAttempt: result.queryAttempt ?? queryAttempt
+            )
+        }
+    }
+
+    private func keywordFallbackQuery(for query: String) -> String? {
+        let tokens = query.split { !$0.isLetter && !$0.isNumber }
+        let keywords = tokens.filter { token in
+            let lower = token.lowercased()
+            return (token.count >= 4 || lower == "app") && !Self.keywordFallbackStopWords.contains(lower)
+        }
+        guard keywords.count >= 3 else { return nil }
+        return keywords.prefix(7).joined(separator: " ")
     }
 
     private func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {
@@ -281,6 +363,12 @@ public struct SearchDocsTool {
                 return "remote_network_failure"
             case .invalidURL:
                 return "remote_invalid_url"
+            case .invalidResponse:
+                return "remote_invalid_response"
+            case .emptyResponse:
+                return "remote_empty_body"
+            case .unsupportedSourceType, .aggregateFetchFailure:
+                return idocsError.reason
             }
         }
 

@@ -146,6 +146,28 @@ struct UsageLoggingTests {
         #expect(sosumiStage.hint?.contains("search-quality miss") == true)
     }
 
+    @Test("SearchDocsTool reports missing local documentation cache as degradation")
+    func searchDocsToolReportsMissingLocalDocsAsDegradation() async throws {
+        let query = "View"
+        let tool = SearchDocsTool(
+            api: makeMockAppleAPI(queries: [query]),
+            sosumiAPI: makeMockSosumiAPI(queries: [query]),
+            xcodeDocs: XcodeLocalDocs(
+                fileManager: MockFileSystem(),
+                searchProvider: MockSearchProvider(),
+                cacheDirectory: URL(fileURLWithPath: "/tmp/missing-xcode-doc-cache")
+            ),
+            memoryCache: MemoryCache<String, [iDocsKit.SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+        let localStage = try #require(output.instrumentation.stages.first { $0.name == "local" })
+
+        #expect(!output.results.isEmpty)
+        #expect(localStage.reason == "local_docs_unavailable")
+        #expect(localStage.hint?.contains("remote-only") == true)
+    }
+
     @Test("DefaultDocumentationAdapter writes sanitized search usage log with timings")
     func adapterWritesSanitizedSearchUsageLog() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()

@@ -10,6 +10,7 @@ public enum DocumentationSearchStageStatus: String, Codable, Sendable, Equatable
     case miss
     case error
     case skipped
+    case unsupported
 }
 
 public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
@@ -19,6 +20,7 @@ public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
     public let resultCount: Int
     public let reason: String?
     public let hint: String?
+    public let queryAttempt: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -27,6 +29,7 @@ public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
         case resultCount = "result_count"
         case reason
         case hint
+        case queryAttempt = "query_attempt"
     }
 
     public init(
@@ -35,7 +38,8 @@ public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
         durationMs: Double,
         resultCount: Int,
         reason: String? = nil,
-        hint: String? = nil
+        hint: String? = nil,
+        queryAttempt: String? = nil
     ) {
         self.name = name
         self.status = status
@@ -43,6 +47,7 @@ public struct DocumentationSearchStageTiming: Codable, Sendable, Equatable {
         self.resultCount = resultCount
         self.reason = reason
         self.hint = hint
+        self.queryAttempt = queryAttempt
     }
 }
 

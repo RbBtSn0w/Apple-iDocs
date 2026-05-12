@@ -22,6 +22,10 @@ public enum CLIErrorPresenter {
             return .versionMismatch
         case .internalError:
             return .internalError
+        case .unsupportedSourceType:
+            return .config
+        case .aggregateFetchFailure:
+            return .network
         }
     }
 
@@ -45,6 +49,10 @@ public enum CLIErrorPresenter {
             return "Error [VERSION_MISMATCH]: Adapter \(adapter) is incompatible with Core \(core)."
         case .internalError(let message):
             return "Error [INTERNAL]: \(message)"
+        case .unsupportedSourceType(let id, let sourceKind, _):
+            return "Error [CONFIG]: Unsupported Apple source type '\(sourceKind)' for '\(id)'."
+        case .aggregateFetchFailure(_, let message, _):
+            return "Error [NETWORK]: \(message)"
         }
     }
 }

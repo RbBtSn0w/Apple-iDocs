@@ -168,7 +168,77 @@ struct CLICommandTests {
         #expect(payload.selectedPaths == ["/documentation/swiftui/view"])
         #expect(payload.source == "local")
         #expect(payload.results?.first?.source == "local")
+        #expect(payload.results?.first?.sourceKind == "documentation")
+        #expect(payload.results?.first?.fetchSupported == true)
+        #expect(payload.results?.first?.queryAttempt == "SwiftUI")
         #expect(payload.durationMs >= 0)
+    }
+
+    @Test("CLI search JSON and text expose source kind and fetch support")
+    func searchOutputIncludesSourceKindAndFetchSupport() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                searchResults: [
+                    SearchResult(
+                        id: "/help/app-store-connect/manage-builds/upload-builds",
+                        title: "Upload builds",
+                        snippet: "Upload builds to App Store Connect.",
+                        technology: "app-store-connect",
+                        source: .sosumi,
+                        sourceKind: "help",
+                        fetchSupported: true,
+                        queryAttempt: "Xcode Cloud TestFlight App Store Connect"
+                    ),
+                    SearchResult(
+                        id: "/news",
+                        title: "Developer News",
+                        snippet: "Apple developer news.",
+                        technology: "unknown",
+                        source: .sosumi,
+                        sourceKind: "news",
+                        fetchSupported: false,
+                        fetchSupportReason: "unsupported_source_type",
+                        queryAttempt: "Xcode Cloud TestFlight App Store Connect"
+                    )
+                ]
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let textCode = await CLIExecutor.runSearch(query: "Xcode Cloud TestFlight App Store Connect")
+        #expect(textCode == 0)
+        let text = capture.stdout.joined(separator: "\n")
+        #expect(text.contains("kind: help"))
+        #expect(text.contains("fetch: supported"))
+        #expect(text.contains("kind: news"))
+        #expect(text.contains("fetch: unsupported"))
+
+        capture.stdout.removeAll()
+        let jsonCode = await CLIExecutor.runSearch(
+            query: "Xcode Cloud TestFlight App Store Connect",
+            outputFormat: .json
+        )
+        #expect(jsonCode == 0)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.results?.first?.sourceKind == "help")
+        #expect(payload.results?.first?.fetchSupported == true)
+        #expect(payload.results?.last?.fetchSupportReason == "unsupported_source_type")
     }
 
     @Test("CLI search JSON exposes actionable diagnostics for empty results")
@@ -434,6 +504,90 @@ struct CLICommandTests {
         #expect(payload.resultCount == 1)
         #expect(payload.selectedPaths == ["/documentation/swiftui/view"])
         #expect(payload.body == "# View")
+    }
+
+    @Test("CLI fetch JSON emits diagnostics for successful fallback")
+    func fetchJSONOutputIncludesDiagnostics() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                documentByID: [
+                    "/documentation/xcode/environment-variable-reference": DocumentationContent(
+                        title: "Environment variable reference",
+                        body: "# Environment variable reference",
+                        metadata: ["source": "sosumi"],
+                        url: URL(string: "https://developer.apple.com/documentation/xcode/environment-variable-reference")!,
+                        fetchDiagnostics: [
+                            FetchAttemptDiagnostic(source: "apple", status: "error", reason: "remote_decode_failed"),
+                            FetchAttemptDiagnostic(source: "sosumi", status: "hit")
+                        ]
+                    )
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runFetch(
+            id: "/documentation/xcode/environment-variable-reference",
+            outputFormat: .json
+        )
+
+        #expect(code == 0)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.fetchDiagnostics?.map(\.source) == ["apple", "sosumi"])
+        #expect(payload.fetchDiagnostics?.first?.reason == "remote_decode_failed")
+    }
+
+    @Test("CLI fetch JSON classifies unsupported source type without NOT_FOUND")
+    func fetchJSONUnsupportedSourceType() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                errorToThrow: .unsupportedSourceType(
+                    id: "/videos/play/wwdc2024/10123",
+                    sourceKind: "video",
+                    attempts: [
+                        FetchAttemptDiagnostic(source: "unsupported", status: "unsupported", reason: "unsupported_source_type")
+                    ]
+                )
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runFetch(
+            id: "/videos/play/wwdc2024/10123",
+            outputFormat: .json
+        )
+
+        #expect(code == 1)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.exitCategory == .config)
+        #expect(payload.exitCategory != .notFound)
+        #expect(payload.fetchDiagnostics?.first?.reason == "unsupported_source_type")
     }
 
     @Test("CLI list prints technologies and supports category filtering")
