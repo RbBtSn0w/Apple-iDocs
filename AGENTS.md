@@ -46,5 +46,5 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/011-search-fetch-reliability/plan.md
+specs/012-search-quality-race/plan.md
 <!-- SPECKIT END -->

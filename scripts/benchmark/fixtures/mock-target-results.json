@@ -1,0 +1,39 @@
+{
+  "versions": {
+    "idocs": "local-test-binary",
+    "apple-docs-mcp": "1.0.26",
+    "apple-doc-mcp": "1.9.1",
+    "sosumi": "1.0.0"
+  },
+  "results": {
+    "swiftui-navigation-split-view": {
+      "idocs": {
+        "path": "/documentation/swiftui/navigationsplitview",
+        "text": "NavigationSplitView"
+      },
+      "apple-docs-mcp": {
+        "path": "/documentation/swiftui/navigationsplitview",
+        "text": "NavigationSplitView"
+      },
+      "apple-doc-mcp": {
+        "path": "/documentation/swiftui",
+        "text": "SwiftUI framework"
+      },
+      "sosumi": {
+        "path": "/documentation/swiftui/navigationsplitview",
+        "text": "NavigationSplitView"
+      }
+    },
+    "swiftui-navigation-title": {
+      "idocs": {
+        "path": "/documentation/swiftui/view/navigationtitle(_:)",
+        "text": "navigationTitle"
+      }
+    },
+    "swiftui-invalid-no-result": {
+      "idocs": {
+        "results": []
+      }
+    }
+  }
+}

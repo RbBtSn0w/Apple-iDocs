@@ -7,6 +7,8 @@ public struct DocumentationConfig: Sendable, Equatable {
     public let callerID: String?
     /// Optional local usage log path for CLI and agent-side observability.
     public let usageLogPath: String?
+    /// Optional override for the local Xcode documentation cache used by search/fetch.
+    public let xcodeDocumentationCachePath: String?
     /// Optional category filter for technology-list workflows.
     public let technologyCategoryFilter: String?
     /// Active locale metadata carried through adapter responses.
@@ -22,6 +24,7 @@ public struct DocumentationConfig: Sendable, Equatable {
         cachePath: String,
         callerID: String? = nil,
         usageLogPath: String? = nil,
+        xcodeDocumentationCachePath: String? = nil,
         technologyCategoryFilter: String? = nil,
         locale: Locale = Locale(identifier: "en_US_POSIX"),
         timeout: TimeInterval = 30,
@@ -31,6 +34,7 @@ public struct DocumentationConfig: Sendable, Equatable {
         self.cachePath = cachePath
         self.callerID = callerID
         self.usageLogPath = usageLogPath
+        self.xcodeDocumentationCachePath = xcodeDocumentationCachePath
         self.technologyCategoryFilter = technologyCategoryFilter
         self.locale = locale
         self.timeout = timeout
@@ -54,7 +58,12 @@ public struct DocumentationConfig: Sendable, Equatable {
             ?? defaultCachePath
         let usageLogPath = nonEmptyEnvironmentValue("IDOCS_USAGE_LOG_PATH", environment: environment)
             ?? defaultUsageLogPath
-        return DocumentationConfig(cachePath: cachePath, usageLogPath: usageLogPath)
+        let xcodeDocumentationCachePath = nonEmptyEnvironmentValue("IDOCS_XCODE_DOC_CACHE_PATH", environment: environment)
+        return DocumentationConfig(
+            cachePath: cachePath,
+            usageLogPath: usageLogPath,
+            xcodeDocumentationCachePath: xcodeDocumentationCachePath
+        )
     }
 
     public func withInvocationContext(
@@ -64,6 +73,7 @@ public struct DocumentationConfig: Sendable, Equatable {
             cachePath: cachePath,
             callerID: callerID,
             usageLogPath: usageLogPath,
+            xcodeDocumentationCachePath: xcodeDocumentationCachePath,
             technologyCategoryFilter: technologyCategoryFilter,
             locale: locale,
             timeout: timeout,
@@ -80,6 +90,7 @@ public struct DocumentationConfig: Sendable, Equatable {
             cachePath: cachePath,
             callerID: callerID,
             usageLogPath: usageLogPath,
+            xcodeDocumentationCachePath: xcodeDocumentationCachePath,
             technologyCategoryFilter: technologyCategoryFilter,
             locale: locale,
             timeout: timeout,

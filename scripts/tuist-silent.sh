@@ -46,15 +46,11 @@ tuist_safe() {
 }
 
 ensure_workspace() {
-  if [[ -d "iDocs.xcworkspace" ]]; then
-    return 0
-  fi
-
   if tuist_safe tuist generate --no-open >/dev/null; then
     return 0
   fi
 
-  echo "Error: iDocs.xcworkspace is missing and 'tuist generate --no-open' failed." >&2
+  echo "Error: 'tuist generate --no-open' failed before building the workspace." >&2
   return 1
 }
 

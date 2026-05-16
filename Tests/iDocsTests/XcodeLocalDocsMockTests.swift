@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import iDocsAdapter
 @testable import iDocsKit
 
 @Suite("XcodeLocalDocs Mock Tests")
@@ -50,6 +51,17 @@ struct XcodeLocalDocsMockTests {
         mockSearch.mockResults = []
         let results = try await docs.search(query: "missing-symbol")
         #expect(results.isEmpty)
+    }
+
+    @Test("DocumentationConfig honors Xcode documentation cache path override")
+    func documentationConfigHonorsXcodeCachePathOverride() {
+        let config = DocumentationConfig.cliDefault(
+            environment: [
+                "IDOCS_XCODE_DOC_CACHE_PATH": "/tmp/idocs-remote-only-doc-cache"
+            ]
+        )
+
+        #expect(config.xcodeDocumentationCachePath == "/tmp/idocs-remote-only-doc-cache")
     }
 
     @Test("Module queries prefer documentation roots before provider search")

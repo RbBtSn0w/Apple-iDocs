@@ -4,7 +4,7 @@ import iDocsKit
 public struct DefaultDocumentationAdapter: DocumentationService {
     private let adapterVersion: String
     private let logger: any DocumentationLogger
-    private let searchPerformer: @Sendable (String) async throws -> SearchDocsRunOutput
+    private let searchPerformer: @Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput
     private let technologiesPerformer: @Sendable () async throws -> [Technology]
     private let usageRecorder: DocumentationUsageRecorder
 
@@ -12,16 +12,27 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         adapterVersion: String = "1.0.0",
         logger: any DocumentationLogger = NoopDocumentationLogger(),
         searchPerformer: (@Sendable (String) async throws -> SearchDocsRunOutput)? = nil,
+        configuredSearchPerformer: (@Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput)? = nil,
         technologiesPerformer: (@Sendable () async throws -> [Technology])? = nil,
         usageRecorder: DocumentationUsageRecorder = DocumentationUsageRecorder()
     ) throws {
         self.adapterVersion = adapterVersion
         self.logger = logger
-        self.searchPerformer = searchPerformer ?? { query in
-            try await SearchDocsTool(
+        self.searchPerformer = configuredSearchPerformer ?? { query, config in
+            if let searchPerformer {
+                return try await searchPerformer(query)
+            }
+            let cacheDirectory = config.xcodeDocumentationCachePath.map {
+                URL(fileURLWithPath: $0, isDirectory: true)
+            }
+            return try await SearchDocsTool(
                 api: AppleJSONAPI(),
                 sosumiAPI: SosumiAPI(),
-                xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider())
+                xcodeDocs: XcodeLocalDocs(
+                    fileManager: FileManager.default,
+                    searchProvider: SpotlightSearchProvider(),
+                    cacheDirectory: cacheDirectory
+                )
             ).runDetailed(query: query)
         }
         self.technologiesPerformer = technologiesPerformer ?? {
@@ -38,7 +49,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     public func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
         let start = ContinuousClock.now
         do {
-            let output = try await searchPerformer(query)
+            let output = try await searchPerformer(query, config)
             let results = output.results.map {
                 SearchResult(
                     id: $0.path,
@@ -106,10 +117,17 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 fileManager: FileManager.default,
                 enableFileLocking: config.enableFileLocking
             )
+            let xcodeCacheDirectory = config.xcodeDocumentationCachePath.map {
+                URL(fileURLWithPath: $0, isDirectory: true)
+            }
             let output = try await FetchDocTool(
                 api: AppleJSONAPI(),
                 sosumiAPI: SosumiAPI(),
-                xcodeDocs: XcodeLocalDocs(fileManager: FileManager.default, searchProvider: SpotlightSearchProvider()),
+                xcodeDocs: XcodeLocalDocs(
+                    fileManager: FileManager.default,
+                    searchProvider: SpotlightSearchProvider(),
+                    cacheDirectory: xcodeCacheDirectory
+                ),
                 diskCache: diskCache
             ).runDetailed(path: id)
 
