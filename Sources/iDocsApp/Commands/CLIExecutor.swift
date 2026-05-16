@@ -42,6 +42,7 @@ public enum CLIExecutor {
                                 sourceKind: $0.sourceKind,
                                 fetchSupported: $0.fetchSupported,
                                 fetchSupportReason: $0.fetchSupportReason,
+                                matchScope: $0.matchScope,
                                 queryAttempt: $0.queryAttempt ?? query
                             )
                         },
@@ -61,7 +62,7 @@ public enum CLIExecutor {
             for item in results {
                 let source = item.source?.rawValue ?? "unknown"
                 let fetch = item.fetchSupported ? "supported" : "unsupported"
-                lines.append("- \(item.title) [\(item.technology)] {source: \(source), kind: \(item.sourceKind), fetch: \(fetch)}")
+                lines.append("- \(item.title) [\(item.technology)] {source: \(source), kind: \(item.sourceKind), fetch: \(fetch), scope: \(item.matchScope)}")
                 lines.append("  - ID: \(item.id)")
                 if let snippet = item.snippet {
                     lines.append("  - Snippet: \(snippet)")

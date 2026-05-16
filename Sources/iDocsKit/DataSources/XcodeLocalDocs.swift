@@ -3,6 +3,31 @@ import Logging
 
 public struct XcodeLocalDocs {
     private let logger = Logger(label: "com.snow.idocs-xcode-docs")
+    private static let knownModuleNames: Set<String> = [
+        "accelerate",
+        "appkit",
+        "arkit",
+        "avfoundation",
+        "cloudkit",
+        "combine",
+        "coredata",
+        "coregraphics",
+        "corelocation",
+        "foundation",
+        "gamekit",
+        "healthkit",
+        "mapkit",
+        "metal",
+        "realitykit",
+        "scenekit",
+        "spritekit",
+        "swift",
+        "swiftdata",
+        "swiftui",
+        "uikit",
+        "vision",
+        "widgetkit"
+    ]
     private let fileManager: any FileSystem
     private let searchProvider: any SearchProvider
     
@@ -90,10 +115,11 @@ public struct XcodeLocalDocs {
 
         var results: [SearchResult] = []
 
-        // Fast path: module-style queries can usually be satisfied from local
+        // Fast path: exact module queries can usually be satisfied from local
         // documentation roots or index stores without paying the cost of a
-        // broader provider search.
-        if isLikelyModuleQuery(trimmed) {
+        // broader provider search. Symbol-like PascalCase queries must continue
+        // into the broader path search so they are not misreported as modules.
+        if isLikelyModuleQuery(trimmed), !isLikelySymbolName(trimmed) {
             let directModuleResults = searchDocumentationRoots(query: trimmed, sdks: sdks, limit: 20)
             if !directModuleResults.isEmpty {
                 return directModuleResults
@@ -102,22 +128,6 @@ public struct XcodeLocalDocs {
             let directIndexResults = searchIndexStores(query: trimmed, sdks: sdks)
             if !directIndexResults.isEmpty {
                 return directIndexResults
-            }
-        }
-
-        // Composite queries such as "SwiftUI View" still benefit from resolving
-        // the framework/module token first before searching more broadly.
-        if let moduleHint = extractModuleHint(from: trimmed) {
-            let hinted = searchDocumentationRoots(query: moduleHint, sdks: sdks, limit: 20)
-            if !hinted.isEmpty {
-                logger.info("Recovered \(hinted.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
-                return hinted
-            }
-
-            let hintedIndexResults = searchIndexStores(query: moduleHint, sdks: sdks)
-            if !hintedIndexResults.isEmpty {
-                logger.info("Recovered \(hintedIndexResults.count) module-level matches using hint '\(moduleHint)' for query: \(trimmed)")
-                return hintedIndexResults
             }
         }
 
@@ -148,6 +158,14 @@ public struct XcodeLocalDocs {
             if !indexResults.isEmpty {
                 logger.info("Recovered \(indexResults.count) matches from DeveloperDocumentation.index for: \(trimmed)")
                 results = indexResults
+            }
+        }
+
+        if results.isEmpty, let moduleHint = extractModuleHint(from: trimmed) {
+            let fallback = moduleHintFallbackResults(moduleHint: moduleHint, originalQuery: trimmed, sdks: sdks)
+            if !fallback.isEmpty {
+                logger.info("Recovered \(fallback.count) module-level fallback matches using hint '\(moduleHint)' for query: \(trimmed)")
+                return fallback
             }
         }
 
@@ -256,6 +274,36 @@ public struct XcodeLocalDocs {
         return results
     }
 
+    private func moduleHintFallbackResults(
+        moduleHint: String,
+        originalQuery: String,
+        sdks: [XcodeLocalDocInfo]
+    ) -> [SearchResult] {
+        let rootResults = searchDocumentationRoots(query: moduleHint, sdks: sdks, limit: 20)
+        if !rootResults.isEmpty {
+            return rootResults.map { moduleFallbackResult($0, originalQuery: originalQuery) }
+        }
+
+        let indexResults = searchIndexStores(query: moduleHint, sdks: sdks)
+        return indexResults.map { moduleFallbackResult($0, originalQuery: originalQuery) }
+    }
+
+    private func moduleFallbackResult(_ result: SearchResult, originalQuery: String) -> SearchResult {
+        SearchResult(
+            title: result.title,
+            abstract: "Only a module-level local result was found after broader local symbol search missed for '\(originalQuery)'.",
+            path: result.path,
+            kind: result.kind,
+            source: result.source,
+            relevance: result.relevance,
+            sourceKind: result.sourceKind,
+            fetchSupported: result.fetchSupported,
+            fetchSupportReason: result.fetchSupportReason,
+            matchScope: .module,
+            queryAttempt: result.queryAttempt
+        )
+    }
+
     private func indexStoreURLs(for sdkPath: URL) -> [URL] {
         let modernIndexRoot = sdkPath
             .appendingPathComponent("DeveloperDocumentation.index")
@@ -307,6 +355,14 @@ public struct XcodeLocalDocs {
         return query.count >= 3 && uppercaseCount >= 2
     }
 
+    private func isLikelySymbolName(_ query: String) -> Bool {
+        guard !query.contains(where: \.isWhitespace) else { return false }
+        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
+        guard let first = query.first, first.isUppercase else { return false }
+        guard !Self.knownModuleNames.contains(query.lowercased()) else { return false }
+        return true
+    }
+
     private func shouldShortCircuitOpaqueMissQuery(_ query: String) -> Bool {
         guard !query.contains(where: \.isWhitespace) else { return false }
         guard query.count >= 16 else { return false }
@@ -320,7 +376,7 @@ public struct XcodeLocalDocs {
         for token in tokens {
             guard token.count >= 3 else { continue }
             guard let first = token.first, first.isUppercase else { continue }
-            if isLikelyModuleQuery(token) {
+            if isLikelyModuleQuery(token), !isLikelySymbolName(token) {
                 return token
             }
         }
@@ -370,7 +426,7 @@ public struct XcodeLocalDocs {
                     title: title,
                     abstract: "Matched in local Xcode documentation index.",
                     path: item.path,
-                    kind: item.path.split(separator: "/").count <= 3 ? .framework : .overview,
+                    kind: item.path.split(separator: "/").count <= 2 ? .framework : .overview,
                     source: .local,
                     relevance: item.score
                 )

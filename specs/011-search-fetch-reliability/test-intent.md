@@ -23,3 +23,29 @@ Tests use mocked network sessions, mocked file systems, and stable JSON/HTML fix
 ## If Omitted
 
 The CLI can regress to returning real Apple Help/news/video paths as fetchable search results or misleading `NOT_FOUND` fetch errors, breaking agent evidence collection again.
+
+## Addendum: Module Hint Short-Circuit
+
+### Risk
+
+Composite API-symbol queries such as `SwiftUI NavigationSplitView` can be reported as successful while returning only a framework/module page, causing agents to cite the wrong evidence.
+
+### Why Automation
+
+The regression is deterministic local search control flow and JSON contract behavior. Manual CLI checks would miss whether provider/index search was skipped and whether the returned result is marked as a module fallback.
+
+### Why Existing Tests Insufficient
+
+Existing 011 tests cover mixed source classification and fallback provenance, but one older local-docs test explicitly encoded "composite query returns module and skips provider search" as desired behavior.
+
+### Chosen Layer
+
+Unit-style Swift Testing in `XcodeLocalDocsMockTests` for local search sequencing plus CLI JSON/text tests for `match_scope`. This is the smallest layer that covers both root cause and public output.
+
+### Fragility Analysis
+
+Tests use mock file systems, mock search providers, and synthetic `DeveloperDocumentation.index` byte payloads. They avoid live Apple services and do not depend on private Xcode database decoding beyond direct path-string extraction already implemented by the production code.
+
+### If Omitted
+
+The CLI can keep short-circuiting symbol-oriented searches at module hints, making `idocs search -> idocs fetch` look usable while failing to find the actual API page.

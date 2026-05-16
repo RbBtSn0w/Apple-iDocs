@@ -25,6 +25,7 @@ public struct CLISearchResultPayload: Codable, Sendable, Equatable {
     public let sourceKind: String
     public let fetchSupported: Bool
     public let fetchSupportReason: String?
+    public let matchScope: String
     public let queryAttempt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -36,6 +37,7 @@ public struct CLISearchResultPayload: Codable, Sendable, Equatable {
         case sourceKind = "source_kind"
         case fetchSupported = "fetch_supported"
         case fetchSupportReason = "fetch_support_reason"
+        case matchScope = "match_scope"
         case queryAttempt = "query_attempt"
     }
 
@@ -48,6 +50,7 @@ public struct CLISearchResultPayload: Codable, Sendable, Equatable {
         sourceKind: String,
         fetchSupported: Bool,
         fetchSupportReason: String? = nil,
+        matchScope: String = "path",
         queryAttempt: String? = nil
     ) {
         self.id = id
@@ -58,6 +61,7 @@ public struct CLISearchResultPayload: Codable, Sendable, Equatable {
         self.sourceKind = sourceKind
         self.fetchSupported = fetchSupported
         self.fetchSupportReason = fetchSupportReason
+        self.matchScope = matchScope
         self.queryAttempt = queryAttempt
     }
 }

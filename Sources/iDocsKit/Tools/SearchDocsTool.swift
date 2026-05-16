@@ -34,6 +34,7 @@ public struct SearchDocsTool {
         logger.info("Searching Apple documentation for: \(query)")
         let totalStart = ContinuousClock.now
         var stages: [DocumentationSearchStageTiming] = []
+        var localModuleFallbackResults: [SearchResult] = []
 
         // 0. Try Memory Cache
         let cacheStart = ContinuousClock.now
@@ -49,6 +50,7 @@ public struct SearchDocsTool {
                     sourceKind: result.sourceKind,
                     fetchSupported: result.fetchSupported,
                     fetchSupportReason: result.fetchSupportReason,
+                    matchScope: result.matchScope,
                     queryAttempt: result.queryAttempt ?? query
                 )
             }
@@ -85,37 +87,47 @@ public struct SearchDocsTool {
             let localResults = try await xcodeDocs.search(query: query)
             if !localResults.isEmpty {
                 let mapped = annotateResults(localResults, queryAttempt: query)
+                let shouldContinueRemote = shouldContinueRemoteSearch(afterLocalResults: mapped, originalQuery: query)
                 stages.append(
                     DocumentationSearchStageTiming(
                         name: "local",
                         status: .hit,
                         durationMs: durationInMilliseconds(since: localStart),
                         resultCount: mapped.count,
+                        reason: shouldContinueRemote ? "local_module_fallback" : nil,
+                        hint: shouldContinueRemote
+                            ? "Only module-level local results were found; remote Apple and sosumi fallbacks will be attempted for symbol-level evidence."
+                            : nil,
                         queryAttempt: query
                     )
                 )
                 logger.info("Found \(mapped.count) matches in local Xcode documentation.")
-                await memoryCache.set(query, value: mapped)
-                return buildOutput(
-                    results: mapped,
-                    stages: stages,
-                    totalStart: totalStart
+                if shouldContinueRemote {
+                    localModuleFallbackResults = mapped
+                } else {
+                    await memoryCache.set(query, value: mapped)
+                    return buildOutput(
+                        results: mapped,
+                        stages: stages,
+                        totalStart: totalStart
+                    )
+                }
+            } else {
+                let localUnavailable = !xcodeDocs.isDocumentationCacheAvailable()
+                stages.append(
+                    DocumentationSearchStageTiming(
+                        name: "local",
+                        status: .miss,
+                        durationMs: durationInMilliseconds(since: localStart),
+                        resultCount: 0,
+                        reason: localUnavailable ? "local_docs_unavailable" : "local_no_results",
+                        hint: localUnavailable
+                            ? "Xcode local documentation is unavailable; this run is remote-only until the local DocumentationCache is restored."
+                            : "Local Xcode documentation did not return a match; remote Apple and sosumi fallbacks will be attempted.",
+                        queryAttempt: query
+                    )
                 )
             }
-            let localUnavailable = !xcodeDocs.isDocumentationCacheAvailable()
-            stages.append(
-                DocumentationSearchStageTiming(
-                    name: "local",
-                    status: .miss,
-                    durationMs: durationInMilliseconds(since: localStart),
-                    resultCount: 0,
-                    reason: localUnavailable ? "local_docs_unavailable" : "local_no_results",
-                    hint: localUnavailable
-                        ? "Xcode local documentation is unavailable; this run is remote-only until the local DocumentationCache is restored."
-                        : "Local Xcode documentation did not return a match; remote Apple and sosumi fallbacks will be attempted.",
-                    queryAttempt: query
-                )
-            )
         } catch {
             stages.append(
                 DocumentationSearchStageTiming(
@@ -229,7 +241,23 @@ public struct SearchDocsTool {
                         queryAttempt: fallbackQuery
                     )
                 )
-                await memoryCache.set(query, value: fallbackMapped)
+                if !fallbackMapped.isEmpty {
+                    await memoryCache.set(query, value: fallbackMapped)
+                    return buildOutput(
+                        results: fallbackMapped,
+                        stages: stages,
+                        totalStart: totalStart
+                    )
+                }
+
+                if !localModuleFallbackResults.isEmpty {
+                    return buildOutput(
+                        results: localModuleFallbackResults,
+                        stages: stages,
+                        totalStart: totalStart
+                    )
+                }
+
                 return buildOutput(
                     results: fallbackMapped,
                     stages: stages,
@@ -237,7 +265,14 @@ public struct SearchDocsTool {
                 )
             }
 
-            await memoryCache.set(query, value: mapped)
+            if !localModuleFallbackResults.isEmpty {
+                return buildOutput(
+                    results: localModuleFallbackResults,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
             return buildOutput(results: mapped, stages: stages, totalStart: totalStart)
         } catch {
             stages.append(
@@ -252,11 +287,27 @@ public struct SearchDocsTool {
                 )
             )
             logger.warning("Sosumi search failed: \(error.localizedDescription). Returning empty results.")
+            if !localModuleFallbackResults.isEmpty {
+                return buildOutput(
+                    results: localModuleFallbackResults,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
             return buildOutput(
                 results: [],
                 stages: stages,
                 totalStart: totalStart
             )
+        }
+    }
+
+    private func shouldContinueRemoteSearch(afterLocalResults results: [SearchResult], originalQuery: String) -> Bool {
+        guard originalQuery.contains(where: \.isWhitespace) else { return false }
+        guard !results.isEmpty else { return false }
+        return results.allSatisfy { result in
+            result.source == .local
+                && result.matchScope == .module
         }
     }
 
@@ -296,6 +347,7 @@ public struct SearchDocsTool {
                 sourceKind: result.sourceKind,
                 fetchSupported: result.fetchSupported,
                 fetchSupportReason: result.fetchSupportReason,
+                matchScope: result.matchScope,
                 queryAttempt: result.queryAttempt ?? queryAttempt
             )
         }

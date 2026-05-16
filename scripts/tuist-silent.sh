@@ -46,7 +46,7 @@ tuist_safe() {
 }
 
 ensure_workspace() {
-  if [[ -d "iDocs.xcworkspace" ]]; then
+  if [[ "${IDOCS_TUIST_FORCE_GENERATE:-0}" != "1" ]] && ! workspace_needs_regenerate; then
     return 0
   fi
 
@@ -54,7 +54,23 @@ ensure_workspace() {
     return 0
   fi
 
-  echo "Error: iDocs.xcworkspace is missing and 'tuist generate --no-open' failed." >&2
+  echo "Error: 'tuist generate --no-open' failed before building the workspace." >&2
+  return 1
+}
+
+workspace_needs_regenerate() {
+  local workspace_ref="iDocs.xcworkspace/contents.xcworkspacedata"
+  if [[ ! -e "$workspace_ref" ]]; then
+    return 0
+  fi
+
+  local candidate
+  for candidate in Project.swift Tuist.swift Tuist/Package.swift Tuist/Package.resolved .tuist-version; do
+    if [[ -e "$candidate" && "$candidate" -nt "$workspace_ref" ]]; then
+      return 0
+    fi
+  done
+
   return 1
 }
 
@@ -131,6 +147,15 @@ resolve_target() {
 build_quiet() {
   local target_scheme="$1"
   ensure_workspace
+  if run_xcodebuild_silent \
+    build \
+    -workspace iDocs.xcworkspace \
+    -scheme "$target_scheme" \
+    -destination "platform=macOS,arch=arm64"; then
+    return 0
+  fi
+
+  IDOCS_TUIST_FORCE_GENERATE=1 ensure_workspace
   run_xcodebuild_silent \
     build \
     -workspace iDocs.xcworkspace \

@@ -58,6 +58,13 @@ public enum AppleSourceKind: String, Codable, Sendable, Equatable {
     }
 }
 
+public enum SearchMatchScope: String, Codable, Sendable, Equatable {
+    case module
+    case symbol
+    case member
+    case path
+}
+
 public struct FetchSourceAttempt: Codable, Sendable, Equatable {
     public let source: DataSource
     public let status: DocumentationSearchStageStatus
@@ -122,6 +129,7 @@ public struct SearchResult: Codable, Sendable {
     public let sourceKind: AppleSourceKind
     public let fetchSupported: Bool
     public let fetchSupportReason: String?
+    public let matchScope: SearchMatchScope
     public let queryAttempt: String?
     
     public init(
@@ -134,6 +142,7 @@ public struct SearchResult: Codable, Sendable {
         sourceKind: AppleSourceKind? = nil,
         fetchSupported: Bool? = nil,
         fetchSupportReason: String? = nil,
+        matchScope: SearchMatchScope? = nil,
         queryAttempt: String? = nil
     ) {
         let resolvedSourceKind = sourceKind ?? AppleSourceKind(path: path)
@@ -147,7 +156,36 @@ public struct SearchResult: Codable, Sendable {
         self.sourceKind = resolvedSourceKind
         self.fetchSupported = resolvedFetchSupported
         self.fetchSupportReason = fetchSupportReason ?? (resolvedFetchSupported ? nil : "unsupported_source_type")
+        self.matchScope = matchScope ?? Self.inferMatchScope(path: path, kind: kind)
         self.queryAttempt = queryAttempt
+    }
+
+    private static func inferMatchScope(path: String, kind: DocumentKind) -> SearchMatchScope {
+        switch kind {
+        case .framework:
+            return .module
+        case .function, .property, .operator, .macro, .variable, .initializer,
+             .instanceMethod, .typeMethod, .instanceProperty, .typeProperty:
+            return .member
+        default:
+            break
+        }
+
+        let normalized = URLHelpers.normalizePath(path).lowercased()
+        guard normalized.hasPrefix("/documentation/") else {
+            return .path
+        }
+
+        let components = normalized.split(separator: "/")
+        guard components.count >= 2 else {
+            return .path
+        }
+
+        if let last = components.last, last.contains("(") {
+            return .member
+        }
+
+        return .symbol
     }
 }
 

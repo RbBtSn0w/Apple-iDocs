@@ -200,6 +200,7 @@ struct CLICommandTests {
                         source: .sosumi,
                         sourceKind: "help",
                         fetchSupported: true,
+                        matchScope: "path",
                         queryAttempt: "Xcode Cloud TestFlight App Store Connect"
                     ),
                     SearchResult(
@@ -211,6 +212,7 @@ struct CLICommandTests {
                         sourceKind: "news",
                         fetchSupported: false,
                         fetchSupportReason: "unsupported_source_type",
+                        matchScope: "path",
                         queryAttempt: "Xcode Cloud TestFlight App Store Connect"
                     )
                 ]
@@ -225,6 +227,7 @@ struct CLICommandTests {
         let text = capture.stdout.joined(separator: "\n")
         #expect(text.contains("kind: help"))
         #expect(text.contains("fetch: supported"))
+        #expect(text.contains("scope: path"))
         #expect(text.contains("kind: news"))
         #expect(text.contains("fetch: unsupported"))
 
@@ -238,6 +241,7 @@ struct CLICommandTests {
         let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
         #expect(payload.results?.first?.sourceKind == "help")
         #expect(payload.results?.first?.fetchSupported == true)
+        #expect(payload.results?.first?.matchScope == "path")
         #expect(payload.results?.last?.fetchSupportReason == "unsupported_source_type")
     }
 
@@ -377,6 +381,48 @@ struct CLICommandTests {
         ])
         #expect(payload.searchDiagnostics?.contains { $0.reason == "remote_permission_denied" } == false)
         #expect(payload.searchDiagnostics?.contains { $0.reason == "remote_network_failure" } == false)
+    }
+
+    @Test("CLI search JSON includes local docs unavailable diagnostic from cache override")
+    func searchJSONIncludesLocalDocsUnavailableDiagnosticFromCacheOverride() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            ConfigAwareSearchAdapter()
+        }
+        CLIEnvironment.configFactory = {
+            DocumentationConfig.cliDefault(
+                environment: [
+                    "IDOCS_XCODE_DOC_CACHE_PATH": "/tmp/idocs-remote-only-doc-cache"
+                ]
+            )
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runSearch(
+            query: "SwiftUI NavigationSplitView",
+            outputFormat: .json
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        let localStage = try #require(payload.searchDiagnostics?.first { $0.name == "local" })
+        #expect(localStage.reason == "local_docs_unavailable")
+        #expect(localStage.hint?.contains("remote-only") == true)
     }
 
     @Test("CLI outputs standardized DocumentationError mapping")
@@ -754,6 +800,50 @@ struct CLICommandTests {
         #expect(content.contains("`idocs list"))
         #expect(content.contains("`--json`"))
         #expect(content.contains("`--caller <opaque-id>`"))
+    }
+}
+
+private struct ConfigAwareSearchAdapter: DocumentationService {
+    func search(query: String, config: DocumentationConfig) async throws -> [SearchResult] {
+        try await searchDetailed(query: query, config: config).results
+    }
+
+    func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
+        #expect(config.xcodeDocumentationCachePath == "/tmp/idocs-remote-only-doc-cache")
+        return DocumentationSearchResponse(
+            results: [],
+            diagnostics: SearchDiagnostics(
+                stages: [
+                    SearchStageDiagnostic(
+                        name: "local",
+                        status: "miss",
+                        durationMs: 1.0,
+                        resultCount: 0,
+                        reason: "local_docs_unavailable",
+                        hint: "Xcode local documentation is unavailable; this run is remote-only until the local DocumentationCache is restored."
+                    ),
+                    SearchStageDiagnostic(
+                        name: "apple",
+                        status: "miss",
+                        durationMs: 1.0,
+                        resultCount: 0,
+                        reason: "remote_no_results"
+                    )
+                ]
+            )
+        )
+    }
+
+    func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {
+        throw DocumentationError.notFound(id: id)
+    }
+
+    func listTechnologies(config: DocumentationConfig) async throws -> [Technology] {
+        []
+    }
+
+    func getCoreVersion() -> String {
+        "1.0.0"
     }
 }
 

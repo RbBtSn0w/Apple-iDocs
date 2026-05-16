@@ -1,0 +1,105 @@
+name: Search Quality Race
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Sampler seed"
+        required: false
+        default: "1"
+      sample_size:
+        description: "Sample size"
+        required: false
+        default: "40"
+      package_spec:
+        description: "Comma-separated competitor npm package specs"
+        required: false
+        default: "@kimsungwhee/apple-docs-mcp@latest,apple-doc-mcp-server@latest,@nshipster/sosumi@latest"
+      mock_failure:
+        description: "Inject an iDocs failure to validate issue create/comment flow"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IDOCS_DERIVED_DATA_PATH: ${{ github.workspace }}/.deriveddata
+  IDOCS_CLI_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
+  IDOCS_XCODE_DOC_CACHE_PATH: ${{ runner.temp }}/idocs-nonexistent-doc-cache
+  SEARCH_QUALITY_OUTPUT_DIR: ${{ github.workspace }}/artifacts/search-quality-race
+
+jobs:
+  search-quality-race:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tuist
+        uses: ./.github/actions/setup-tuist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Build iDocs CLI
+        run: |
+          ./scripts/tuist-silent.sh build iDocs
+          test -x "$IDOCS_CLI_BINARY"
+
+      - name: Install competitor npm releases
+        run: |
+          mkdir -p "$SEARCH_QUALITY_OUTPUT_DIR"
+          node scripts/benchmark/install-corrival-releases.mjs \
+            --package-spec "${{ inputs.package_spec || '@kimsungwhee/apple-docs-mcp@latest,apple-doc-mcp-server@latest,@nshipster/sosumi@latest' }}" \
+            --install-dir "$RUNNER_TEMP/search-quality-corrivals" \
+            --output "$SEARCH_QUALITY_OUTPUT_DIR/corrival-versions.json"
+
+      - name: Run random search audit
+        run: |
+          MOCK_FAILURE_FLAG=""
+          if [[ "${{ inputs.mock_failure || 'false' }}" == "true" ]]; then
+            MOCK_FAILURE_FLAG="--mock-failure"
+          fi
+          node scripts/benchmark/run-random-search-audit.mjs \
+            --seed "${{ inputs.seed || '1' }}" \
+            --sample-size "${{ inputs.sample_size || '40' }}" \
+            --versions-file "$SEARCH_QUALITY_OUTPUT_DIR/corrival-versions.json" \
+            --idocs-binary "$IDOCS_CLI_BINARY" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --output-dir "$SEARCH_QUALITY_OUTPUT_DIR" \
+            $MOCK_FAILURE_FLAG
+
+      - name: Write GitHub Step Summary
+        run: |
+          node scripts/benchmark/render-search-quality-summary.mjs \
+            --input "$SEARCH_QUALITY_OUTPUT_DIR/random-search-audit.json" \
+            --output "$SEARCH_QUALITY_OUTPUT_DIR/summary.md"
+          cat "$SEARCH_QUALITY_OUTPUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload search quality artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-quality-race
+          path: |
+            ${{ env.SEARCH_QUALITY_OUTPUT_DIR }}/random-search-audit.json
+            ${{ env.SEARCH_QUALITY_OUTPUT_DIR }}/random-search-audit.md
+            ${{ env.SEARCH_QUALITY_OUTPUT_DIR }}/summary.md
+            ${{ env.SEARCH_QUALITY_OUTPUT_DIR }}/corrival-versions.json
+
+      - name: Create or update search quality issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/benchmark/create-search-quality-issue.mjs \
+            --input "$SEARCH_QUALITY_OUTPUT_DIR/random-search-audit.json"
