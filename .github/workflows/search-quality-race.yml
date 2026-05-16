@@ -33,7 +33,7 @@ concurrency:
 env:
   IDOCS_DERIVED_DATA_PATH: ${{ github.workspace }}/.deriveddata
   IDOCS_CLI_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
-  IDOCS_XCODE_DOC_CACHE_PATH: ${{ runner.temp }}/idocs-nonexistent-doc-cache
+  IDOCS_XCODE_DOC_CACHE_PATH: $RUNNER_TEMP/idocs-nonexistent-doc-cache
   SEARCH_QUALITY_OUTPUT_DIR: ${{ github.workspace }}/artifacts/search-quality-race
 
 jobs:

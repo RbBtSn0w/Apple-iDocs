@@ -29,5 +29,6 @@ test("workflow has required triggers, permissions, stages, and remote-only envir
   assert.match(workflow, /create-search-quality-issue\.mjs/);
   assert.match(workflow, /IDOCS_CLI_BINARY/);
   assert.match(workflow, /test -x "\$IDOCS_CLI_BINARY"/);
-  assert.match(workflow, /IDOCS_XCODE_DOC_CACHE_PATH/);
+  assert.match(workflow, /IDOCS_XCODE_DOC_CACHE_PATH:\s*\$RUNNER_TEMP\/idocs-nonexistent-doc-cache/);
+  assert.doesNotMatch(workflow, /env:[\s\S]*IDOCS_XCODE_DOC_CACHE_PATH:\s*\$\{\{\s*runner\./);
 });
