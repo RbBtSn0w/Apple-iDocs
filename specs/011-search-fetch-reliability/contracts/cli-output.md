@@ -20,6 +20,7 @@ Each item in `results` keeps existing fields and adds:
   "source_kind": "help",
   "fetch_supported": true,
   "fetch_support_reason": null,
+  "match_scope": "path",
   "query_attempt": "Xcode Cloud TestFlight App Store Connect"
 }
 ```
@@ -29,6 +30,7 @@ Rules:
 - `source_kind` is always present.
 - `fetch_supported` is always present.
 - `fetch_support_reason` is present when `fetch_supported` is false.
+- `match_scope` identifies whether the result matched a `module`, `symbol`, `member`, or general `path`.
 - `query_attempt` identifies which original or derived query produced the result.
 
 ## Search Diagnostics JSON
@@ -136,7 +138,7 @@ Rules:
 Search text output includes compact markers:
 
 ```text
-- Upload builds [app-store-connect] {source: sosumi, kind: help, fetch: supported}
+- Upload builds [app-store-connect] {source: sosumi, kind: help, fetch: supported, scope: path}
   - ID: /help/app-store-connect/manage-builds/upload-builds
 ```
 

@@ -140,6 +140,23 @@
 
 ---
 
+## Issue Addendum: Module Hint Short-Circuit
+
+**Input**: `issue-reports/2026-05-16-search-module-hint-short-circuit.md`
+
+**Goal**: Composite API-symbol queries must not stop at a framework/module hint when a symbol-level local path can be recovered.
+
+- [x] T033 [P] Add failing local search tests for `SwiftUI NavigationSplitView`, `NavigationSplitView`, and module-hint fallback sequencing in `Tests/iDocsTests/XcodeLocalDocsMockTests.swift`.
+- [x] T034 [P] Add failing CLI contract coverage for search result `match_scope` in `Tests/iDocsTests/CLICommandTests.swift`.
+- [x] T035 Add typed match-scope metadata through `Sources/iDocsKit/Rendering/DocCTypes.swift`, `Sources/iDocsAdapter/Models/CoreEntities.swift`, and `Sources/iDocsApp/Commands/CLIOutputModels.swift`.
+- [x] T036 Change `Sources/iDocsKit/DataSources/XcodeLocalDocs.swift` so exact module queries keep the fast path, composite queries run provider/index path search first, and module hints are returned only as fallback candidates.
+- [x] T037 Update `Sources/iDocsKit/Tools/SearchDocsTool.swift`, `Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift`, and `Sources/iDocsApp/Commands/CLIExecutor.swift` to preserve and render `match_scope`.
+- [x] T038 Update `specs/011-search-fetch-reliability/contracts/cli-output.md`, `specs/011-search-fetch-reliability/test-intent.md`, and `specs/011-search-fetch-reliability/verification.md` with the addendum evidence.
+- [x] T039 Run targeted tests for the short-circuit fix.
+- [x] T040 Run full headless test, build, and diff verification.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

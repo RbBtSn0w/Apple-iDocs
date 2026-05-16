@@ -200,6 +200,7 @@ struct CLICommandTests {
                         source: .sosumi,
                         sourceKind: "help",
                         fetchSupported: true,
+                        matchScope: "path",
                         queryAttempt: "Xcode Cloud TestFlight App Store Connect"
                     ),
                     SearchResult(
@@ -211,6 +212,7 @@ struct CLICommandTests {
                         sourceKind: "news",
                         fetchSupported: false,
                         fetchSupportReason: "unsupported_source_type",
+                        matchScope: "path",
                         queryAttempt: "Xcode Cloud TestFlight App Store Connect"
                     )
                 ]
@@ -225,6 +227,7 @@ struct CLICommandTests {
         let text = capture.stdout.joined(separator: "\n")
         #expect(text.contains("kind: help"))
         #expect(text.contains("fetch: supported"))
+        #expect(text.contains("scope: path"))
         #expect(text.contains("kind: news"))
         #expect(text.contains("fetch: unsupported"))
 
@@ -238,6 +241,7 @@ struct CLICommandTests {
         let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
         #expect(payload.results?.first?.sourceKind == "help")
         #expect(payload.results?.first?.fetchSupported == true)
+        #expect(payload.results?.first?.matchScope == "path")
         #expect(payload.results?.last?.fetchSupportReason == "unsupported_source_type")
     }
 

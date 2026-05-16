@@ -49,6 +49,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     sourceKind: $0.sourceKind.rawValue,
                     fetchSupported: $0.fetchSupported,
                     fetchSupportReason: $0.fetchSupportReason,
+                    matchScope: $0.matchScope.rawValue,
                     queryAttempt: $0.queryAttempt
                 )
             }

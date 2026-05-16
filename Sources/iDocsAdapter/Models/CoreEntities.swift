@@ -74,6 +74,7 @@ public struct SearchResult: Sendable, Equatable {
     public let sourceKind: String
     public let fetchSupported: Bool
     public let fetchSupportReason: String?
+    public let matchScope: String
     public let queryAttempt: String?
 
     public init(
@@ -85,6 +86,7 @@ public struct SearchResult: Sendable, Equatable {
         sourceKind: String = "documentation",
         fetchSupported: Bool = true,
         fetchSupportReason: String? = nil,
+        matchScope: String = "path",
         queryAttempt: String? = nil
     ) {
         self.id = id
@@ -95,6 +97,7 @@ public struct SearchResult: Sendable, Equatable {
         self.sourceKind = sourceKind
         self.fetchSupported = fetchSupported
         self.fetchSupportReason = fetchSupportReason
+        self.matchScope = matchScope
         self.queryAttempt = queryAttempt
     }
 }

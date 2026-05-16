@@ -268,6 +268,97 @@ struct ToolTests {
         #expect(output.instrumentation.stages.contains { $0.queryAttempt == derivedQuery })
     }
 
+    @Test("SearchDocsTool continues remote search after local module fallback for composite symbol query")
+    func searchToolContinuesRemoteAfterLocalModuleFallback() async throws {
+        let query = "SwiftUI NavigationSplitView"
+        let mockFS = MockFileSystem()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        mockFS.virtualFiles[cacheDirectory.path + "/"] = Data()
+        let sdkURL = cacheDirectory.appendingPathComponent("26.3")
+        let docsRoot = sdkURL.appendingPathComponent("documentation", isDirectory: true)
+        let moduleRoot = docsRoot.appendingPathComponent("SwiftUI", isDirectory: true)
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[docsRoot.path + "/"] = Data()
+        mockFS.virtualFiles[moduleRoot.path + "/"] = Data()
+
+        let appleSession = MockNetworkSession()
+        let searchURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: searchURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: searchURL)
+        )
+        let dataURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui/navigationsplitview"))
+        appleSession.setResponse(
+            for: dataURL,
+            data: MockPayloads.docCJSON(
+                title: "NavigationSplitView",
+                identifier: "doc://com.apple.documentation/documentation/swiftui/navigationsplitview",
+                abstract: "A view that presents views in two or three columns."
+            ),
+            response: MockPayloads.httpResponse(url: dataURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: MockNetworkSession()),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(output.results.first?.source == .apple)
+        #expect(output.results.first?.matchScope == .symbol)
+        #expect(output.instrumentation.stages.map(\.name).contains("local"))
+        #expect(output.instrumentation.stages.map(\.name).contains("apple"))
+    }
+
+    @Test("SearchDocsTool keeps module fallback with remote diagnostics when symbol search misses")
+    func searchToolKeepsModuleFallbackAfterRemoteMisses() async throws {
+        let query = "SwiftUI MissingSymbol"
+        let mockFS = MockFileSystem()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        mockFS.virtualFiles[cacheDirectory.path + "/"] = Data()
+        let sdkURL = cacheDirectory.appendingPathComponent("26.3")
+        let docsRoot = sdkURL.appendingPathComponent("documentation", isDirectory: true)
+        let moduleRoot = docsRoot.appendingPathComponent("SwiftUI", isDirectory: true)
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[docsRoot.path + "/"] = Data()
+        mockFS.virtualFiles[moduleRoot.path + "/"] = Data()
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.emptySosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/SwiftUI")
+        #expect(output.results.first?.matchScope == .module)
+        #expect(output.instrumentation.stages.contains { $0.name == "apple" })
+        #expect(output.instrumentation.stages.contains { $0.name == "sosumi" })
+    }
+
     @Test("SearchDocsTool prefers local results over remote")
     func searchToolPrefersLocal() async throws {
         let apiSession = MockNetworkSession(stubbedError: MockError.networkTimeout)

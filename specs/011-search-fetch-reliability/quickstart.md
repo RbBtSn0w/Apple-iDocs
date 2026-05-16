@@ -70,11 +70,28 @@ Expected:
 - Search continues to remote sources.
 - Diagnostics include a machine-readable `local_docs_unavailable` or equivalent remote-only signal.
 
+## Scenario 6: Composite Symbol Search Does Not Stop At Module Hint
+
+```sh
+idocs search "SwiftUI NavigationSplitView" --json
+idocs search "NSWindow toolbarStyle" --json
+idocs search "NavigationSplitView" --json
+idocs search "NSSplitViewController" --json
+```
+
+Expected:
+
+- Composite symbol queries do not return an unqualified module result as final evidence when a symbol/member result is recoverable.
+- Module fallback results include `match_scope: "module"` and diagnostics such as `local_module_fallback`.
+- Symbol/member results include `match_scope: "symbol"` or `match_scope: "member"`.
+- Exact module queries such as `idocs search "SwiftUI" --json` still return the module result quickly.
+
 ## Verification
 
 Run:
 
 ```sh
 tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'
+node scripts/benchmark/run-search-short-circuit-comparison.mjs --run-id run-20260516-search-short-circuit
 git diff --check
 ```
