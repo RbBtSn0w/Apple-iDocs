@@ -32,6 +32,7 @@ concurrency:
 
 env:
   IDOCS_DERIVED_DATA_PATH: ${{ github.workspace }}/.deriveddata
+  IDOCS_CLI_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
   IDOCS_XCODE_DOC_CACHE_PATH: ${{ runner.temp }}/idocs-nonexistent-doc-cache
   SEARCH_QUALITY_OUTPUT_DIR: ${{ github.workspace }}/artifacts/search-quality-race
 
@@ -52,7 +53,9 @@ jobs:
           node-version: "lts/*"
 
       - name: Build iDocs CLI
-        run: ./scripts/tuist-silent.sh build iDocs
+        run: |
+          ./scripts/tuist-silent.sh build iDocs
+          test -x "$IDOCS_CLI_BINARY"
 
       - name: Install competitor npm releases
         run: |
@@ -72,7 +75,7 @@ jobs:
             --seed "${{ inputs.seed || '1' }}" \
             --sample-size "${{ inputs.sample_size || '40' }}" \
             --versions-file "$SEARCH_QUALITY_OUTPUT_DIR/corrival-versions.json" \
-            --idocs-binary "$IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs" \
+            --idocs-binary "$IDOCS_CLI_BINARY" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --output-dir "$SEARCH_QUALITY_OUTPUT_DIR" \
             $MOCK_FAILURE_FLAG

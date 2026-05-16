@@ -130,6 +130,9 @@ export function parsePackageSpecs(input = DEFAULT_PACKAGE_SPECS.join(",")) {
     .map(item => item.trim())
     .filter(Boolean)
     .map(spec => {
+      if (isUnsupportedAliasSpec(spec)) {
+        throw new Error(`npm alias package specs are not supported: ${spec}`);
+      }
       const atIndex = spec.startsWith("@")
         ? spec.indexOf("@", 1)
         : spec.lastIndexOf("@");
@@ -142,6 +145,10 @@ export function parsePackageSpecs(input = DEFAULT_PACKAGE_SPECS.join(",")) {
         raw: spec
       };
     });
+}
+
+function isUnsupportedAliasSpec(spec) {
+  return spec.startsWith("npm:") || spec.includes("@npm:");
 }
 
 export function targetMetadataFromVersions(versions = {}, { idocsBinary = "idocs", installDir = null } = {}) {

@@ -159,13 +159,13 @@
 
 ## Verification Evidence
 
-- T036: `node --test scripts/benchmark/tests/*.test.mjs` passed 14/14 tests.
+- T036: `node --test scripts/benchmark/tests/*.test.mjs` passed 16/16 tests.
 - T037: `./scripts/tuist-silent.sh test` passed all reported suites, including `CLI Command Tests`, `XcodeLocalDocs Mock Tests`, `XcodeLocalDocs Integration Tests`, and `SearchDocsTool Integration Tests`.
 - T038: `node scripts/benchmark/run-random-search-audit.mjs --seed 1 --sample-size 6 --mock-targets scripts/benchmark/fixtures/mock-target-results.json --output-dir /tmp/idocs-search-quality-race` completed and wrote `random-search-audit.json` and `random-search-audit.md`.
 - T039: `node scripts/benchmark/create-search-quality-issue.mjs --input /tmp/idocs-search-quality-race/random-search-audit.json --dry-run --print-body` returned `{"action":"none"}`; mock-failure dry-run rendered an issue body with fingerprint, CI run URL, failing cases, diagnostics, competitor versions, artifact path, and reproduction command.
 - T040: `node --test scripts/benchmark/tests/search-quality-workflow.test.mjs` passed 1/1 tests.
 - Additional live competitor smoke: real npm install into `/tmp/idocs-corrival-probe` retained all default packages and `node scripts/benchmark/run-random-search-audit.mjs --seed 1 --sample-size 1 --versions-file /tmp/idocs-corrival-versions.json --idocs-binary /usr/bin/true --output-dir /tmp/idocs-search-quality-live-smoke` completed, exercising live MCP/CLI competitor execution paths without failing the runner for quality findings.
-- Build gate: `./scripts/tuist-silent.sh build iDocs` passed with `** BUILD SUCCEEDED **` after making `tuist-silent.sh` refresh the generated workspace before build/run.
+- Build gate: `./scripts/tuist-silent.sh build iDocs` passed with `** BUILD SUCCEEDED **`; `test -x "$IDOCS_CLI_BINARY"` verifies the workflow path resolves to the freshly built CLI. `tuist-silent.sh` refreshes the generated workspace when manifest inputs are newer, `IDOCS_TUIST_FORCE_GENERATE=1` is set, or the first xcodebuild attempt exposes a stale workspace.
 - CLI remote-only gate: `IDOCS_XCODE_DOC_CACHE_PATH=/tmp/idocs-nonexistent-doc-cache ./scripts/tuist-silent.sh run idocs search "SwiftUI NavigationSplitView" --json` exited 0, returned a symbol hit through remote fallback, and included `search_diagnostics[].reason == "local_docs_unavailable"`.
 
 ## Spec Verification Checklist

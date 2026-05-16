@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -77,6 +77,38 @@ test("runner reports infrastructure failure when requested", async () => {
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /mock infrastructure failure/i);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner classifies missing competitor binaries as infrastructure failures", async () => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "idocs-audit-missing-bin-"));
+  try {
+    const versionsFile = path.join(outputDir, "versions.json");
+    await writeFile(versionsFile, `${JSON.stringify({
+      installDir: path.join(outputDir, "missing-corrivals"),
+      packages: {
+        "@kimsungwhee/apple-docs-mcp": { resolvedVersion: "1.0.26" },
+        "apple-doc-mcp-server": { resolvedVersion: "1.9.1" },
+        "@nshipster/sosumi": { resolvedVersion: "1.0.0" }
+      }
+    })}\n`);
+
+    const result = spawnSync(process.execPath, [
+      runner,
+      "--seed", "1",
+      "--sample-size", "1",
+      "--versions-file", versionsFile,
+      "--idocs-binary", "/usr/bin/true",
+      "--output-dir", outputDir
+    ], { cwd: repoRoot, encoding: "utf8" });
+
+    assert.equal(result.status, 0, result.stderr);
+    const audit = JSON.parse(await readFile(path.join(outputDir, "random-search-audit.json"), "utf8"));
+    const missingMCP = audit.results.find(item => item.targetId === "apple-docs-mcp");
+    assert.equal(missingMCP.classification, "network_error");
+    assert.equal(missingMCP.verdict, "infra");
   } finally {
     await rm(outputDir, { recursive: true, force: true });
   }

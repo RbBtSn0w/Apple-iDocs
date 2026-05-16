@@ -10,7 +10,13 @@ const packageSpec = args.get("package-spec") ?? DEFAULT_PACKAGE_SPECS.join(",");
 const output = args.get("output") ?? "search-quality-corrival-versions.json";
 const installDir = args.get("install-dir") ?? ".tmp/search-quality-corrivals";
 
-const packages = parsePackageSpecs(packageSpec);
+let packages;
+try {
+  packages = parsePackageSpecs(packageSpec);
+} catch (error) {
+  process.stderr.write(`${error.message}\n`);
+  process.exit(2);
+}
 const metadata = {
   generatedAt: new Date().toISOString(),
   installDir,

@@ -179,13 +179,12 @@ func probeStore(url: URL, terms: [[UInt8]], config: ProbeConfig) -> StoreProbe {
 
 func findOccurrences(of needle: [UInt8], in data: Data) -> [Int] {
     guard !needle.isEmpty, data.count >= needle.count else { return [] }
-    let bytes = [UInt8](data)
     let loweredNeedle = needle.map(asciiLowercase)
     var offsets: [Int] = []
     var index = 0
-    while index <= bytes.count - loweredNeedle.count {
+    while index <= data.count - loweredNeedle.count {
         var matched = true
-        for j in 0..<loweredNeedle.count where asciiLowercase(bytes[index + j]) != loweredNeedle[j] {
+        for j in 0..<loweredNeedle.count where asciiLowercase(data[index + j]) != loweredNeedle[j] {
             matched = false
             break
         }
@@ -200,13 +199,14 @@ func findOccurrences(of needle: [UInt8], in data: Data) -> [Int] {
 }
 
 func sanitizedSnippet(data: Data, center: Int, radius: Int) -> String {
-    let bytes = [UInt8](data)
     let start = max(0, center - radius)
-    let end = min(bytes.count, center + radius)
+    let end = min(data.count, center + radius)
+    guard start < end else { return "" }
     var scalarBytes: [UInt8] = []
     scalarBytes.reserveCapacity(end - start)
 
-    for byte in bytes[start..<end] {
+    for index in start..<end {
+        let byte = data[index]
         switch byte {
         case 32...126:
             scalarBytes.append(byte)

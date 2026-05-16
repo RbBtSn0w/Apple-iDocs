@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -170,6 +171,9 @@ async function readVersionMetadata(file) {
 }
 
 async function runCompetitor(target, testCase) {
+  const missingBinary = missingCompetitorBinary(target);
+  if (missingBinary) return missingBinary;
+
   if (target.id === "sosumi") {
     return runSosumi(target, testCase);
   }
@@ -182,13 +186,23 @@ async function runCompetitor(target, testCase) {
   return { error: `unsupported competitor target ${target.id}`, unsupported: true };
 }
 
+function missingCompetitorBinary(target) {
+  if (typeof target.binaryPath !== "string" || !target.binaryPath.includes("/")) {
+    return null;
+  }
+  if (existsSync(target.binaryPath)) {
+    return null;
+  }
+  return { error: `competitor binary not found: ${target.binaryPath}`, networkError: true };
+}
+
 function runSosumi(target, testCase) {
   const result = spawnSync(target.binaryPath, ["search", testCase.query, "--json"], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 120_000
   });
-  if (result.error) return { error: result.error.message, unsupported: true };
+  if (result.error) return { error: result.error.message, networkError: true };
   if (result.status !== 0) return { error: result.stderr || result.stdout, unsupported: true };
   try {
     const payload = JSON.parse(result.stdout);
@@ -268,6 +282,9 @@ async function callMCPTool(command, toolName, toolArguments, beforeCalls = []) {
   }, 120_000);
 
   function send(method, params) {
+    if (spawnError) {
+      return Promise.resolve({ error: { message: spawnError.message } });
+    }
     const id = nextId;
     nextId += 1;
     const promise = new Promise(resolve => {
@@ -281,8 +298,19 @@ async function callMCPTool(command, toolName, toolArguments, beforeCalls = []) {
         clearTimeout(requestTimeout);
         resolve(message);
       });
+      try {
+        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`, error => {
+          if (!error) return;
+          pending.delete(id);
+          clearTimeout(requestTimeout);
+          resolve({ error: { message: error.message } });
+        });
+      } catch (error) {
+        pending.delete(id);
+        clearTimeout(requestTimeout);
+        resolve({ error: { message: error.message } });
+      }
     });
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
     return promise;
   }
 
@@ -291,12 +319,15 @@ async function callMCPTool(command, toolName, toolArguments, beforeCalls = []) {
   }
 
   try {
-    if (spawnError) return { error: spawnError.message, unsupported: true, stderr, stdout };
-    await send("initialize", {
+    if (spawnError) return { error: spawnError.message, networkError: true, stderr, stdout };
+    const initializeMessage = await send("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: { name: "idocs-search-quality-race", version: "0.0.0" }
     });
+    if (initializeMessage.error) {
+      return { error: JSON.stringify(initializeMessage.error), networkError: true, stderr, stdout };
+    }
     notify("notifications/initialized", {});
     for (const call of beforeCalls) {
       const message = await send("tools/call", { name: call.name, arguments: call.arguments });
@@ -308,7 +339,7 @@ async function callMCPTool(command, toolName, toolArguments, beforeCalls = []) {
     if (message.error) return { error: JSON.stringify(message.error), unsupported: true, stderr, stdout };
     return message.result ?? { stdout };
   } catch (error) {
-    return { error: error.message, unsupported: true, stderr, stdout };
+    return { error: error.message, networkError: true, stderr, stdout };
   } finally {
     clearTimeout(timeout);
     if (settled) {

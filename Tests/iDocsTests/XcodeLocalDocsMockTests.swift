@@ -253,6 +253,31 @@ struct XcodeLocalDocsMockTests {
         #expect(results.isEmpty)
     }
 
+    @Test("PascalCase symbol queries do not use module index fallback")
+    func testPascalCaseSymbolQuerySkipsModuleIndexFallback() async throws {
+        let mockFS = MockFileSystem()
+        let mockSearch = MockSearchProvider()
+        let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+
+        mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
+        let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
+        let storeURL = sdkURL
+            .appendingPathComponent("DeveloperDocumentation.index")
+            .appendingPathComponent("NSFileProtectionCompleteUntilFirstUserAuthentication")
+            .appendingPathComponent("index.spotlightV3")
+            .appendingPathComponent("store.db")
+
+        mockFS.virtualFiles[sdkURL.path + "/"] = Data()
+        mockFS.virtualFiles[sdkURL.appendingPathComponent("DeveloperDocumentation.index").path + "/"] = Data()
+        mockFS.virtualFiles[storeURL.path] = Data([0x00]) + Data("URLSession".utf8) + Data([0x00])
+
+        let results = try await docs.search(query: "URLSession")
+
+        #expect(results.isEmpty)
+        #expect(mockSearch.searchCallCount == 1)
+    }
+
     @Test("Opaque long miss queries skip provider fallback")
     func testOpaqueLongMissQuerySkipsProviderFallback() async throws {
         let mockFS = MockFileSystem()

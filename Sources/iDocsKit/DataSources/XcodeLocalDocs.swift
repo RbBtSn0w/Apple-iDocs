@@ -3,6 +3,31 @@ import Logging
 
 public struct XcodeLocalDocs {
     private let logger = Logger(label: "com.snow.idocs-xcode-docs")
+    private static let knownModuleNames: Set<String> = [
+        "accelerate",
+        "appkit",
+        "arkit",
+        "avfoundation",
+        "cloudkit",
+        "combine",
+        "coredata",
+        "coregraphics",
+        "corelocation",
+        "foundation",
+        "gamekit",
+        "healthkit",
+        "mapkit",
+        "metal",
+        "realitykit",
+        "scenekit",
+        "spritekit",
+        "swift",
+        "swiftdata",
+        "swiftui",
+        "uikit",
+        "vision",
+        "widgetkit"
+    ]
     private let fileManager: any FileSystem
     private let searchProvider: any SearchProvider
     
@@ -332,12 +357,10 @@ public struct XcodeLocalDocs {
 
     private func isLikelySymbolName(_ query: String) -> Bool {
         guard !query.contains(where: \.isWhitespace) else { return false }
-        let lower = query.lowercased()
-        let symbolSuffixes = [
-            "view", "controller", "style", "modifier", "reader", "column",
-            "width", "height", "scene", "button", "field", "stack"
-        ]
-        return symbolSuffixes.contains { lower.hasSuffix($0) }
+        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
+        guard let first = query.first, first.isUppercase else { return false }
+        guard !Self.knownModuleNames.contains(query.lowercased()) else { return false }
+        return true
     }
 
     private func shouldShortCircuitOpaqueMissQuery(_ query: String) -> Bool {
@@ -353,7 +376,7 @@ public struct XcodeLocalDocs {
         for token in tokens {
             guard token.count >= 3 else { continue }
             guard let first = token.first, first.isUppercase else { continue }
-            if isLikelyModuleQuery(token) {
+            if isLikelyModuleQuery(token), !isLikelySymbolName(token) {
                 return token
             }
         }

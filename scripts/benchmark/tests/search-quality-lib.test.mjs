@@ -5,6 +5,7 @@ import {
   classifyProductResult,
   computeFailureFingerprint,
   createSeededSampler,
+  parsePackageSpecs,
   redactRawEvidence,
   redactSensitiveValues,
   summarizeProducts
@@ -123,4 +124,11 @@ test("redaction removes token-like environment values", () => {
   const raw = redactRawEvidence({ stderr: "GH_TOKEN=github_pat_secret", nested: ["npm_secret"] });
   assert.equal(JSON.stringify(raw).includes("github_pat_secret"), false);
   assert.equal(JSON.stringify(raw).includes("npm_secret"), false);
+});
+
+test("package spec parser rejects unsupported npm alias specs", () => {
+  assert.throws(
+    () => parsePackageSpecs("apple-doc-mcp-server@npm:apple-doc-mcp-server@1.9.1"),
+    /npm alias package specs are not supported/
+  );
 });

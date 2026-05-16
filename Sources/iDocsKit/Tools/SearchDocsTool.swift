@@ -258,7 +258,6 @@ public struct SearchDocsTool {
                     )
                 }
 
-                await memoryCache.set(query, value: fallbackMapped)
                 return buildOutput(
                     results: fallbackMapped,
                     stages: stages,
@@ -274,7 +273,6 @@ public struct SearchDocsTool {
                 )
             }
 
-            await memoryCache.set(query, value: mapped)
             return buildOutput(results: mapped, stages: stages, totalStart: totalStart)
         } catch {
             stages.append(
@@ -310,7 +308,6 @@ public struct SearchDocsTool {
         return results.allSatisfy { result in
             result.source == .local
                 && result.matchScope == .module
-                && result.abstract?.contains("Only a module-level local result was found") == true
         }
     }
 

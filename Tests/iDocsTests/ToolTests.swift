@@ -359,6 +359,41 @@ struct ToolTests {
         #expect(output.instrumentation.stages.contains { $0.name == "sosumi" })
     }
 
+    @Test("SearchDocsTool does not cache empty remote misses")
+    func searchToolDoesNotCacheEmptyRemoteMisses() async throws {
+        let query = "DefinitelyMissingSearchQualitySymbol"
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.emptySosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let first = try await tool.runDetailed(query: query)
+        let second = try await tool.runDetailed(query: query)
+
+        #expect(first.results.isEmpty)
+        #expect(second.results.isEmpty)
+        #expect(appleSession.requestCount == 2)
+        #expect(sosumiSession.requestCount == 2)
+    }
+
     @Test("SearchDocsTool prefers local results over remote")
     func searchToolPrefersLocal() async throws {
         let apiSession = MockNetworkSession(stubbedError: MockError.networkTimeout)
