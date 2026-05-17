@@ -10,7 +10,7 @@ CHECKSUM_ASSET_NAME="idocs-darwin-arm64.sha256"
 VERSION="${1:-$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).version" "$PACKAGE_DIR/package.json")}"
 DEFAULT_RELEASE_BASE_URL='https://github.com/RbBtSn0w/Apple-iDocs/releases/download/v{version}'
 RELEASE_BASE_URL="${IDOCS_HOMEBREW_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
-RELEASE_BASE_URL="$(printf '%s\n' "$RELEASE_BASE_URL" | awk -v version="$VERSION" '{ gsub(/\{version\}/, version); print }')"
+RELEASE_BASE_URL="${RELEASE_BASE_URL//\{version\}/$VERSION}"
 ASSET_URL="$RELEASE_BASE_URL/$ASSET_NAME"
 CHECKSUM_URL="$RELEASE_BASE_URL/$CHECKSUM_ASSET_NAME"
 TMP_DIRS=()
@@ -48,7 +48,7 @@ read_checksum() {
   else
     if [[ -z "$checksum_file" ]]; then
       checksum_file="$(new_tmp_dir)/$CHECKSUM_ASSET_NAME"
-      curl -fsSL "$CHECKSUM_URL" -o "$checksum_file"
+      curl -fsSL --retry 3 --retry-connrefused "$CHECKSUM_URL" -o "$checksum_file"
     fi
 
     if [[ ! -f "$checksum_file" ]]; then
@@ -82,6 +82,7 @@ prepare_tap_checkout() {
   tap_dir="$(new_tmp_dir)/homebrew-tap"
   git clone \
     --branch "$TAP_BRANCH" \
+    --depth 1 \
     "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPOSITORY}.git" \
     "$tap_dir"
   printf '%s\n' "$tap_dir"
