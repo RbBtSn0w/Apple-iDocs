@@ -181,8 +181,12 @@ public actor AppleJSONAPI {
 
     private func searchTechnologyGraph(query: String) async throws -> [SearchResult] {
         let intent = SearchQueryIntent(query)
-        let candidateTechnologies = try await fetchTechnologies()
-            .filter { intent.matches(technology: $0) }
+        let technologies = try await fetchTechnologies()
+        var matchedTechnologies = technologies.filter { intent.matches(technology: $0) }
+        if matchedTechnologies.isEmpty && !intent.requiredSymbols.isEmpty {
+            matchedTechnologies = technologies
+        }
+        let candidateTechnologies = matchedTechnologies
             .compactMap { technologyRootPath(for: $0) }
 
         guard !candidateTechnologies.isEmpty else {
@@ -223,7 +227,7 @@ public actor AppleJSONAPI {
             throw firstFailure
         }
 
-        return SearchResultRanker(query: query).rankedRemoteResults(results)
+        return SearchResultRanker(intent: intent).rankedRemoteResults(results)
     }
 
     private func searchTechnologyReferences(rootPath: String, intent: SearchQueryIntent) async throws -> [SearchResult] {
@@ -269,7 +273,7 @@ public actor AppleJSONAPI {
             )
         }
 
-        return SearchResultRanker(query: intent.rawQuery)
+        return SearchResultRanker(intent: intent)
             .rankedRemoteResults(matches)
             .prefix(50)
             .map { $0 }

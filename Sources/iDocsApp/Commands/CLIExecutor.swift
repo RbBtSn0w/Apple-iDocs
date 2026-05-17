@@ -373,6 +373,7 @@ public enum CLIExecutor {
             id: result.canonicalPath,
             category: nil,
             source: result.evidence?.source,
+            sourceFamily: intent.sourceFamily,
             durationMs: durationMs,
             resultCount: result.canonicalPath == nil ? 0 : 1,
             selectedPaths: result.canonicalPath.map { [$0] } ?? [],
@@ -409,6 +410,7 @@ public enum CLIExecutor {
                     stage: $0.stage,
                     status: $0.status,
                     reason: $0.reason,
+                    hint: $0.hint,
                     pathAttempt: $0.pathAttempt,
                     queryAttempt: $0.queryAttempt
                 )
@@ -418,12 +420,18 @@ public enum CLIExecutor {
     }
 
     private static func unresolvedResolveResult(for error: Error) -> ResolveResult {
+        let stage: String
         let reason: String
+        let hint: String?
         if let documentationError = error as? DocumentationError,
-           case .invalidResolveIntent = documentationError {
+           case .invalidResolveIntent(let message) = documentationError {
+            stage = "validation"
             reason = "invalid_intent"
+            hint = message
         } else {
+            stage = "resolve"
             reason = "resolve_failed"
+            hint = nil
         }
 
         return ResolveResult(
@@ -434,9 +442,10 @@ public enum CLIExecutor {
             candidates: [],
             resolveDiagnostics: [
                 ResolveDiagnostic(
-                    stage: "resolve",
+                    stage: stage,
                     status: "error",
-                    reason: reason
+                    reason: reason,
+                    hint: hint
                 )
             ],
             fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics ?? []

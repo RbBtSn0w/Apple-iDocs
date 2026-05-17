@@ -84,6 +84,7 @@ export function isP0IssueEligible(result = {}) {
 
 export function classifyProductResult(testCase, rawResult = {}) {
   const normalized = normalizeRawResult(rawResult);
+  const capability = caseCapability(testCase);
 
   if (normalized.networkError) {
     return buildClassification("network_error", "infra", normalized);
@@ -101,6 +102,20 @@ export function classifyProductResult(testCase, rawResult = {}) {
   const canonicalPaths = (testCase.canonicalPaths ?? []).map(normalizeComparablePath);
   const actualPath = normalizeComparablePath(normalized.path ?? "");
   const expectedFramework = String(testCase.framework ?? "").toLowerCase();
+  const missingRequiredTerms = missingRequiredEvidenceTerms(testCase, normalized);
+
+  if (capability === "resolve" && normalized.resolveContract) {
+    if (normalized.verifiedByFetch !== true) {
+      return buildClassification("unverified_resolve", "fail", normalized);
+    }
+    if (!isAcceptableResolveConfidence(normalized.confidence)) {
+      return buildClassification("low_confidence_resolve", "fail", normalized);
+    }
+  }
+
+  if ((capability === "fetch" || (capability === "resolve" && normalized.resolveContract)) && missingRequiredTerms.length > 0) {
+    return buildClassification("missing_required_terms", "fail", normalized);
+  }
 
   if (canonicalPaths.length > 0 && canonicalPaths.includes(actualPath)) {
     return buildClassification("symbol_hit", "pass", normalized);
@@ -451,11 +466,25 @@ function normalizeRawResult(rawResult) {
   return {
     path,
     text,
+    confidence: result.confidence ?? first.confidence ?? null,
+    verifiedByFetch: result.verifiedByFetch ?? first.verifiedByFetch ?? null,
+    resolveContract: result.resolveContract === true || first.resolveContract === true,
     error: result.error ?? first.error ?? null,
     networkError: result.networkError === true || /ECONN|timeout|network/i.test(String(result.error ?? "")),
     unsupported: result.unsupported === true || /unsupported/i.test(String(result.error ?? "")),
     empty: result.empty === true || (results != null && results.length === 0) || (!path && !text && !result.error)
   };
+}
+
+function missingRequiredEvidenceTerms(testCase, normalized) {
+  const requiredTerms = testCase.requiredTerms ?? [];
+  if (requiredTerms.length === 0) return [];
+  const evidenceText = String(normalized.text ?? "").toLowerCase();
+  return requiredTerms.filter(term => !evidenceText.includes(String(term).toLowerCase()));
+}
+
+function isAcceptableResolveConfidence(confidence) {
+  return confidence === "high" || confidence === "medium";
 }
 
 function isModuleOnlyPath(path, expectedFramework) {

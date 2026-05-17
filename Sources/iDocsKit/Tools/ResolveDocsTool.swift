@@ -136,6 +136,7 @@ public struct ResolveDocsDiagnostic: Sendable, Codable, Equatable {
     public let stage: String
     public let status: String
     public let reason: String?
+    public let hint: String?
     public let pathAttempt: String?
     public let queryAttempt: String?
 
@@ -143,12 +144,14 @@ public struct ResolveDocsDiagnostic: Sendable, Codable, Equatable {
         stage: String,
         status: String,
         reason: String? = nil,
+        hint: String? = nil,
         pathAttempt: String? = nil,
         queryAttempt: String? = nil
     ) {
         self.stage = stage
         self.status = status
         self.reason = reason
+        self.hint = hint
         self.pathAttempt = pathAttempt
         self.queryAttempt = queryAttempt
     }
@@ -216,6 +219,30 @@ public struct ResolveDocsTool {
             do {
                 let output = try await fetch(path)
                 let evidence = evidenceFromFetch(output, path: path, sourceFamily: intent.sourceFamily)
+                let allFetchDiagnostics = fetchDiagnostics + output.sourceAttempts
+                guard memberKindMatches(evidence: evidence, path: path, intent: intent) else {
+                    fetchDiagnostics = allFetchDiagnostics
+                    candidates.append(
+                        ResolveDocsCandidate(
+                            path: path,
+                            title: evidence.title,
+                            source: .direct,
+                            matchQuality: .mismatch,
+                            verifiedByFetch: true,
+                            confidence: .low
+                        )
+                    )
+                    resolveDiagnostics.append(
+                        ResolveDocsDiagnostic(
+                            stage: "direct_path",
+                            status: "miss",
+                            reason: "member_kind_mismatch",
+                            hint: "Fetched evidence did not match the requested member kind.",
+                            pathAttempt: path
+                        )
+                    )
+                    continue
+                }
                 let candidate = ResolveDocsCandidate(
                     path: path,
                     title: evidence.title,
@@ -240,7 +267,7 @@ public struct ResolveDocsTool {
                     evidence: evidence,
                     candidates: candidates,
                     resolveDiagnostics: resolveDiagnostics,
-                    fetchDiagnostics: output.sourceAttempts
+                    fetchDiagnostics: allFetchDiagnostics
                 )
             } catch {
                 let attempts = fetchAttempts(from: error)
@@ -287,6 +314,7 @@ public struct ResolveDocsTool {
                 do {
                     let output = try await fetch(result.path)
                     let evidence = evidenceFromFetch(output, path: result.path, sourceFamily: intent.sourceFamily)
+                    let allFetchDiagnostics = fetchDiagnostics + output.sourceAttempts
                     let confidence: ResolveDocsConfidence = quality == .exact ? .medium : .low
                     candidates.append(
                         ResolveDocsCandidate(
@@ -298,7 +326,8 @@ public struct ResolveDocsTool {
                             confidence: confidence
                         )
                     )
-                    if intent.member != nil && quality != .exact {
+                    if requiresExactFallback(for: intent) && quality != .exact {
+                        fetchDiagnostics = allFetchDiagnostics
                         continue
                     }
                     return ResolveDocsResult(
@@ -308,7 +337,7 @@ public struct ResolveDocsTool {
                         evidence: evidence,
                         candidates: candidates,
                         resolveDiagnostics: resolveDiagnostics,
-                        fetchDiagnostics: output.sourceAttempts
+                        fetchDiagnostics: allFetchDiagnostics
                     )
                 } catch {
                     let attempts = fetchAttempts(from: error)
@@ -417,6 +446,28 @@ public struct ResolveDocsTool {
         }
 
         return .exact
+    }
+
+    private func requiresExactFallback(for intent: ResolveDocsIntent) -> Bool {
+        intent.symbol != nil || intent.member != nil
+    }
+
+    private func memberKindMatches(evidence: ResolveDocsEvidence, path: String, intent: ResolveDocsIntent) -> Bool {
+        guard let memberKind = intent.memberKind?.lowercased(),
+              intent.member != nil else {
+            return true
+        }
+
+        let combined = "\(path) \(evidence.title)".lowercased()
+        let looksCallable = combined.contains("(")
+        switch memberKind {
+        case "method", "function", "initializer":
+            return looksCallable
+        case "property", "variable":
+            return !looksCallable
+        default:
+            return true
+        }
     }
 
     private func evidenceFromFetch(

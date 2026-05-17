@@ -110,6 +110,35 @@ test("classification treats Apple Swift slug variants as canonical path hits", (
   assert.equal(result.verdict, "pass");
 });
 
+test("resolve classification requires fetch-backed confidence evidence", () => {
+  const result = classifyProductResult(pool[0], {
+    path: "/documentation/swiftui/navigationsplitview",
+    text: "NavigationSplitView",
+    confidence: "low",
+    verifiedByFetch: false,
+    resolveContract: true
+  });
+
+  assert.equal(result.classification, "unverified_resolve");
+  assert.equal(result.verdict, "fail");
+});
+
+test("fetch classification validates body evidence terms", () => {
+  const result = classifyProductResult({
+    capability: "fetch",
+    framework: "SwiftUI",
+    expectedOutcome: "canonical_doc",
+    canonicalPaths: ["/documentation/swiftui/navigationsplitview"],
+    requiredTerms: ["NavigationSplitView"]
+  }, {
+    path: "/documentation/swiftui/navigationsplitview",
+    text: "List"
+  });
+
+  assert.equal(result.classification, "missing_required_terms");
+  assert.equal(result.verdict, "fail");
+});
+
 test("issue fingerprint is stable regardless of failing case order", () => {
   const failures = [
     { caseId: "b", expectedOutcome: "canonical_doc", classification: "module_only" },

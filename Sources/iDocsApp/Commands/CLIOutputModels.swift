@@ -206,6 +206,7 @@ public struct CLIResolveDiagnosticPayload: Codable, Sendable, Equatable {
     public let stage: String
     public let status: String
     public let reason: String?
+    public let hint: String?
     public let pathAttempt: String?
     public let queryAttempt: String?
 
@@ -213,6 +214,7 @@ public struct CLIResolveDiagnosticPayload: Codable, Sendable, Equatable {
         case stage
         case status
         case reason
+        case hint
         case pathAttempt = "path_attempt"
         case queryAttempt = "query_attempt"
     }
@@ -221,12 +223,14 @@ public struct CLIResolveDiagnosticPayload: Codable, Sendable, Equatable {
         stage: String,
         status: String,
         reason: String? = nil,
+        hint: String? = nil,
         pathAttempt: String? = nil,
         queryAttempt: String? = nil
     ) {
         self.stage = stage
         self.status = status
         self.reason = reason
+        self.hint = hint
         self.pathAttempt = pathAttempt
         self.queryAttempt = queryAttempt
     }
@@ -239,6 +243,7 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
     public let id: String?
     public let category: String?
     public let source: String?
+    public let sourceFamily: String?
     public let durationMs: Double
     public let resultCount: Int
     public let selectedPaths: [String]
@@ -263,6 +268,7 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         case id
         case category
         case source
+        case sourceFamily = "source_family"
         case durationMs = "duration_ms"
         case resultCount = "result_count"
         case selectedPaths = "selected_paths"
@@ -288,6 +294,7 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         id: String?,
         category: String?,
         source: String?,
+        sourceFamily: String? = nil,
         durationMs: Double,
         resultCount: Int,
         selectedPaths: [String],
@@ -311,6 +318,7 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         self.id = id
         self.category = category
         self.source = source
+        self.sourceFamily = sourceFamily
         self.durationMs = durationMs
         self.resultCount = resultCount
         self.selectedPaths = selectedPaths

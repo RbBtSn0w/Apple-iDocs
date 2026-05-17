@@ -119,6 +119,48 @@ struct ToolTests {
         #expect(results.first?.source == .apple)
     }
 
+    @Test("AppleJSONAPI searches technology graph for exact symbol without framework")
+    func appleSearchesTechnologyGraphForBareExactSymbol() async throws {
+        let session = MockNetworkSession()
+        let query = "NavigationSplitView"
+        let searchURL = try #require(URLHelpers.searchURL(query: query))
+        session.setResponse(
+            for: searchURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: searchURL)
+        )
+
+        if let technologiesURL = URLHelpers.technologiesURL() {
+            session.setResponse(
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
+            )
+        }
+
+        let moduleURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui"))
+        session.setResponse(
+            for: moduleURL,
+            data: MockPayloads.technologyGraphJSON(
+                references: [
+                    (
+                        title: "NavigationSplitView",
+                        path: "/documentation/swiftui/navigationsplitview",
+                        abstract: "A view that presents columns.",
+                        role: "symbol"
+                    )
+                ]
+            ),
+            response: MockPayloads.httpResponse(url: moduleURL)
+        )
+
+        let api = AppleJSONAPI(session: session)
+        let results = try await api.search(query: query)
+
+        #expect(results.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(results.first?.title == "NavigationSplitView")
+    }
+
     @Test("AppleJSONAPI preserves technology graph transport failures")
     func appleTechnologyGraphPreservesTransportFailures() async throws {
         let session = MockNetworkSession()
@@ -192,6 +234,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: sosumi,
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 

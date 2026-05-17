@@ -303,6 +303,10 @@ struct SearchResultRanker: Sendable {
         self.intent = SearchQueryIntent(query)
     }
 
+    init(intent: SearchQueryIntent) {
+        self.intent = intent
+    }
+
     func rankedRemoteResults(_ results: [SearchResult]) -> [SearchResult] {
         results
             .filter(intent.acceptsRemoteResult)

@@ -177,6 +177,9 @@ function runIDocs(testCase, idocsBinary, capability) {
           payload.evidence?.summary,
           payload.confidence
         ].filter(Boolean).join(" "),
+        confidence: payload.confidence ?? null,
+        verifiedByFetch: payload.verified_by_fetch === true,
+        resolveContract: true,
         diagnostics: {
           resolve: payload.resolve_diagnostics,
           fetch: payload.fetch_diagnostics
@@ -185,7 +188,7 @@ function runIDocs(testCase, idocsBinary, capability) {
     }
     if (capability === "fetch") {
       return {
-        path: testCase.fetchPath ?? testCase.canonicalPaths?.[0] ?? payload.id ?? null,
+        path: payload.id ?? null,
         text: payload.body ?? "",
         diagnostics: payload.fetch_diagnostics
       };

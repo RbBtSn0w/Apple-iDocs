@@ -257,6 +257,7 @@ struct CLICommandTests {
         let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
         #expect(payload.command == "resolve")
         #expect(payload.caller == "skill.swiftui-engineering")
+        #expect(payload.sourceFamily == "documentation")
         #expect(payload.canonicalPath == "/documentation/swiftui/navigationsplitview")
         #expect(payload.confidence == "high")
         #expect(payload.verifiedByFetch == true)
@@ -296,10 +297,13 @@ struct CLICommandTests {
         let data = try #require(capture.stdout.first?.data(using: .utf8))
         let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
         #expect(payload.command == "resolve")
+        #expect(payload.sourceFamily == "documentation")
         #expect(payload.confidence == "unresolved")
         #expect(payload.verifiedByFetch == false)
         #expect(payload.results == nil)
+        #expect(payload.resolveDiagnostics?.first?.stage == "validation")
         #expect(payload.resolveDiagnostics?.first?.reason == "invalid_intent")
+        #expect(payload.resolveDiagnostics?.first?.hint == "member requires type")
     }
 
     @Test("CLI search JSON and text expose source kind and fetch support")

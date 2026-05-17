@@ -317,6 +317,7 @@ public struct ResolveDiagnostic: Sendable, Codable, Equatable {
     public let stage: String
     public let status: String
     public let reason: String?
+    public let hint: String?
     public let pathAttempt: String?
     public let queryAttempt: String?
 
@@ -324,6 +325,7 @@ public struct ResolveDiagnostic: Sendable, Codable, Equatable {
         case stage
         case status
         case reason
+        case hint
         case pathAttempt = "path_attempt"
         case queryAttempt = "query_attempt"
     }
@@ -332,12 +334,14 @@ public struct ResolveDiagnostic: Sendable, Codable, Equatable {
         stage: String,
         status: String,
         reason: String? = nil,
+        hint: String? = nil,
         pathAttempt: String? = nil,
         queryAttempt: String? = nil
     ) {
         self.stage = stage
         self.status = status
         self.reason = reason
+        self.hint = hint
         self.pathAttempt = pathAttempt
         self.queryAttempt = queryAttempt
     }

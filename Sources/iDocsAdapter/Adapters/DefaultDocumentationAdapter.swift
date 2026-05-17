@@ -20,6 +20,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     ) throws {
         self.adapterVersion = adapterVersion
         self.logger = logger
+        let defaultAppleAPI = AppleJSONAPI()
+        let defaultSosumiAPI = SosumiAPI()
         self.searchPerformer = configuredSearchPerformer ?? { query, config in
             if let searchPerformer {
                 return try await searchPerformer(query)
@@ -28,8 +30,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 URL(fileURLWithPath: $0, isDirectory: true)
             }
             return try await SearchDocsTool(
-                api: AppleJSONAPI(),
-                sosumiAPI: SosumiAPI(),
+                api: defaultAppleAPI,
+                sosumiAPI: defaultSosumiAPI,
                 xcodeDocs: XcodeLocalDocs(
                     fileManager: FileManager.default,
                     searchProvider: SpotlightSearchProvider(),
@@ -52,14 +54,14 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 enableFileLocking: config.enableFileLocking
             )
             let fetchTool = FetchDocTool(
-                api: AppleJSONAPI(),
-                sosumiAPI: SosumiAPI(),
+                api: defaultAppleAPI,
+                sosumiAPI: defaultSosumiAPI,
                 xcodeDocs: xcodeDocs,
                 diskCache: diskCache
             )
             let searchTool = SearchDocsTool(
-                api: AppleJSONAPI(),
-                sosumiAPI: SosumiAPI(),
+                api: defaultAppleAPI,
+                sosumiAPI: defaultSosumiAPI,
                 xcodeDocs: xcodeDocs
             )
             return try await ResolveDocsTool(
@@ -374,6 +376,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     stage: $0.stage,
                     status: $0.status,
                     reason: $0.reason,
+                    hint: $0.hint,
                     pathAttempt: $0.pathAttempt,
                     queryAttempt: $0.queryAttempt
                 )
