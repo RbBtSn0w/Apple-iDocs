@@ -1,8 +1,8 @@
 # Feature Specification: Agent Resolve Documentation Entry
 
-**Feature Branch**: `013-agent-resolve-entry`  
-**Created**: Saturday, May 16, 2026  
-**Status**: Verified  
+**Feature Branch**: `013-agent-resolve-entry`
+**Created**: Saturday, May 16, 2026
+**Status**: Verified
 **Input**: User description: "Make iDocs an AI-agent-facing Apple documentation evidence entry by adding a structured resolve capability, keeping fetch as the evidence surface, demoting search to exploration, and reframing the Search Quality Race as a layered evidence quality audit."
 
 ## User Scenarios & Testing *(mandatory)*

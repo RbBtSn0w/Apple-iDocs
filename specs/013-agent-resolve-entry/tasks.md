@@ -200,10 +200,10 @@
 
 ## Planning Coverage Review
 
-**Requirements extracted**: 30 functional requirements, 10 success criteria, 13 acceptance scenarios, 10 edge cases.  
-**Fully covered**: 53/53 planning requirements.  
-**Partially covered**: 0.  
-**Gaps identified**: 0.  
+**Requirements extracted**: 30 functional requirements, 10 success criteria, 13 acceptance scenarios, 10 edge cases.
+**Fully covered**: 53/53 planning requirements.
+**Partially covered**: 0.
+**Gaps identified**: 0.
 **TDD readiness**: READY, with explicit test-first tasks for Swift resolver behavior, adapter contracts, CLI payloads, and Node audit layering.
 
 | Requirement Area | Coverage Tasks | Status |

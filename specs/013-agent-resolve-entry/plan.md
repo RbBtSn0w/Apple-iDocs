@@ -1,6 +1,6 @@
 # Implementation Plan: Agent Resolve Documentation Entry
 
-**Branch**: `013-agent-resolve-entry` | **Date**: Saturday, May 16, 2026 | **Spec**: [spec.md](./spec.md)  
+**Branch**: `013-agent-resolve-entry` | **Date**: Saturday, May 16, 2026 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `specs/013-agent-resolve-entry/spec.md`
 
 ## Summary
@@ -9,14 +9,14 @@ Add `idocs resolve` as the P0 structured Apple documentation evidence entry for 
 
 ## Technical Context
 
-**Language/Version**: Swift 6.0 project settings plus Node.js ES modules for benchmark scripts  
-**Primary Dependencies**: Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner  
-**Storage**: Existing disk cache for fetch; benchmark fixture JSON under `specs/008-mcp-service-benchmark/fixtures/`; no new persistent service storage  
-**Testing**: `./scripts/tuist-silent.sh test`; `node --test scripts/benchmark/tests/*.test.mjs`; CLI smoke through `./scripts/tuist-silent.sh run idocs resolve ... --json`  
-**Target Platform**: macOS CLI and macOS CI runner  
-**Project Type**: Swift CLI with adapter/library targets and repository-local benchmark automation  
-**Performance Goals**: Structured direct path resolution should avoid unnecessary search when a valid canonical path is fetch verified; fallback search is only used for recovery/ambiguity and remains bounded by existing search behavior  
-**Constraints**: CLI-first product runtime; no MCP main path; fetch verification required for high confidence; `search`, `fetch`, and `list` output compatibility preserved; benchmark MCP assets remain isolated; no network-only tests in the default suite  
+**Language/Version**: Swift 6.0 project settings plus Node.js ES modules for benchmark scripts
+**Primary Dependencies**: Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner
+**Storage**: Existing disk cache for fetch; benchmark fixture JSON under `specs/008-mcp-service-benchmark/fixtures/`; no new persistent service storage
+**Testing**: `./scripts/tuist-silent.sh test`; `node --test scripts/benchmark/tests/*.test.mjs`; CLI smoke through `./scripts/tuist-silent.sh run idocs resolve ... --json`
+**Target Platform**: macOS CLI and macOS CI runner
+**Project Type**: Swift CLI with adapter/library targets and repository-local benchmark automation
+**Performance Goals**: Structured direct path resolution should avoid unnecessary search when a valid canonical path is fetch verified; fallback search is only used for recovery/ambiguity and remains bounded by existing search behavior
+**Constraints**: CLI-first product runtime; no MCP main path; fetch verification required for high confidence; `search`, `fetch`, and `list` output compatibility preserved; benchmark MCP assets remain isolated; no network-only tests in the default suite
 **Scale/Scope**: Resolver v1 covers Apple API documentation structured intents for `framework + symbol`, `framework + type`, and `framework + type + member`; Help/App Store Connect remain search/fetch only
 
 ## Constitution Check
