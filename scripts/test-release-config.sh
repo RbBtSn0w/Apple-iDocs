@@ -76,12 +76,12 @@ assertIncludes(
 );
 assertIncludes(
   workflow,
-  "  publish-homebrew:\n",
+  "  publish-homebrew:",
   "release workflow must isolate Homebrew formula publication in its own job"
 );
 assertIncludes(
   workflow,
-  "    needs: release\n",
+  "    needs: release",
   "Homebrew formula publication must wait for the release job"
 );
 assertIncludes(
@@ -151,7 +151,7 @@ assertOrder(
   "./scripts/publish-homebrew-formula.sh",
   "Homebrew formula publication must run after GitHub Packages publish"
 );
-if (workflow.includes("secrets.HOMEBREW_TAP_TOKEN") || workflow.includes("HOMEBREW_APP_PRIVATE_KEY")) {
+if (workflow.includes("secrets.HOMEBREW_TAP_TOKEN") || workflow.includes("secrets.HOMEBREW_APP_PRIVATE_KEY")) {
   fail("release workflow must not depend on legacy Homebrew PAT/private-key credentials");
 }
 
