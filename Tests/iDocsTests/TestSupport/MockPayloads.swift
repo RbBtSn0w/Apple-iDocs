@@ -159,6 +159,32 @@ enum MockPayloads {
         """.data(using: .utf8)!
     }
 
+    static func technologyGraphJSON(references: [(title: String, path: String, abstract: String, role: String)]) -> Data {
+        let renderedReferences = references.map { reference in
+            """
+                    "doc://com.apple.documentation\(reference.path)": {
+                        "title": "\(reference.title)",
+                        "role": "\(reference.role)",
+                        "url": "\(reference.path)",
+                        "abstract": [
+                            {
+                                "type": "text",
+                                "text": "\(reference.abstract)"
+                            }
+                        ]
+                    }
+            """
+        }.joined(separator: ",\n")
+
+        return """
+        {
+            "references": {
+        \(renderedReferences)
+            }
+        }
+        """.data(using: .utf8)!
+    }
+
     static let externalDocCJSON = """
     {
         "identifier": "doc://com.example/documentation/example",

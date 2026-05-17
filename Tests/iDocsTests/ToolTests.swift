@@ -70,60 +70,57 @@ struct ToolTests {
         #expect(results.first?.path == "/documentation/swiftui/view")
     }
 
-    @Test("AppleJSONAPI recovers known issue pages through direct Apple lookup")
-    func appleDirectLookupRecoversKnownIssuePages() async throws {
+    @Test("AppleJSONAPI searches a technology graph when the search index misses")
+    func appleSearchesTechnologyGraphWhenIndexMisses() async throws {
         let session = MockNetworkSession()
-        let cases = [
-            (
-                query: "NavigationSplitView",
-                title: "NavigationSplitView",
-                path: "/documentation/swiftui/navigationsplitview",
-                abstract: "A view that presents views in two or three columns."
-            ),
-            (
-                query: "SwiftUI inspector isPresented inspectorColumnWidth",
-                title: "inspectorColumnWidth(min:ideal:max:)",
-                path: "/documentation/swiftui/view/inspectorcolumnwidth(min:ideal:max:)",
-                abstract: "Sets a flexible preferred width for the inspector column."
-            ),
-            (
-                query: "macOS split views inspector sidebar SwiftUI",
-                title: "Split views",
-                path: "/design/human-interface-guidelines/split-views",
-                abstract: "A split view manages multiple adjacent panes of content."
-            )
-        ]
+        let query = "SwiftUI SplitNavigationContainer"
+        let searchURL = try #require(URLHelpers.searchURL(query: query))
+        session.setResponse(
+            for: searchURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: searchURL)
+        )
 
-        for testCase in cases {
-            let searchURL = try #require(URLHelpers.searchURL(query: testCase.query))
+        if let technologiesURL = URLHelpers.technologiesURL() {
             session.setResponse(
-                for: searchURL,
-                data: MockPayloads.emptySearchJSON,
-                response: MockPayloads.httpResponse(url: searchURL)
-            )
-            let dataURL = try #require(URLHelpers.dataURL(for: testCase.path))
-            session.setResponse(
-                for: dataURL,
-                data: MockPayloads.docCJSON(
-                    title: testCase.title,
-                    identifier: "doc://com.apple.documentation\(testCase.path)",
-                    abstract: testCase.abstract
-                ),
-                response: MockPayloads.httpResponse(url: dataURL)
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
             )
         }
+
+        let moduleURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui"))
+        session.setResponse(
+            for: moduleURL,
+            data: MockPayloads.technologyGraphJSON(
+                references: [
+                    (
+                        title: "SplitNavigationContainerStyle",
+                        path: "/documentation/swiftui/view/splitnavigationcontainerstyle(_:)",
+                        abstract: "Sets the style for split navigation containers.",
+                        role: "symbol"
+                    ),
+                    (
+                        title: "SplitNavigationContainer",
+                        path: "/documentation/swiftui/splitnavigationcontainer",
+                        abstract: "A view that presents navigation content in split columns.",
+                        role: "symbol"
+                    )
+                ]
+            ),
+            response: MockPayloads.httpResponse(url: moduleURL)
+        )
 
         let api = AppleJSONAPI(session: session)
+        let results = try await api.search(query: query)
 
-        for testCase in cases {
-            let results = try await api.search(query: testCase.query)
-
-            #expect(results.contains { $0.title == testCase.title && $0.path == testCase.path && $0.source == .apple })
-        }
+        #expect(results.first?.title == "SplitNavigationContainer")
+        #expect(results.first?.path == "/documentation/swiftui/splitnavigationcontainer")
+        #expect(results.first?.source == .apple)
     }
 
-    @Test("AppleJSONAPI preserves direct lookup transport failures")
-    func appleDirectLookupPreservesTransportFailures() async throws {
+    @Test("AppleJSONAPI searches technology graph for exact symbol without framework")
+    func appleSearchesTechnologyGraphForBareExactSymbol() async throws {
         let session = MockNetworkSession()
         let query = "NavigationSplitView"
         let searchURL = try #require(URLHelpers.searchURL(query: query))
@@ -132,14 +129,63 @@ struct ToolTests {
             data: MockPayloads.emptySearchJSON,
             response: MockPayloads.httpResponse(url: searchURL)
         )
-        let dataURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui/navigationsplitview"))
-        session.setError(for: dataURL, error: URLError(.notConnectedToInternet))
+
+        if let technologiesURL = URLHelpers.technologiesURL() {
+            session.setResponse(
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
+            )
+        }
+
+        let moduleURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui"))
+        session.setResponse(
+            for: moduleURL,
+            data: MockPayloads.technologyGraphJSON(
+                references: [
+                    (
+                        title: "NavigationSplitView",
+                        path: "/documentation/swiftui/navigationsplitview",
+                        abstract: "A view that presents columns.",
+                        role: "symbol"
+                    )
+                ]
+            ),
+            response: MockPayloads.httpResponse(url: moduleURL)
+        )
+
+        let api = AppleJSONAPI(session: session)
+        let results = try await api.search(query: query)
+
+        #expect(results.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(results.first?.title == "NavigationSplitView")
+    }
+
+    @Test("AppleJSONAPI preserves technology graph transport failures")
+    func appleTechnologyGraphPreservesTransportFailures() async throws {
+        let session = MockNetworkSession()
+        let query = "SwiftUI SplitNavigationContainer"
+        let searchURL = try #require(URLHelpers.searchURL(query: query))
+        session.setResponse(
+            for: searchURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: searchURL)
+        )
+        if let technologiesURL = URLHelpers.technologiesURL() {
+            session.setResponse(
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
+            )
+        }
+        let moduleURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui"))
+        session.setError(for: moduleURL, error: URLError(.notConnectedToInternet))
 
         let api = AppleJSONAPI(session: session)
 
         do {
             _ = try await api.search(query: query)
-            Issue.record("Expected direct Apple lookup transport failure to be propagated.")
+            Issue.record("Expected technology graph transport failure to be propagated.")
         } catch let error as URLError {
             #expect(error.code == .notConnectedToInternet)
         } catch {
@@ -175,11 +221,24 @@ struct ToolTests {
 
     @Test("SearchDocsTool falls back to sosumi when apple remote misses")
     func searchToolFallsBackToSosumi() async throws {
-        let api = makeMockAPI(queries: ["NoLocalHit"])
-        let sosumi = makeMockSosumiAPI(queries: ["NoLocalHit"])
-        let tool = SearchDocsTool(api: api, sosumiAPI: sosumi, memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5))
+        let query = "View"
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
 
-        let result = try await tool.run(query: "NoLocalHit")
+        let sosumi = makeMockSosumiAPI(queries: [query])
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: sosumi,
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let result = try await tool.run(query: query)
         #expect(!result.isEmpty)
         #expect(result.first?.source == .sosumi)
     }
@@ -194,6 +253,13 @@ struct ToolTests {
             data: MockPayloads.emptySearchJSON,
             response: MockPayloads.httpResponse(url: appleURL)
         )
+        if let technologiesURL = URLHelpers.technologiesURL() {
+            appleSession.setResponse(
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
+            )
+        }
 
         let sosumiSession = MockNetworkSession()
         let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
@@ -268,6 +334,318 @@ struct ToolTests {
         #expect(output.instrumentation.stages.contains { $0.queryAttempt == derivedQuery })
     }
 
+    @Test("SearchDocsTool promotes canonical documentation over broad remote hits")
+    func searchToolPromotesCanonicalDocumentationOverBroadRemoteHits() async throws {
+        let query = "UIViewController"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "UIViewController",
+                "results": [
+                    {
+                        "title": "Advanced View Controller Transitions",
+                        "url": "https://developer.apple.com/videos/play/wwdc2015/504",
+                        "description": "Video session about view controller transitions.",
+                        "type": "other"
+                    },
+                    {
+                        "title": "UIViewController",
+                        "url": "https://developer.apple.com/documentation/uikit/uiviewcontroller",
+                        "description": "An object that manages a view hierarchy for your UIKit app.",
+                        "type": "documentation"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/uikit/uiviewcontroller")
+        #expect(output.results.first?.sourceKind == .documentation)
+        #expect(output.results.first?.fetchSupported == true)
+    }
+
+    @Test("SearchDocsTool promotes type page over member style for natural language queries")
+    func searchToolPromotesTypePageOverMemberStyleForNaturalLanguageQueries() async throws {
+        let query = "How do I create a split navigation interface in SwiftUI?"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "How do I create a split navigation interface in SwiftUI?",
+                "results": [
+                    {
+                        "title": "NavigationSplitViewVisibility",
+                        "url": "https://developer.apple.com/documentation/swiftui/navigationsplitviewvisibility",
+                        "description": "The visibility of the leading columns in a navigation split view.",
+                        "type": "documentation"
+                    },
+                    {
+                        "title": "navigationSplitViewStyle(_:)",
+                        "url": "https://developer.apple.com/documentation/swiftui/view/navigationsplitviewstyle(_:)",
+                        "description": "Sets the style for navigation split views within this view.",
+                        "type": "documentation"
+                    },
+                    {
+                        "title": "NavigationSplitView",
+                        "url": "https://developer.apple.com/documentation/swiftui/navigationsplitview",
+                        "description": "A view that presents views in two or three columns.",
+                        "type": "documentation"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(output.results.first?.matchScope == .symbol)
+    }
+
+    @Test("SearchDocsTool promotes App Store Connect help title intent")
+    func searchToolPromotesAppStoreConnectHelpTitleIntent() async throws {
+        let query = "App Store Connect upload builds"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "App Store Connect upload builds",
+                "results": [
+                    {
+                        "title": "App build statuses - App uploads - Reference - App Store Connect - Help - Apple Developer",
+                        "url": "https://developer.apple.com/help/app-store-connect/reference/app-uploads/app-build-statuses",
+                        "description": "Reference build status values.",
+                        "type": "general"
+                    },
+                    {
+                        "title": "Upload builds - Manage builds - App Store Connect - Help - Apple Developer",
+                        "url": "https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds",
+                        "description": "Upload builds to App Store Connect.",
+                        "type": "general"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/help/app-store-connect/manage-builds/upload-builds")
+        #expect(output.results.first?.sourceKind == .help)
+    }
+
+    @Test("SearchDocsTool promotes UIKit present method over presentation properties")
+    func searchToolPromotesUIKitPresentMethodOverPresentationProperties() async throws {
+        let query = "UIViewController presentViewController"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "UIViewController presentViewController",
+                "results": [
+                    {
+                        "title": "presentedViewController",
+                        "url": "https://developer.apple.com/documentation/uikit/uiviewcontroller/presentedviewcontroller",
+                        "description": "The view controller that is presented.",
+                        "type": "documentation"
+                    },
+                    {
+                        "title": "present(_:animated:completion:)",
+                        "url": "https://developer.apple.com/documentation/uikit/uiviewcontroller/present(_:animated:completion:)",
+                        "description": "Presents a view controller modally.",
+                        "type": "documentation"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/uikit/uiviewcontroller/present(_:animated:completion:)")
+        #expect(output.results.first?.matchScope == .member)
+    }
+
+    @Test("SearchDocsTool promotes Foundation exact symbol over cross-framework lowercase matches")
+    func searchToolPromotesFoundationExactSymbolOverCrossFrameworkLowercaseMatches() async throws {
+        let query = "URLSession"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "URLSession",
+                "results": [
+                    {
+                        "title": "urlSession",
+                        "url": "https://developer.apple.com/documentation/swiftui/backgroundtask/urlsession",
+                        "description": "A task that responds to background URL sessions.",
+                        "type": "documentation"
+                    },
+                    {
+                        "title": "URLSession",
+                        "url": "https://developer.apple.com/documentation/foundation/urlsession",
+                        "description": "An object that coordinates network data transfer tasks.",
+                        "type": "documentation"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.first?.path == "/documentation/foundation/urlsession")
+        #expect(output.results.first?.sourceKind == .documentation)
+    }
+
+    @Test("SearchDocsTool returns empty for low confidence framework-qualified symbol misses")
+    func searchToolReturnsEmptyForLowConfidenceFrameworkQualifiedSymbolMisses() async throws {
+        let query = "SwiftUI DefinitelyNotARealSymbol999"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: """
+            {
+                "query": "SwiftUI DefinitelyNotARealSymbol999",
+                "results": [
+                    {
+                        "title": "SwiftUI updates",
+                        "url": "https://developer.apple.com/documentation/updates/swiftui",
+                        "description": "Learn about important changes to SwiftUI.",
+                        "type": "documentation"
+                    },
+                    {
+                        "title": "List",
+                        "url": "https://developer.apple.com/documentation/swiftui/list",
+                        "description": "A container that presents rows of data.",
+                        "type": "documentation"
+                    }
+                ]
+            }
+            """.data(using: .utf8)!,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.isEmpty)
+    }
+
     @Test("SearchDocsTool continues remote search after local module fallback for composite symbol query")
     func searchToolContinuesRemoteAfterLocalModuleFallback() async throws {
         let query = "SwiftUI NavigationSplitView"
@@ -288,15 +666,27 @@ struct ToolTests {
             data: MockPayloads.emptySearchJSON,
             response: MockPayloads.httpResponse(url: searchURL)
         )
-        let dataURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui/navigationsplitview"))
+        if let technologiesURL = URLHelpers.technologiesURL() {
+            appleSession.setResponse(
+                for: technologiesURL,
+                data: MockPayloads.technologiesModernJSON,
+                response: MockPayloads.httpResponse(url: technologiesURL)
+            )
+        }
+        let moduleURL = try #require(URLHelpers.dataURL(for: "/documentation/swiftui"))
         appleSession.setResponse(
-            for: dataURL,
-            data: MockPayloads.docCJSON(
-                title: "NavigationSplitView",
-                identifier: "doc://com.apple.documentation/documentation/swiftui/navigationsplitview",
-                abstract: "A view that presents views in two or three columns."
+            for: moduleURL,
+            data: MockPayloads.technologyGraphJSON(
+                references: [
+                    (
+                        title: "NavigationSplitView",
+                        path: "/documentation/swiftui/navigationsplitview",
+                        abstract: "A view that presents views in two or three columns.",
+                        role: "symbol"
+                    )
+                ]
             ),
-            response: MockPayloads.httpResponse(url: dataURL)
+            response: MockPayloads.httpResponse(url: moduleURL)
         )
 
         let tool = SearchDocsTool(
@@ -390,8 +780,8 @@ struct ToolTests {
 
         #expect(first.results.isEmpty)
         #expect(second.results.isEmpty)
-        #expect(appleSession.requestCount == 2)
-        #expect(sosumiSession.requestCount == 2)
+        #expect(appleSession.requestedURLs.filter { $0 == appleURL }.count == 2)
+        #expect(sosumiSession.requestedURLs.filter { $0 == sosumiURL }.count == 2)
     }
 
     @Test("SearchDocsTool prefers local results over remote")

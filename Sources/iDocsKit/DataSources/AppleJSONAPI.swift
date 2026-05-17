@@ -58,7 +58,7 @@ public actor AppleJSONAPI {
             return indexedResults
         }
 
-        return try await searchDirectAppleDocs(query: query)
+        return try await searchTechnologyGraph(query: query)
     }
     
     public func fetchDoc(path: String) async throws -> DocCContent {
@@ -179,28 +179,32 @@ public actor AppleJSONAPI {
         return score
     }
 
-    private func searchDirectAppleDocs(query: String) async throws -> [SearchResult] {
+    private func searchTechnologyGraph(query: String) async throws -> [SearchResult] {
+        let intent = SearchQueryIntent(query)
+        let technologies = try await fetchTechnologies()
+        var matchedTechnologies = technologies.filter { intent.matches(technology: $0) }
+        if matchedTechnologies.isEmpty && !intent.requiredSymbols.isEmpty {
+            matchedTechnologies = technologies
+        }
+        let candidateTechnologies = matchedTechnologies
+            .compactMap { technologyRootPath(for: $0) }
+
+        guard !candidateTechnologies.isEmpty else {
+            return []
+        }
+
         var results: [SearchResult] = []
         var firstFailure: Error?
 
-        await withTaskGroup(of: DirectLookupResult.self) { group in
-            for candidate in uniqueDirectLookupCandidates(for: query) {
+        await withTaskGroup(of: TechnologyGraphLookupResult.self) { group in
+            for rootPath in candidateTechnologies {
                 group.addTask { [self] in
                     do {
-                        let summary = try await fetchDirectDocSummary(path: candidate.path)
-                        return .hit(
-                            SearchResult(
-                                title: summary.metadata.title,
-                                abstract: summary.abstractText,
-                                path: candidate.path,
-                                kind: documentKind(kind: nil, role: summary.metadata.role, type: nil),
-                                source: .apple,
-                                relevance: candidate.relevance
-                            )
-                        )
+                        let matches = try await searchTechnologyReferences(rootPath: rootPath, intent: intent)
+                        return .hit(matches)
                     } catch {
-                        if isDirectLookupMiss(error) {
-                            return .miss(path: candidate.path, errorDescription: error.localizedDescription)
+                        if isTechnologyGraphMiss(error) {
+                            return .miss(path: rootPath, errorDescription: error.localizedDescription)
                         }
                         return .failure(error)
                     }
@@ -209,10 +213,10 @@ public actor AppleJSONAPI {
 
             for await lookupResult in group {
                 switch lookupResult {
-                case .hit(let result):
-                    results.append(result)
+                case .hit(let matches):
+                    results.append(contentsOf: matches)
                 case .miss(let path, let errorDescription):
-                    logger.debug("Direct Apple lookup candidate missed: \(path) (\(errorDescription))")
+                    logger.debug("Apple technology graph missed: \(path) (\(errorDescription))")
                 case .failure(let error):
                     firstFailure = firstFailure ?? error
                 }
@@ -223,93 +227,73 @@ public actor AppleJSONAPI {
             throw firstFailure
         }
 
-        return results.sorted {
-            let left = $0.relevance ?? 0
-            let right = $1.relevance ?? 0
-            if left == right { return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            return left > right
-        }
+        return SearchResultRanker(intent: intent).rankedRemoteResults(results)
     }
 
-    private func fetchDirectDocSummary(path: String) async throws -> DirectDocSummary {
-        guard let url = URLHelpers.dataURL(for: path) else {
+    private func searchTechnologyReferences(rootPath: String, intent: SearchQueryIntent) async throws -> [SearchResult] {
+        guard let url = URLHelpers.dataURL(for: rootPath) else {
             throw iDocsError.invalidURL
         }
 
         let data = try await fetchWithRetry(url: url)
-        return try JSONDecoder().decode(DirectDocSummary.self, from: data)
-    }
-
-    private func uniqueDirectLookupCandidates(for query: String) -> [DirectLookupCandidate] {
-        var seenPaths = Set<String>()
-        return directLookupCandidates(for: query).filter { candidate in
-            seenPaths.insert(candidate.path).inserted
-        }
-    }
-
-    private func directLookupCandidates(for query: String) -> [DirectLookupCandidate] {
-        let normalized = normalizeSearchText(query)
-        let orderedTokens = searchTokens(query)
-        let tokens = Set(orderedTokens.map { $0.lowercased() })
-        let hasKnownDirectSymbol = normalized.contains("navigationsplitview")
-            || normalized.contains("inspectorcolumnwidth")
-        var candidates: [DirectLookupCandidate] = []
-
-        func append(_ path: String, relevance: Double) {
-            candidates.append(DirectLookupCandidate(path: path, relevance: relevance))
-        }
-
-        if normalized.contains("navigationsplitview") {
-            append("/documentation/swiftui/navigationsplitview", relevance: 180)
-        }
-
-        if normalized.contains("inspectorcolumnwidth") {
-            append("/documentation/swiftui/view/inspectorcolumnwidth(min:ideal:max:)", relevance: 180)
-        }
-
-        if tokens.contains("split") && (tokens.contains("view") || tokens.contains("views")) {
-            append("/design/human-interface-guidelines/split-views", relevance: 170)
-        }
-
-        if tokens.contains("sidebar") || tokens.contains("sidebars") {
-            append("/design/human-interface-guidelines/sidebars", relevance: 140)
-        }
-
-        if tokens.contains("swiftui") && !hasKnownDirectSymbol {
-            for token in orderedTokens where isLikelySwiftSymbolToken(token) {
-                append("/documentation/swiftui/\(token.lowercased())", relevance: 120)
+        let graph = try JSONDecoder().decode(TechnologyGraphSearchDocument.self, from: data)
+        let matches: [SearchResult] = (graph.references ?? [:]).values.compactMap { reference in
+            guard let title = reference.title,
+                  let path = reference.url,
+                  intent.acceptsCandidate(title: title, path: path, abstract: reference.abstractText) else {
+                return nil
             }
+
+            let sourceKind = AppleSourceKind(path: path)
+            let kind = documentKind(kind: reference.kind, role: reference.role, type: reference.type)
+            let matchScope = SearchResult.inferMatchScope(path: path, kind: kind)
+            let score = intent.score(
+                title: title,
+                path: path,
+                abstract: reference.abstractText,
+                sourceKind: sourceKind,
+                fetchSupported: sourceKind.fetchSupportedByIDocs,
+                matchScope: matchScope
+            )
+
+            guard score > 0 else {
+                return nil
+            }
+
+            return SearchResult(
+                title: title,
+                abstract: reference.abstractText,
+                path: path,
+                kind: kind,
+                source: .apple,
+                relevance: score,
+                sourceKind: sourceKind,
+                fetchSupported: sourceKind.fetchSupportedByIDocs,
+                matchScope: matchScope
+            )
         }
 
-        return candidates
+        return SearchResultRanker(intent: intent)
+            .rankedRemoteResults(matches)
+            .prefix(50)
+            .map { $0 }
     }
 
-    private func normalizeSearchText(_ text: String) -> String {
-        text.lowercased().filter { $0.isLetter || $0.isNumber }
-    }
-
-    private func searchTokens(_ text: String) -> [String] {
-        text.split { character in
-            !character.isLetter && !character.isNumber
+    private func technologyRootPath(for technology: Technology) -> String? {
+        let normalized = URLHelpers.normalizePath(technology.url)
+        guard normalized.hasPrefix("/documentation/") else {
+            return nil
         }
-        .map { String($0) }
-        .filter { !$0.isEmpty }
+
+        let components = normalized.split(separator: "/")
+        guard components.count >= 2 else {
+            return nil
+        }
+
+        return "/documentation/\(components[1])"
     }
 
-    private func isLikelySwiftSymbolToken(_ token: String) -> Bool {
-        let normalized = token.lowercased()
-        let excluded = [
-            "swiftui", "macos", "ios", "ipados", "watchos", "tvos",
-            "visionos", "sidebar", "sidebars", "detail", "inspector",
-            "split", "view", "views", "ispresented"
-        ]
-        guard !excluded.contains(normalized) else { return false }
-        return token.rangeOfCharacter(from: .uppercaseLetters) != nil
-            || normalized.contains("view")
-            || normalized.contains("width")
-    }
-
-    private nonisolated func isDirectLookupMiss(_ error: Error) -> Bool {
+    private nonisolated func isTechnologyGraphMiss(_ error: Error) -> Bool {
         switch error {
         case iDocsError.invalidURL:
             return true
@@ -362,35 +346,16 @@ public actor AppleJSONAPI {
     }
 }
 
-private struct DirectLookupCandidate {
-    let path: String
-    let relevance: Double
-}
-
-private enum DirectLookupResult: Sendable {
-    case hit(SearchResult)
+private enum TechnologyGraphLookupResult: Sendable {
+    case hit([SearchResult])
     case miss(path: String, errorDescription: String)
     case failure(any Error)
 }
 
 // MARK: - API Response Types
 
-private struct DirectDocSummary: Codable {
-    let metadata: DirectDocMetadata
-    let abstract: [InlineText]?
-
-    var abstractText: String? {
-        let text = abstract?
-            .compactMap { $0.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        return text?.isEmpty == false ? text : nil
-    }
-}
-
-private struct DirectDocMetadata: Codable {
-    let title: String
-    let role: String?
+private struct TechnologyGraphSearchDocument: Codable {
+    let references: [String: DocumentationReference]?
 }
 
 private struct TechnologiesResponse: Codable {

@@ -16,7 +16,7 @@ public enum CLIErrorPresenter {
             return .parsing
         case .unauthorized:
             return .unauthorized
-        case .invalidConfiguration:
+        case .invalidConfiguration, .invalidResolveIntent:
             return .config
         case .incompatibleVersion:
             return .versionMismatch
@@ -45,6 +45,8 @@ public enum CLIErrorPresenter {
             return "Error [UNAUTHORIZED]: Access denied."
         case .invalidConfiguration(let message):
             return "Error [CONFIG]: \(message)"
+        case .invalidResolveIntent(let message):
+            return "Error [CONFIG]: Invalid resolve intent: \(message)"
         case .incompatibleVersion(let adapter, let core):
             return "Error [VERSION_MISMATCH]: Adapter \(adapter) is incompatible with Core \(core)."
         case .internalError(let message):

@@ -5,11 +5,13 @@
     "queryShape": "exact_symbol",
     "query": "SwiftUI NavigationSplitView",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/swiftui/navigationsplitview"],
     "requiredTerms": ["NavigationSplitView"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "SwiftUI", "symbol": "NavigationSplitView" }
+    "runnerHints": { "technology": "SwiftUI", "symbol": "NavigationSplitView" },
+    "structuredIntent": { "framework": "SwiftUI", "symbol": "NavigationSplitView", "sourceFamily": "documentation" }
   },
   {
     "id": "swiftui-navigation-title",
@@ -17,11 +19,13 @@
     "queryShape": "member_property",
     "query": "View navigationTitle",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/swiftui/view/navigationtitle(_:)"],
     "requiredTerms": ["navigationTitle"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "SwiftUI", "symbol": "navigationTitle" }
+    "runnerHints": { "technology": "SwiftUI", "symbol": "navigationTitle" },
+    "structuredIntent": { "framework": "SwiftUI", "type": "View", "member": "navigationTitle", "memberKind": "method", "sourceFamily": "documentation" }
   },
   {
     "id": "swiftui-navigation-composite",
@@ -29,6 +33,7 @@
     "queryShape": "composite",
     "query": "SwiftUI NavigationStack path",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/swiftui/navigationstack"],
     "requiredTerms": ["NavigationStack", "path"],
     "sourceFamily": "documentation",
@@ -41,6 +46,7 @@
     "queryShape": "natural_language",
     "query": "How do I create a split navigation interface in SwiftUI?",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/swiftui/navigationsplitview"],
     "requiredTerms": ["NavigationSplitView"],
     "sourceFamily": "documentation",
@@ -53,6 +59,7 @@
     "queryShape": "fuzzy_typo",
     "query": "SwiftUI NavigatonSplitView",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/swiftui/navigationsplitview"],
     "requiredTerms": ["NavigationSplitView"],
     "sourceFamily": "documentation",
@@ -65,6 +72,7 @@
     "queryShape": "invalid_no_result",
     "query": "SwiftUI DefinitelyNotARealSymbol999",
     "expectedOutcome": "invalid_no_result",
+    "capability": "search",
     "canonicalPaths": [],
     "requiredTerms": [],
     "sourceFamily": "documentation",
@@ -77,11 +85,13 @@
     "queryShape": "member_property",
     "query": "NSWindow toolbarStyle",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/appkit/nswindow/toolbarstyle"],
     "requiredTerms": ["toolbarStyle"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "AppKit", "symbol": "NSWindow toolbarStyle" }
+    "runnerHints": { "technology": "AppKit", "symbol": "NSWindow toolbarStyle" },
+    "structuredIntent": { "framework": "AppKit", "type": "NSWindow", "member": "toolbarStyle", "memberKind": "property", "sourceFamily": "documentation" }
   },
   {
     "id": "appkit-nssplitviewcontroller",
@@ -89,11 +99,13 @@
     "queryShape": "exact_symbol",
     "query": "NSSplitViewController",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/appkit/nssplitviewcontroller"],
     "requiredTerms": ["NSSplitViewController"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "AppKit", "symbol": "NSSplitViewController" }
+    "runnerHints": { "technology": "AppKit", "symbol": "NSSplitViewController" },
+    "structuredIntent": { "framework": "AppKit", "symbol": "NSSplitViewController", "sourceFamily": "documentation" }
   },
   {
     "id": "appkit-toolbar-composite",
@@ -101,6 +113,7 @@
     "queryShape": "composite",
     "query": "AppKit NSToolbar validation",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/appkit/nstoolbar"],
     "requiredTerms": ["NSToolbar"],
     "sourceFamily": "documentation",
@@ -113,11 +126,13 @@
     "queryShape": "exact_symbol",
     "query": "UIViewController",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/uikit/uiviewcontroller"],
     "requiredTerms": ["UIViewController"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "UIKit", "symbol": "UIViewController" }
+    "runnerHints": { "technology": "UIKit", "symbol": "UIViewController" },
+    "structuredIntent": { "framework": "UIKit", "symbol": "UIViewController", "sourceFamily": "documentation" }
   },
   {
     "id": "uikit-present-member",
@@ -125,11 +140,13 @@
     "queryShape": "member_property",
     "query": "UIViewController presentViewController",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/uikit/uiviewcontroller/present(_:animated:completion:)"],
     "requiredTerms": ["present"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "UIKit", "symbol": "present" }
+    "runnerHints": { "technology": "UIKit", "symbol": "present" },
+    "structuredIntent": { "framework": "UIKit", "type": "UIViewController", "member": "present", "memberKind": "method", "sourceFamily": "documentation" }
   },
   {
     "id": "uikit-natural-language",
@@ -137,6 +154,7 @@
     "queryShape": "natural_language",
     "query": "How do I present a view controller in UIKit?",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/uikit/uiviewcontroller/present(_:animated:completion:)"],
     "requiredTerms": ["present", "UIViewController"],
     "sourceFamily": "documentation",
@@ -149,11 +167,13 @@
     "queryShape": "exact_symbol",
     "query": "URLSession",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/foundation/urlsession"],
     "requiredTerms": ["URLSession"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "Foundation", "symbol": "URLSession" }
+    "runnerHints": { "technology": "Foundation", "symbol": "URLSession" },
+    "structuredIntent": { "framework": "Foundation", "symbol": "URLSession", "sourceFamily": "documentation" }
   },
   {
     "id": "foundation-date-format-style",
@@ -161,11 +181,13 @@
     "queryShape": "member_property",
     "query": "Date FormatStyle",
     "expectedOutcome": "canonical_doc",
+    "capability": "resolve",
     "canonicalPaths": ["/documentation/foundation/date/formatstyle"],
     "requiredTerms": ["FormatStyle"],
     "sourceFamily": "documentation",
     "ciEligible": true,
-    "runnerHints": { "technology": "Foundation", "symbol": "FormatStyle" }
+    "runnerHints": { "technology": "Foundation", "symbol": "FormatStyle" },
+    "structuredIntent": { "framework": "Foundation", "type": "Date", "member": "FormatStyle", "sourceFamily": "documentation" }
   },
   {
     "id": "foundation-invalid-no-result",
@@ -173,6 +195,7 @@
     "queryShape": "invalid_no_result",
     "query": "Foundation ImaginarySymbolForRace999",
     "expectedOutcome": "invalid_no_result",
+    "capability": "search",
     "canonicalPaths": [],
     "requiredTerms": [],
     "sourceFamily": "documentation",
@@ -185,6 +208,7 @@
     "queryShape": "natural_language",
     "query": "creating a workflow that builds your app for distribution",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution"],
     "requiredTerms": ["workflow", "distribution"],
     "sourceFamily": "documentation",
@@ -197,6 +221,8 @@
     "queryShape": "exact_symbol",
     "query": "Xcode environment variable reference",
     "expectedOutcome": "canonical_doc",
+    "capability": "fetch",
+    "fetchPath": "/documentation/xcode/environment-variable-reference",
     "canonicalPaths": ["/documentation/xcode/environment-variable-reference"],
     "requiredTerms": ["environment", "variable"],
     "sourceFamily": "documentation",
@@ -209,6 +235,7 @@
     "queryShape": "composite",
     "query": "Xcode Cloud TestFlight App Store Connect",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/xcode/developing-a-workflow-strategy-for-xcode-cloud"],
     "requiredTerms": ["Xcode Cloud", "TestFlight"],
     "sourceFamily": "documentation",
@@ -221,6 +248,7 @@
     "queryShape": "natural_language",
     "query": "App Store Connect upload builds",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/help/app-store-connect/manage-builds/upload-builds"],
     "requiredTerms": ["Upload builds"],
     "sourceFamily": "help",
@@ -233,6 +261,7 @@
     "queryShape": "composite",
     "query": "App Store Connect TestFlight overview",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/help/app-store-connect/test-a-beta-version/testflight-overview"],
     "requiredTerms": ["TestFlight"],
     "sourceFamily": "help",
@@ -245,6 +274,7 @@
     "queryShape": "natural_language",
     "query": "manual live network probe",
     "expectedOutcome": "canonical_doc",
+    "capability": "search",
     "canonicalPaths": ["/documentation/xcode"],
     "requiredTerms": ["Xcode"],
     "sourceFamily": "documentation",

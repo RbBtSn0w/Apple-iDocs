@@ -7,8 +7,10 @@ import {
   DEFAULT_TARGETS,
   actionableIDocsFailures,
   buildIssueCollection,
+  caseCapability,
   classifyProductResult,
   createSeededSampler,
+  isP0IssueEligible,
   redactRawEvidence,
   renderAuditMarkdown,
   targetMetadataFromVersions,
@@ -49,9 +51,20 @@ const results = [];
 
 let injectedFailure = false;
 for (const testCase of sample) {
+  const capability = caseCapability(testCase);
+  const p0IssueEligible = isP0IssueEligible({
+    capability,
+    p0IssueEligible: testCase.p0IssueEligible
+  });
   for (const target of targets) {
-    const raw = await runTarget({ target, testCase, mockTargets, idocsBinary });
-    if (mockFailure && target.id === "idocs" && testCase.expectedOutcome !== "invalid_no_result" && !injectedFailure) {
+    const raw = await runTarget({ target, testCase, mockTargets, idocsBinary, capability });
+    if (
+      mockFailure
+      && target.id === "idocs"
+      && testCase.expectedOutcome !== "invalid_no_result"
+      && p0IssueEligible
+      && !injectedFailure
+    ) {
       raw.path = "/documentation/swiftui";
       raw.text = "SwiftUI framework";
       injectedFailure = true;
@@ -62,6 +75,8 @@ for (const testCase of sample) {
       targetId: target.id,
       framework: testCase.framework,
       queryShape: testCase.queryShape,
+      capability,
+      p0IssueEligible,
       query: testCase.query,
       expectedOutcome: testCase.expectedOutcome,
       classification: assessment.classification,
@@ -70,7 +85,7 @@ for (const testCase of sample) {
       rawEvidence: redactRawEvidence(raw),
       diagnostics: redactRawEvidence(raw.diagnostics ?? null),
       reproCommand: target.id === "idocs" && assessment.verdict === "fail"
-        ? `IDOCS_XCODE_DOC_CACHE_PATH=/tmp/idocs-nonexistent-doc-cache ${idocsBinary} search ${JSON.stringify(testCase.query)} --json`
+        ? reproCommandForIDocs(testCase, idocsBinary, capability)
         : null
     });
   }
@@ -94,7 +109,14 @@ const audit = {
   },
   targets,
   sample: sample.map(testCase => testCase.id),
-  cases: sample,
+  cases: sample.map(testCase => ({
+    ...testCase,
+    capability: caseCapability(testCase),
+    p0IssueEligible: isP0IssueEligible({
+      capability: caseCapability(testCase),
+      p0IssueEligible: testCase.p0IssueEligible
+    })
+  })),
   results,
   issueCollection: {},
   artifacts: {
@@ -113,11 +135,11 @@ await writeFile(path.join(outputDir, "random-search-audit.md"), renderAuditMarkd
 
 process.stdout.write(`${JSON.stringify({ status: "completed", outputDir, qualityFailures: actionableIDocsFailures(results).length }, null, 2)}\n`);
 
-async function runTarget({ target, testCase, mockTargets, idocsBinary }) {
+async function runTarget({ target, testCase, mockTargets, idocsBinary, capability }) {
   const mock = mockTargets?.results?.[testCase.id]?.[target.id];
   if (mock) return structuredClone(mock);
   if (mockTargets) return defaultMockResult(testCase);
-  if (target.id === "idocs") return runIDocs(testCase, idocsBinary);
+  if (target.id === "idocs") return runIDocs(testCase, idocsBinary, capability);
   return runCompetitor(target, testCase);
 }
 
@@ -129,11 +151,11 @@ function defaultMockResult(testCase) {
   };
 }
 
-function runIDocs(testCase, idocsBinary) {
+function runIDocs(testCase, idocsBinary, capability) {
   const command = idocsBinary === "idocs" ? "./scripts/tuist-silent.sh" : idocsBinary;
   const commandArgs = idocsBinary === "idocs"
-    ? ["run", "idocs", "search", testCase.query, "--json"]
-    : ["search", testCase.query, "--json"];
+    ? ["run", "idocs", ...idocsArgsForCase(testCase, capability)]
+    : idocsArgsForCase(testCase, capability);
   const result = spawnSync(command, commandArgs, {
     cwd: repoRoot,
     encoding: "utf8",
@@ -147,13 +169,106 @@ function runIDocs(testCase, idocsBinary) {
   if (result.status !== 0) return { error: result.stderr || result.stdout, unsupported: false };
   try {
     const payload = JSON.parse(result.stdout);
+    if (capability === "resolve") {
+      return {
+        path: payload.canonical_path ?? null,
+        text: [
+          payload.evidence?.title,
+          payload.evidence?.summary,
+          payload.confidence
+        ].filter(Boolean).join(" "),
+        confidence: payload.confidence ?? null,
+        verifiedByFetch: payload.verified_by_fetch === true,
+        resolveContract: true,
+        diagnostics: {
+          resolve: payload.resolve_diagnostics,
+          fetch: payload.fetch_diagnostics
+        }
+      };
+    }
+    if (capability === "fetch") {
+      return {
+        path: payload.id ?? null,
+        text: payload.body ?? "",
+        diagnostics: payload.fetch_diagnostics
+      };
+    }
+    const diagnostics = payload.search_diagnostics;
+    const results = payload.results?.map(item => ({ path: item.id, text: `${item.title ?? ""} ${item.snippet ?? ""}` })) ?? [];
+    if (results.length === 0 && diagnosticsIndicateRemoteFailure(diagnostics)) {
+      return {
+        results,
+        diagnostics,
+        networkError: true,
+        error: "idocs remote search failed before returning results"
+      };
+    }
     return {
-      results: payload.results?.map(item => ({ path: item.id, text: `${item.title ?? ""} ${item.snippet ?? ""}` })) ?? [],
-      diagnostics: payload.search_diagnostics
+      results,
+      diagnostics
     };
   } catch {
     return { text: result.stdout, path: null };
   }
+}
+
+function idocsArgsForCase(testCase, capability) {
+  if (capability === "resolve") {
+    const intent = structuredIntentForCase(testCase);
+    const args = ["resolve"];
+    if (intent.framework) args.push("--framework", intent.framework);
+    if (intent.symbol) args.push("--symbol", intent.symbol);
+    if (intent.type) args.push("--type", intent.type);
+    if (intent.member) args.push("--member", intent.member);
+    if (intent.memberKind) args.push("--member-kind", intent.memberKind);
+    if (intent.sourceFamily) args.push("--source-family", intent.sourceFamily);
+    args.push("--json");
+    return args;
+  }
+
+  if (capability === "fetch") {
+    return ["fetch", testCase.fetchPath ?? testCase.canonicalPaths?.[0] ?? testCase.query, "--json"];
+  }
+
+  return ["search", testCase.query, "--json"];
+}
+
+function structuredIntentForCase(testCase) {
+  if (testCase.structuredIntent) return testCase.structuredIntent;
+  const framework = testCase.framework;
+  const symbol = testCase.runnerHints?.symbol;
+  if (testCase.queryShape === "member_property") {
+    const parts = String(testCase.query ?? "").split(/\s+/).filter(Boolean);
+    return {
+      framework,
+      type: parts[0],
+      member: parts.slice(1).join(" ") || symbol,
+      sourceFamily: testCase.sourceFamily ?? "documentation"
+    };
+  }
+  return {
+    framework,
+    symbol: symbol ?? String(testCase.query ?? "").replace(new RegExp(`^${framework}\\s+`, "i"), ""),
+    sourceFamily: testCase.sourceFamily ?? "documentation"
+  };
+}
+
+function reproCommandForIDocs(testCase, idocsBinary, capability) {
+  const args = idocsArgsForCase(testCase, capability)
+    .map(arg => JSON.stringify(arg))
+    .join(" ");
+  return `IDOCS_XCODE_DOC_CACHE_PATH=/tmp/idocs-nonexistent-doc-cache ${idocsBinary} ${args}`;
+}
+
+function diagnosticsIndicateRemoteFailure(diagnostics) {
+  const values = Array.isArray(diagnostics) ? diagnostics : [];
+  return values.some(item => {
+    const reason = String(item.reason ?? "");
+    return reason === "remote_timeout"
+      || reason === "remote_network_failure"
+      || reason === "remote_permission_denied"
+      || reason === "remote_http_error";
+  });
 }
 
 async function readVersionMetadata(file) {

@@ -1,10 +1,12 @@
 > **Note:** For project-specific architectural rules, design patterns, and coding standards, refer to `.specify/memory/constitution.md`.
 
-# iDocs-mcp Development Guidelines
+# iDocs Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-19
+Auto-generated from all feature plans. Last updated: 2026-05-16
 
 ## Active Technologies
+- Swift 6.0 project settings plus Node.js ES modules for benchmark scripts + Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner (013-agent-resolve-entry)
+- Existing disk cache for fetch; benchmark fixture JSON under `specs/008-mcp-service-benchmark/fixtures/`; no new persistent service storage (013-agent-resolve-entry)
 
 - Swift 6.0（项目设置）+ shell scripts + Tuist, swift-argument-parser, swift-log；外部目标为 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai` (008-mcp-service-benchmark)
 
@@ -21,8 +23,9 @@ Tuist/
 ## Commands
 
 # Add commands for Swift 6.0（项目设置）+ shell scripts
-- **Build**: `tuist build` or `swift build`
-- **Test**: `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Build**: `./scripts/tuist-silent.sh build iDocs` or `tuist build`
+- **Test**: `./scripts/tuist-silent.sh test` or `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Run Resolve Smoke**: `./scripts/tuist-silent.sh run idocs resolve --framework SwiftUI --symbol NavigationSplitView --json`
 - **Generate Project**: `tuist generate --no-open`
 
 ## Code Style
@@ -35,8 +38,10 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 - **SPM Boundary**: For App/CLI/main products, `Tuist/Package.swift` is a dependency entry point, not a repository identity manifest. Only SDK/library repositories that publish through SwiftPM should use a root `Package.swift`, because that manifest is their external release contract.
 - **Headless Tests**: Tuist test runs should use the shared `iDocs` scheme with local inspect mode, `--no-upload`, `--no-selective-testing`, and an explicit macOS destination so they do not depend on opening Xcode, remote result inspection, or Tuist server state.
 - **Git Commit Workflow**: Please follow Conventional Commits standard (e.g. `feat: ...`, `fix: ...`, `docs: ...`).
+- **Agent-Facing Documentation Entry**: `idocs resolve` is the P0 agent-facing capability for structured Apple documentation evidence retrieval. Agents should prefer structured resolve intents for API evidence, use `idocs fetch` as the canonical evidence authority for known paths, and treat `idocs search` as exploration and candidate discovery rather than the primary correctness path.
 
 ## Recent Changes
+- 013-agent-resolve-entry: Added Swift 6.0 project settings plus Node.js ES modules for benchmark scripts + Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner
 
 - 008-mcp-service-benchmark: Added Swift 6.0（项目设置）+ shell scripts + Tuist, swift-argument-parser, swift-log；外部目标为 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai`
 
@@ -46,5 +51,5 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/012-search-quality-race/plan.md
+specs/013-agent-resolve-entry/plan.md
 <!-- SPECKIT END -->

@@ -90,6 +90,14 @@
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
+#### iDocs Constitution Alignment *(include when applicable)*
+
+- If the feature touches Apple API evidence, specify whether the primary capability is `resolve`, `fetch`, `search`, or `list`.
+- If the feature touches agent-facing evidence, require structured `resolve` intent handling and fetch-backed evidence rather than natural-language search correctness.
+- If the feature changes CLI output, require backward compatibility for existing optional JSON fields and explicit diagnostics for the affected capability.
+- If the feature changes benchmark or issue automation, require capability-layered reporting and limit P0 issue automation to resolve/fetch golden-truth failures.
+- If the feature adds runtime dependencies, state why Swift/macOS native implementation is insufficient and how the shipped CLI remains free of Node/Python/MCP runtime coupling.
+
 *Example of marking unclear requirements:*
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
@@ -113,3 +121,4 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-005**: [iDocs-specific metric when applicable, e.g., "100% of high-confidence resolve results are fetch verified"]
