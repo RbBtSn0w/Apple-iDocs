@@ -15,6 +15,20 @@ function fail(message) {
   process.exit(1);
 }
 
+function assertIncludes(haystack, needle, message) {
+  if (!haystack.includes(needle)) {
+    fail(message);
+  }
+}
+
+function assertOrder(haystack, first, second, message) {
+  const firstIndex = haystack.indexOf(first);
+  const secondIndex = haystack.indexOf(second);
+  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
+    fail(message);
+  }
+}
+
 function pluginName(plugin) {
   return Array.isArray(plugin) ? plugin[0] : plugin;
 }
@@ -46,12 +60,42 @@ if (execConfig.prepareCmd !== expectedPrepare) {
 }
 
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8");
-if (!workflow.includes("@semantic-release/exec")) {
-  fail("release workflow must install @semantic-release/exec");
-}
+assertIncludes(workflow, "@semantic-release/exec", "release workflow must install @semantic-release/exec");
 if (workflow.includes("Stage GitHub Release Assets")) {
   fail("release workflow must not stage assets before semantic-release computes nextRelease.version");
 }
+assertIncludes(
+  workflow,
+  "bash ./scripts/test-publish-homebrew-formula.sh",
+  "CI must verify the Homebrew formula publish script"
+);
+assertIncludes(
+  workflow,
+  "HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap",
+  "release workflow must target the configured Homebrew tap repository"
+);
+assertIncludes(
+  workflow,
+  "HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
+  "release workflow must require HOMEBREW_TAP_TOKEN for tap writes"
+);
+assertIncludes(
+  workflow,
+  "./scripts/publish-homebrew-formula.sh",
+  "release workflow must publish the Homebrew formula"
+);
+assertOrder(
+  workflow,
+  "npx semantic-release@25",
+  "./scripts/publish-homebrew-formula.sh",
+  "Homebrew formula publication must run after semantic-release creates release assets"
+);
+assertOrder(
+  workflow,
+  "./scripts/publish-npm-package.sh github",
+  "./scripts/publish-homebrew-formula.sh",
+  "Homebrew formula publication must run after GitHub Packages publish"
+);
 
 if (packageJson.engines?.node !== expectedNodeEngine) {
   fail(`npm package must require Node ${expectedNodeEngine} for @semantic-release/exec`);

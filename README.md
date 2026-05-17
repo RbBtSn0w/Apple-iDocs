@@ -16,7 +16,20 @@ The repository also contains project-scoped benchmark assets for external MCP se
 
 ## Installation
 
-### Install from npm (recommended)
+### Install with Homebrew
+
+Requirements:
+- macOS 13.0+
+- Apple Silicon (`arm64`)
+
+```bash
+brew install rbbtsn0w/tap/idocs
+idocs --help
+```
+
+The Homebrew formula is published to [RbBtSn0w/homebrew-tap](https://github.com/RbBtSn0w/homebrew-tap) from the release workflow after the GitHub Release assets are available.
+
+### Install from npm
 
 Requirements:
 - macOS 13.0+
