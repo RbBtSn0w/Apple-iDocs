@@ -1,17 +1,18 @@
 # iDocs: Swift-Native Apple Documentation CLI
 
-iDocs is a high-performance Swift CLI for querying Apple's documentation, rendering Markdown output, and listing technology catalogs.
+iDocs is a high-performance Swift CLI for resolving structured Apple API documentation evidence, querying Apple's documentation, rendering Markdown output, and listing technology catalogs.
 
 The repository also contains project-scoped benchmark assets for external MCP services. Those assets exist only for comparison and validation; the shipped product runtime is CLI-only.
 
 ## Features
 
-- **Search Docs**: Global search across Apple's documentation catalog.
-- **Fetch Doc**: Get high-quality Markdown content for any documentation path.
+- **Resolve Docs**: Structured, agent-facing Apple API resolution through `framework`, `symbol`, `type`, and `member` intent fields.
+- **Fetch Doc**: Get high-quality Markdown evidence for any canonical documentation path.
+- **Search Docs**: Explore Apple's documentation catalog with natural-language, typo, or broad discovery queries.
 - **Xcode Local Docs**: Access documentation already downloaded by Xcode (supports offline mode).
 - **Browse Technologies**: Explore Apple's framework and technology catalog.
 - **Intelligent Caching**: Layered memory and disk caching for maximum performance.
-- **Deterministic Source Chain**: `cache -> local(Xcode) -> apple -> sosumi` for `search`/`fetch`.
+- **Deterministic Source Chain**: `resolve` verifies candidates through `fetch`; `fetch` and `search` use `cache/local(Xcode) -> apple -> sosumi` fallbacks.
 
 ## Installation
 
@@ -133,11 +134,17 @@ idocs --help
 ### Subcommands
 ```bash
 idocs search "SwiftUI"
+idocs resolve --framework SwiftUI --symbol NavigationSplitView --json
+idocs resolve --framework AppKit --type NSWindow --member toolbarStyle --member-kind property --json
 idocs fetch "/documentation/swiftui/view"
 idocs list
 ```
 
 Notes:
+- `resolve` is the P0 AI-agent-facing entry point for structured Apple API evidence.
+- `resolve` output includes `canonical_path`, `confidence`, `verified_by_fetch`, `evidence`, `candidates`, `resolve_diagnostics`, and `fetch_diagnostics`.
+- `fetch` remains the canonical evidence authority for known documentation paths.
+- `search` is for exploration and candidate discovery, not the primary structured correctness path.
 - Search output includes source markers like `{source: apple}`.
 - Empty search output includes structured diagnostics when fallback stages miss or fail.
 - JSON search output includes `search_diagnostics` with stage `reason` and `hint` fields.

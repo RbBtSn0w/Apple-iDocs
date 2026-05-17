@@ -1,6 +1,6 @@
 > **Note:** For project-specific architectural rules, design patterns, and coding standards, refer to `.specify/memory/constitution.md`.
 
-# iDocs-mcp Development Guidelines
+# iDocs Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-05-16
 
@@ -23,8 +23,9 @@ Tuist/
 ## Commands
 
 # Add commands for Swift 6.0（项目设置）+ shell scripts
-- **Build**: `tuist build` or `swift build`
-- **Test**: `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Build**: `./scripts/tuist-silent.sh build iDocs` or `tuist build`
+- **Test**: `./scripts/tuist-silent.sh test` or `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
+- **Run Resolve Smoke**: `./scripts/tuist-silent.sh run idocs resolve --framework SwiftUI --symbol NavigationSplitView --json`
 - **Generate Project**: `tuist generate --no-open`
 
 ## Code Style

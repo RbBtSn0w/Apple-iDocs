@@ -31,7 +31,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+The plan MUST explicitly answer each iDocs constitution gate:
+
+- **Offline-first chain**: Does the design preserve deterministic local/cache-first behavior before remote Apple and sosumi fallbacks?
+- **Stateless CLI/Adapter boundary**: Do CLI commands and `DocumentationService` APIs carry complete inputs and avoid session state or MCP runtime coupling?
+- **Agent Evidence Entry**: If Apple API evidence is involved, does the design route structured agent intents through `idocs resolve`, use `idocs fetch` as the canonical evidence authority, and keep `idocs search` as exploration/candidate discovery?
+- **TDD evidence**: Are RED tests planned before implementation for changed CLI, adapter, iDocsKit, diagnostics, and benchmark behavior?
+- **Observability**: Are source markers and distinct `resolve_diagnostics`, `fetch_diagnostics`, or `search_diagnostics` preserved where relevant?
+- **Simplicity**: Is any new command, data source, service, or benchmark complexity justified against the current `resolve` / `fetch` / `search` / `list` command surface?
+- **Native Swift first**: Does production runtime stay Swift/macOS native without introducing Node, Python, web servers, or MCP SDKs into the shipped CLI path?
+- **Type safety**: Are public payloads and errors modeled with explicit Swift types and constrained state values instead of untyped dictionaries or erased values?
+- **Agent memory boundary**: Are architecture rules kept in the constitution and operational commands kept in AGENTS/runtime docs?
 
 ## Project Structure
 
@@ -56,39 +66,20 @@ specs/[###-feature]/
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+Sources/
+├── iDocsCLI/       # Thin executable entry point
+├── iDocsApp/       # ArgumentParser commands, CLIExecutor, payloads
+├── iDocsAdapter/   # DocumentationService boundary, public models, adapters
+└── iDocsKit/       # Core tools, data sources, renderer, cache
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+Tests/
+├── iDocsTests/
+└── iDocsAdapterTests/
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+scripts/benchmark/ # Capability-layered quality audit and issue tooling
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+specs/
+└── [###-feature]/
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real
