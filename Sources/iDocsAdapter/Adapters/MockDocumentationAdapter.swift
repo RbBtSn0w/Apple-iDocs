@@ -3,6 +3,8 @@ import Foundation
 public struct MockDocumentationAdapter: DocumentationService {
     public var searchResults: [SearchResult]
     public var searchDiagnostics: SearchDiagnostics?
+    public var resolveResult: ResolveResult?
+    public var resolveErrorToThrow: DocumentationError?
     public var documentByID: [String: DocumentationContent]
     public var technologies: [Technology]
     public var errorToThrow: DocumentationError?
@@ -11,6 +13,8 @@ public struct MockDocumentationAdapter: DocumentationService {
     public init(
         searchResults: [SearchResult] = [],
         searchDiagnostics: SearchDiagnostics? = nil,
+        resolveResult: ResolveResult? = nil,
+        resolveErrorToThrow: DocumentationError? = nil,
         documentByID: [String: DocumentationContent] = [:],
         technologies: [Technology] = [],
         errorToThrow: DocumentationError? = nil,
@@ -18,6 +22,8 @@ public struct MockDocumentationAdapter: DocumentationService {
     ) {
         self.searchResults = searchResults
         self.searchDiagnostics = searchDiagnostics
+        self.resolveResult = resolveResult
+        self.resolveErrorToThrow = resolveErrorToThrow
         self.documentByID = documentByID
         self.technologies = technologies
         self.errorToThrow = errorToThrow
@@ -32,6 +38,13 @@ public struct MockDocumentationAdapter: DocumentationService {
     public func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
         if let errorToThrow { throw errorToThrow }
         return DocumentationSearchResponse(results: searchResults, diagnostics: searchDiagnostics)
+    }
+
+    public func resolve(intent: ResolveIntent, config: DocumentationConfig) async throws -> ResolveResult {
+        if let resolveErrorToThrow { throw resolveErrorToThrow }
+        if let errorToThrow { throw errorToThrow }
+        if let resolveResult { return resolveResult }
+        throw DocumentationError.invalidResolveIntent(message: "mock resolve result is not configured")
     }
 
     public func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {

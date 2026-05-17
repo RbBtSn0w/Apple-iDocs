@@ -5,6 +5,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     private let adapterVersion: String
     private let logger: any DocumentationLogger
     private let searchPerformer: @Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput
+    private let resolvePerformer: @Sendable (ResolveIntent, DocumentationConfig) async throws -> ResolveDocsResult
     private let technologiesPerformer: @Sendable () async throws -> [Technology]
     private let usageRecorder: DocumentationUsageRecorder
 
@@ -13,6 +14,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         logger: any DocumentationLogger = NoopDocumentationLogger(),
         searchPerformer: (@Sendable (String) async throws -> SearchDocsRunOutput)? = nil,
         configuredSearchPerformer: (@Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput)? = nil,
+        configuredResolvePerformer: (@Sendable (ResolveIntent, DocumentationConfig) async throws -> ResolveDocsResult)? = nil,
         technologiesPerformer: (@Sendable () async throws -> [Technology])? = nil,
         usageRecorder: DocumentationUsageRecorder = DocumentationUsageRecorder()
     ) throws {
@@ -34,6 +36,40 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     cacheDirectory: cacheDirectory
                 )
             ).runDetailed(query: query)
+        }
+        self.resolvePerformer = configuredResolvePerformer ?? { intent, config in
+            let cacheDirectory = config.xcodeDocumentationCachePath.map {
+                URL(fileURLWithPath: $0, isDirectory: true)
+            }
+            let xcodeDocs = XcodeLocalDocs(
+                fileManager: FileManager.default,
+                searchProvider: SpotlightSearchProvider(),
+                cacheDirectory: cacheDirectory
+            )
+            let diskCache = DiskCache(
+                directory: URL(fileURLWithPath: config.cachePath, isDirectory: true),
+                fileManager: FileManager.default,
+                enableFileLocking: config.enableFileLocking
+            )
+            let fetchTool = FetchDocTool(
+                api: AppleJSONAPI(),
+                sosumiAPI: SosumiAPI(),
+                xcodeDocs: xcodeDocs,
+                diskCache: diskCache
+            )
+            let searchTool = SearchDocsTool(
+                api: AppleJSONAPI(),
+                sosumiAPI: SosumiAPI(),
+                xcodeDocs: xcodeDocs
+            )
+            return try await ResolveDocsTool(
+                fetch: { path in
+                    try await fetchTool.runDetailed(path: path)
+                },
+                search: { query in
+                    try await searchTool.run(query: query)
+                }
+            ).run(intent: Self.mapResolveIntent(intent))
         }
         self.technologiesPerformer = technologiesPerformer ?? {
             try await AppleJSONAPI().fetchTechnologies().map { Technology(name: $0.name, id: $0.url, category: $0.kind) }
@@ -101,6 +137,48 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     errorCategory: errorCategory(for: mappedError),
                     errorMessage: mappedError.localizedDescription,
                     searchStages: nil
+                ),
+                config: config
+            )
+            throw mappedError
+        }
+    }
+
+    public func resolve(intent: ResolveIntent, config: DocumentationConfig) async throws -> ResolveResult {
+        let start = ContinuousClock.now
+        do {
+            let output = try await resolvePerformer(intent, config)
+            let result = Self.mapResolveResult(output)
+            await recordUsageIfConfigured(
+                DocumentationUsageLogEntry(
+                    operation: "resolve",
+                    caller: config.callerID,
+                    status: .success,
+                    query: resolveUsageQuery(from: intent),
+                    id: result.canonicalPath,
+                    localeIdentifier: config.locale.identifier,
+                    durationMs: durationInMilliseconds(since: start),
+                    resultCount: result.canonicalPath == nil ? 0 : 1,
+                    source: result.evidence?.source
+                ),
+                config: config
+            )
+            return result
+        } catch {
+            let mappedError = mapResolveError(error)
+            logger.log(level: .error, message: "Adapter resolve failed", context: ["intent": resolveUsageQuery(from: intent), "error": mappedError.localizedDescription])
+            await recordUsageIfConfigured(
+                DocumentationUsageLogEntry(
+                    operation: "resolve",
+                    caller: config.callerID,
+                    status: .failure,
+                    query: resolveUsageQuery(from: intent),
+                    localeIdentifier: config.locale.identifier,
+                    durationMs: durationInMilliseconds(since: start),
+                    resultCount: 0,
+                    source: nil,
+                    errorCategory: errorCategory(for: mappedError),
+                    errorMessage: mappedError.localizedDescription
                 ),
                 config: config
             )
@@ -256,6 +334,102 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         )
     }
 
+    private static func mapResolveIntent(_ intent: ResolveIntent) -> ResolveDocsIntent {
+        ResolveDocsIntent(
+            framework: intent.framework,
+            symbol: intent.symbol,
+            type: intent.type,
+            member: intent.member,
+            memberKind: intent.memberKind,
+            sourceFamily: intent.sourceFamily
+        )
+    }
+
+    private static func mapResolveResult(_ result: ResolveDocsResult) -> ResolveResult {
+        ResolveResult(
+            canonicalPath: result.canonicalPath,
+            confidence: mapResolveConfidence(result.confidence),
+            verifiedByFetch: result.verifiedByFetch,
+            evidence: result.evidence.map {
+                ResolveEvidence(
+                    sourceFamily: $0.sourceFamily,
+                    source: $0.source.rawValue,
+                    path: $0.path,
+                    title: $0.title,
+                    summary: $0.summary
+                )
+            },
+            candidates: result.candidates.map {
+                ResolveCandidate(
+                    path: $0.path,
+                    title: $0.title,
+                    source: mapResolveCandidateSource($0.source),
+                    matchQuality: mapResolveMatchQuality($0.matchQuality),
+                    verifiedByFetch: $0.verifiedByFetch,
+                    confidence: mapResolveConfidence($0.confidence)
+                )
+            },
+            resolveDiagnostics: result.resolveDiagnostics.map {
+                ResolveDiagnostic(
+                    stage: $0.stage,
+                    status: $0.status,
+                    reason: $0.reason,
+                    pathAttempt: $0.pathAttempt,
+                    queryAttempt: $0.queryAttempt
+                )
+            },
+            fetchDiagnostics: (result.fetchDiagnostics ?? []).map(Self.mapFetchAttemptDiagnostic)
+        )
+    }
+
+    private static func mapResolveConfidence(_ confidence: ResolveDocsConfidence) -> ResolveConfidence {
+        switch confidence {
+        case .high:
+            return .high
+        case .medium:
+            return .medium
+        case .low:
+            return .low
+        case .unresolved:
+            return .unresolved
+        }
+    }
+
+    private static func mapResolveCandidateSource(_ source: ResolveDocsCandidateSource) -> ResolveCandidateSource {
+        switch source {
+        case .direct:
+            return .direct
+        case .searchFallback:
+            return .searchFallback
+        }
+    }
+
+    private static func mapResolveMatchQuality(_ quality: ResolveDocsMatchQuality) -> ResolveMatchQuality {
+        switch quality {
+        case .exact:
+            return .exact
+        case .partial:
+            return .partial
+        case .mismatch:
+            return .mismatch
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    private func mapResolveError(_ error: Error) -> DocumentationError {
+        if let existing = error as? DocumentationError {
+            return existing
+        }
+        if let resolveError = error as? ResolveDocsError {
+            switch resolveError {
+            case .invalidIntent(let message):
+                return .invalidResolveIntent(message: message)
+            }
+        }
+        return mapError(error, fallbackID: "resolve")
+    }
+
     private func mapError(_ error: Error, fallbackID: String) -> DocumentationError {
         if let existing = error as? DocumentationError {
             return existing
@@ -308,6 +482,12 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             return String(parts[1])
         }
         return "unknown"
+    }
+
+    private func resolveUsageQuery(from intent: ResolveIntent) -> String {
+        [intent.framework, intent.symbol, intent.type, intent.member]
+            .compactMap { $0 }
+            .joined(separator: " ")
     }
 
     private func titleFromBody(_ content: FetchDocResult, fallback: String) -> String {
@@ -380,7 +560,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             return "PARSING"
         case .unauthorized:
             return "UNAUTHORIZED"
-        case .invalidConfiguration:
+        case .invalidConfiguration, .invalidResolveIntent:
             return "CONFIG"
         case .incompatibleVersion:
             return "VERSION_MISMATCH"

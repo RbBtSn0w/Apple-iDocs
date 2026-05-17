@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  actionableIDocsFailures,
+  caseCapability,
   classifyProductResult,
   computeFailureFingerprint,
   createSeededSampler,
+  isP0IssueEligible,
   parsePackageSpecs,
   redactRawEvidence,
   redactSensitiveValues,
@@ -93,6 +96,20 @@ test("verdict applies invalid/no-result and module-only rules", () => {
   assert.equal(network.verdict, "infra");
 });
 
+test("classification treats Apple Swift slug variants as canonical path hits", () => {
+  const result = classifyProductResult({
+    framework: "AppKit",
+    expectedOutcome: "canonical_doc",
+    canonicalPaths: ["/documentation/appkit/nswindow/toolbarstyle"]
+  }, {
+    path: "/documentation/appkit/nswindow/toolbarstyle-swift.property",
+    text: "toolbarStyle"
+  });
+
+  assert.equal(result.classification, "symbol_hit");
+  assert.equal(result.verdict, "pass");
+});
+
 test("issue fingerprint is stable regardless of failing case order", () => {
   const failures = [
     { caseId: "b", expectedOutcome: "canonical_doc", classification: "module_only" },
@@ -101,6 +118,53 @@ test("issue fingerprint is stable regardless of failing case order", () => {
   const reversed = [...failures].reverse();
 
   assert.equal(computeFailureFingerprint(failures), computeFailureFingerprint(reversed));
+});
+
+test("case capability defaults and validation separate resolve fetch and search", () => {
+  assert.equal(caseCapability({ capability: "resolve" }), "resolve");
+  assert.equal(caseCapability({ capability: "fetch" }), "fetch");
+  assert.equal(caseCapability({ capability: "search" }), "search");
+  assert.equal(caseCapability({ queryShape: "natural_language" }), "search");
+  assert.throws(() => caseCapability({ capability: "browser" }), /unsupported capability/);
+});
+
+test("P0 issue eligibility excludes search exploration failures by default", () => {
+  const results = [
+    {
+      caseId: "search-natural-language",
+      targetId: "idocs",
+      capability: "search",
+      verdict: "fail",
+      classification: "wrong_page",
+      expectedOutcome: "canonical_doc"
+    },
+    {
+      caseId: "resolve-swiftui-navigation",
+      targetId: "idocs",
+      capability: "resolve",
+      p0IssueEligible: true,
+      verdict: "fail",
+      classification: "empty",
+      expectedOutcome: "canonical_doc"
+    },
+    {
+      caseId: "fetch-swiftui-navigation",
+      targetId: "idocs",
+      capability: "fetch",
+      p0IssueEligible: true,
+      verdict: "fail",
+      classification: "wrong_page",
+      expectedOutcome: "canonical_doc"
+    }
+  ];
+
+  assert.equal(isP0IssueEligible(results[0]), false);
+  assert.equal(isP0IssueEligible(results[1]), true);
+  assert.equal(isP0IssueEligible(results[2]), true);
+  assert.deepEqual(
+    actionableIDocsFailures(results).map(result => result.caseId),
+    ["resolve-swiftui-navigation", "fetch-swiftui-navigation"]
+  );
 });
 
 test("product summary counts verdicts by target", () => {

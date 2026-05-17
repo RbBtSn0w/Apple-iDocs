@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -30,7 +30,9 @@ test("mock audit completes with artifacts and does not fail for quality findings
     assert.equal(audit.localDocsDiagnostic.reason, "local_docs_unavailable");
     assert.ok(audit.results.some(item => item.targetId === "idocs" && item.verdict === "fail"));
     assert.ok(audit.results.every(item => item.classification && item.verdict));
+    assert.ok(audit.results.every(item => ["resolve", "fetch", "search"].includes(item.capability)));
     const markdown = await readFile(path.join(outputDir, "random-search-audit.md"), "utf8");
+    assert.ok(markdown.includes("Capability Summary"));
     assert.ok(markdown.includes("Competitor Comparison"));
     assert.ok(markdown.includes("automation validation path"));
   } finally {
@@ -109,6 +111,52 @@ test("runner classifies missing competitor binaries as infrastructure failures",
     const missingMCP = audit.results.find(item => item.targetId === "apple-docs-mcp");
     assert.equal(missingMCP.classification, "network_error");
     assert.equal(missingMCP.verdict, "infra");
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner classifies empty iDocs results with remote timeout diagnostics as infrastructure", async () => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "idocs-audit-idocs-timeout-"));
+  try {
+    const idocsBinary = path.join(outputDir, "fake-idocs.mjs");
+    await writeFile(idocsBinary, `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({
+  results: [],
+  search_diagnostics: [
+    { name: "cache", status: "miss", reason: "cache_miss", result_count: 0 },
+    { name: "apple", status: "error", reason: "remote_timeout", result_count: 0 },
+    { name: "sosumi", status: "error", reason: "remote_timeout", result_count: 0 }
+  ]
+}));
+`);
+    await chmod(idocsBinary, 0o755);
+
+    const versionsFile = path.join(outputDir, "versions.json");
+    await writeFile(versionsFile, `${JSON.stringify({
+      installDir: path.join(outputDir, "missing-corrivals"),
+      packages: {
+        "@kimsungwhee/apple-docs-mcp": { resolvedVersion: "1.0.26" },
+        "apple-doc-mcp-server": { resolvedVersion: "1.9.1" },
+        "@nshipster/sosumi": { resolvedVersion: "1.0.0" }
+      }
+    })}\n`);
+
+    const result = spawnSync(process.execPath, [
+      runner,
+      "--seed", "1",
+      "--sample-size", "1",
+      "--versions-file", versionsFile,
+      "--idocs-binary", idocsBinary,
+      "--output-dir", outputDir
+    ], { cwd: repoRoot, encoding: "utf8" });
+
+    assert.equal(result.status, 0, result.stderr);
+    const audit = JSON.parse(await readFile(path.join(outputDir, "random-search-audit.json"), "utf8"));
+    const idocsResult = audit.results.find(item => item.targetId === "idocs");
+    assert.equal(idocsResult.classification, "network_error");
+    assert.equal(idocsResult.verdict, "infra");
+    assert.equal(audit.issueCollection.action, "none");
   } finally {
     await rm(outputDir, { recursive: true, force: true });
   }

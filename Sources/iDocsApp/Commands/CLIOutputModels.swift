@@ -144,6 +144,94 @@ public struct CLIFetchDiagnosticPayload: Codable, Sendable, Equatable {
     }
 }
 
+public struct CLIResolveEvidencePayload: Codable, Sendable, Equatable {
+    public let sourceFamily: String
+    public let source: String
+    public let path: String
+    public let title: String
+    public let summary: String?
+
+    enum CodingKeys: String, CodingKey {
+        case sourceFamily = "source_family"
+        case source
+        case path
+        case title
+        case summary
+    }
+
+    public init(sourceFamily: String, source: String, path: String, title: String, summary: String? = nil) {
+        self.sourceFamily = sourceFamily
+        self.source = source
+        self.path = path
+        self.title = title
+        self.summary = summary
+    }
+}
+
+public struct CLIResolveCandidatePayload: Codable, Sendable, Equatable {
+    public let path: String
+    public let title: String?
+    public let source: String
+    public let matchQuality: String
+    public let verifiedByFetch: Bool
+    public let confidence: String
+
+    enum CodingKeys: String, CodingKey {
+        case path
+        case title
+        case source
+        case matchQuality = "match_quality"
+        case verifiedByFetch = "verified_by_fetch"
+        case confidence
+    }
+
+    public init(
+        path: String,
+        title: String?,
+        source: String,
+        matchQuality: String,
+        verifiedByFetch: Bool,
+        confidence: String
+    ) {
+        self.path = path
+        self.title = title
+        self.source = source
+        self.matchQuality = matchQuality
+        self.verifiedByFetch = verifiedByFetch
+        self.confidence = confidence
+    }
+}
+
+public struct CLIResolveDiagnosticPayload: Codable, Sendable, Equatable {
+    public let stage: String
+    public let status: String
+    public let reason: String?
+    public let pathAttempt: String?
+    public let queryAttempt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case stage
+        case status
+        case reason
+        case pathAttempt = "path_attempt"
+        case queryAttempt = "query_attempt"
+    }
+
+    public init(
+        stage: String,
+        status: String,
+        reason: String? = nil,
+        pathAttempt: String? = nil,
+        queryAttempt: String? = nil
+    ) {
+        self.stage = stage
+        self.status = status
+        self.reason = reason
+        self.pathAttempt = pathAttempt
+        self.queryAttempt = queryAttempt
+    }
+}
+
 public struct CLICommandPayload: Codable, Sendable, Equatable {
     public let command: String
     public let caller: String?
@@ -160,6 +248,12 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
     public let technologies: [CLITechnologyPayload]?
     public let searchDiagnostics: [CLISearchDiagnosticPayload]?
     public let fetchDiagnostics: [CLIFetchDiagnosticPayload]?
+    public let canonicalPath: String?
+    public let confidence: String?
+    public let verifiedByFetch: Bool?
+    public let evidence: CLIResolveEvidencePayload?
+    public let candidates: [CLIResolveCandidatePayload]?
+    public let resolveDiagnostics: [CLIResolveDiagnosticPayload]?
     public let errorMessage: String?
 
     enum CodingKeys: String, CodingKey {
@@ -178,6 +272,12 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         case technologies
         case searchDiagnostics = "search_diagnostics"
         case fetchDiagnostics = "fetch_diagnostics"
+        case canonicalPath = "canonical_path"
+        case confidence
+        case verifiedByFetch = "verified_by_fetch"
+        case evidence
+        case candidates
+        case resolveDiagnostics = "resolve_diagnostics"
         case errorMessage = "error_message"
     }
 
@@ -197,6 +297,12 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         technologies: [CLITechnologyPayload]?,
         searchDiagnostics: [CLISearchDiagnosticPayload]?,
         fetchDiagnostics: [CLIFetchDiagnosticPayload]? = nil,
+        canonicalPath: String? = nil,
+        confidence: String? = nil,
+        verifiedByFetch: Bool? = nil,
+        evidence: CLIResolveEvidencePayload? = nil,
+        candidates: [CLIResolveCandidatePayload]? = nil,
+        resolveDiagnostics: [CLIResolveDiagnosticPayload]? = nil,
         errorMessage: String?
     ) {
         self.command = command
@@ -214,6 +320,12 @@ public struct CLICommandPayload: Codable, Sendable, Equatable {
         self.technologies = technologies
         self.searchDiagnostics = searchDiagnostics
         self.fetchDiagnostics = fetchDiagnostics
+        self.canonicalPath = canonicalPath
+        self.confidence = confidence
+        self.verifiedByFetch = verifiedByFetch
+        self.evidence = evidence
+        self.candidates = candidates
+        self.resolveDiagnostics = resolveDiagnostics
         self.errorMessage = errorMessage
     }
 }

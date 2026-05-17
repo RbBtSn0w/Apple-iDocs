@@ -174,6 +174,134 @@ struct CLICommandTests {
         #expect(payload.durationMs >= 0)
     }
 
+    @Test("CLI resolve command parses structured API intent")
+    func resolveCommandParsesStructuredIntent() throws {
+        let command = try ResolveCommand.parse([
+            "--framework", "SwiftUI",
+            "--symbol", "NavigationSplitView",
+            "--json",
+            "--caller", "skill.swiftui-engineering"
+        ])
+
+        #expect(command.framework == "SwiftUI")
+        #expect(command.symbol == "NavigationSplitView")
+        #expect(command.json)
+        #expect(command.caller == "skill.swiftui-engineering")
+    }
+
+    @Test("CLI resolve emits machine-readable JSON with evidence and diagnostics")
+    func resolveJSONOutputIncludesEvidenceAndDiagnostics() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousConfigFactory = CLIEnvironment.configFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.configFactory = previousConfigFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(
+                resolveResult: ResolveResult(
+                    canonicalPath: "/documentation/swiftui/navigationsplitview",
+                    confidence: .high,
+                    verifiedByFetch: true,
+                    evidence: ResolveEvidence(
+                        sourceFamily: "documentation",
+                        source: "apple",
+                        path: "/documentation/swiftui/navigationsplitview",
+                        title: "NavigationSplitView",
+                        summary: "A view that presents columns."
+                    ),
+                    candidates: [
+                        ResolveCandidate(
+                            path: "/documentation/swiftui/navigationsplitview",
+                            title: "NavigationSplitView",
+                            source: .direct,
+                            matchQuality: .exact,
+                            verifiedByFetch: true,
+                            confidence: .high
+                        )
+                    ],
+                    resolveDiagnostics: [
+                        ResolveDiagnostic(
+                            stage: "direct_path",
+                            status: "hit",
+                            reason: "fetch_verified",
+                            pathAttempt: "/documentation/swiftui/navigationsplitview"
+                        )
+                    ],
+                    fetchDiagnostics: [
+                        FetchAttemptDiagnostic(source: "apple", status: "hit")
+                    ]
+                )
+            )
+        }
+        CLIEnvironment.configFactory = { DocumentationConfig(cachePath: "/tmp/idocs-tests") }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runResolve(
+            intent: ResolveIntent(framework: "SwiftUI", symbol: "NavigationSplitView"),
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 0)
+        #expect(capture.stderr.isEmpty)
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "resolve")
+        #expect(payload.caller == "skill.swiftui-engineering")
+        #expect(payload.canonicalPath == "/documentation/swiftui/navigationsplitview")
+        #expect(payload.confidence == "high")
+        #expect(payload.verifiedByFetch == true)
+        #expect(payload.evidence?.source == "apple")
+        #expect(payload.candidates?.first?.source == "direct")
+        #expect(payload.resolveDiagnostics?.first?.stage == "direct_path")
+        #expect(payload.fetchDiagnostics?.first?.source == "apple")
+    }
+
+    @Test("CLI resolve JSON preserves invalid intent errors without search fallback")
+    func resolveInvalidIntentJSONOutput() async throws {
+        let capture = OutputCapture()
+        let previousServiceFactory = CLIEnvironment.serviceFactory
+        let previousStdout = CLIEnvironment.writeStdout
+        let previousStderr = CLIEnvironment.writeStderr
+
+        defer {
+            CLIEnvironment.serviceFactory = previousServiceFactory
+            CLIEnvironment.writeStdout = previousStdout
+            CLIEnvironment.writeStderr = previousStderr
+        }
+
+        CLIEnvironment.serviceFactory = {
+            MockDocumentationAdapter(errorToThrow: .invalidResolveIntent(message: "member requires type"))
+        }
+        CLIEnvironment.writeStdout = { capture.stdout.append($0) }
+        CLIEnvironment.writeStderr = { capture.stderr.append($0) }
+
+        let code = await CLIExecutor.runResolve(
+            intent: ResolveIntent(framework: "SwiftUI", member: "body"),
+            outputFormat: .json,
+            callerID: "skill.swiftui-engineering"
+        )
+
+        #expect(code == 1)
+        #expect(capture.stderr.joined(separator: "\n").contains("Invalid resolve intent"))
+        let data = try #require(capture.stdout.first?.data(using: .utf8))
+        let payload = try JSONDecoder().decode(CLICommandPayload.self, from: data)
+        #expect(payload.command == "resolve")
+        #expect(payload.confidence == "unresolved")
+        #expect(payload.verifiedByFetch == false)
+        #expect(payload.results == nil)
+        #expect(payload.resolveDiagnostics?.first?.reason == "invalid_intent")
+    }
+
     @Test("CLI search JSON and text expose source kind and fetch support")
     func searchOutputIncludesSourceKindAndFetchSupport() async throws {
         let capture = OutputCapture()
@@ -832,6 +960,10 @@ private struct ConfigAwareSearchAdapter: DocumentationService {
                 ]
             )
         )
+    }
+
+    func resolve(intent: ResolveIntent, config: DocumentationConfig) async throws -> ResolveResult {
+        throw DocumentationError.invalidResolveIntent(message: "not configured")
     }
 
     func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {

@@ -180,6 +180,65 @@ public enum CLIExecutor {
     }
 
     @discardableResult
+    public static func runResolve(
+        intent: ResolveIntent,
+        outputFormat: CLIOutputFormat = .text,
+        callerID: String? = nil
+    ) async -> Int32 {
+        let start = ContinuousClock.now
+        do {
+            let adapter = try CLIEnvironment.serviceFactory()
+            let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+            let result = try await adapter.resolve(intent: intent, config: config)
+            let durationMs = durationInMilliseconds(since: start)
+
+            if outputFormat == .json {
+                return writeJSONPayload(
+                    resolvePayload(
+                        intent: intent,
+                        result: result,
+                        callerID: callerID,
+                        durationMs: durationMs,
+                        exitCategory: .ok,
+                        errorMessage: nil
+                    )
+                )
+            }
+
+            if let canonicalPath = result.canonicalPath {
+                CLIEnvironment.writeStdout(
+                    [
+                        "Resolved: \(canonicalPath)",
+                        "Confidence: \(result.confidence.rawValue)",
+                        "Verified by fetch: \(result.verifiedByFetch ? "yes" : "no")"
+                    ].joined(separator: "\n")
+                )
+                return 0
+            }
+
+            CLIEnvironment.writeStdout("Unable to resolve structured documentation intent.")
+            return 1
+        } catch {
+            let message = CLIErrorPresenter.message(for: error)
+            let durationMs = durationInMilliseconds(since: start)
+            if outputFormat == .json {
+                _ = writeJSONPayload(
+                    resolvePayload(
+                        intent: intent,
+                        result: unresolvedResolveResult(for: error),
+                        callerID: callerID,
+                        durationMs: durationMs,
+                        exitCategory: CLIErrorPresenter.category(for: error),
+                        errorMessage: message
+                    )
+                )
+            }
+            CLIEnvironment.writeStderr(message)
+            return 1
+        }
+    }
+
+    @discardableResult
     public static func runList(
         category: String?,
         outputFormat: CLIOutputFormat = .text,
@@ -296,6 +355,91 @@ public enum CLIExecutor {
             contentType: attempt.contentType,
             statusCode: attempt.statusCode,
             hint: attempt.hint
+        )
+    }
+
+    private static func resolvePayload(
+        intent: ResolveIntent,
+        result: ResolveResult,
+        callerID: String?,
+        durationMs: Double,
+        exitCategory: CLIExitCategory,
+        errorMessage: String?
+    ) -> CLICommandPayload {
+        CLICommandPayload(
+            command: "resolve",
+            caller: callerID,
+            query: nil,
+            id: result.canonicalPath,
+            category: nil,
+            source: result.evidence?.source,
+            durationMs: durationMs,
+            resultCount: result.canonicalPath == nil ? 0 : 1,
+            selectedPaths: result.canonicalPath.map { [$0] } ?? [],
+            exitCategory: exitCategory,
+            body: nil,
+            results: nil,
+            technologies: nil,
+            searchDiagnostics: nil,
+            fetchDiagnostics: result.fetchDiagnostics.map(Self.mapFetchDiagnosticPayload),
+            canonicalPath: result.canonicalPath,
+            confidence: result.confidence.rawValue,
+            verifiedByFetch: result.verifiedByFetch,
+            evidence: result.evidence.map {
+                CLIResolveEvidencePayload(
+                    sourceFamily: $0.sourceFamily,
+                    source: $0.source,
+                    path: $0.path,
+                    title: $0.title,
+                    summary: $0.summary
+                )
+            },
+            candidates: result.candidates.map {
+                CLIResolveCandidatePayload(
+                    path: $0.path,
+                    title: $0.title,
+                    source: $0.source.rawValue,
+                    matchQuality: $0.matchQuality.rawValue,
+                    verifiedByFetch: $0.verifiedByFetch,
+                    confidence: $0.confidence.rawValue
+                )
+            },
+            resolveDiagnostics: result.resolveDiagnostics.map {
+                CLIResolveDiagnosticPayload(
+                    stage: $0.stage,
+                    status: $0.status,
+                    reason: $0.reason,
+                    pathAttempt: $0.pathAttempt,
+                    queryAttempt: $0.queryAttempt
+                )
+            },
+            errorMessage: errorMessage
+        )
+    }
+
+    private static func unresolvedResolveResult(for error: Error) -> ResolveResult {
+        let reason: String
+        if let documentationError = error as? DocumentationError,
+           case .invalidResolveIntent = documentationError {
+            reason = "invalid_intent"
+        } else {
+            reason = "resolve_failed"
+        }
+
+        return ResolveResult(
+            canonicalPath: nil,
+            confidence: .unresolved,
+            verifiedByFetch: false,
+            evidence: nil,
+            candidates: [],
+            resolveDiagnostics: [
+                ResolveDiagnostic(
+                    stage: "resolve",
+                    status: "error",
+                    reason: reason
+                )
+            ],
+            fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics ?? []
         )
     }
 

@@ -96,6 +96,23 @@ struct DocumentationServiceContractTests {
     func asyncAPIShape() async throws {
         struct StubService: DocumentationService {
             func search(query: String, config: DocumentationConfig) async throws -> [SearchResult] { [] }
+            func resolve(intent: ResolveIntent, config: DocumentationConfig) async throws -> ResolveResult {
+                ResolveResult(
+                    canonicalPath: "/documentation/swiftui/navigationsplitview",
+                    confidence: .high,
+                    verifiedByFetch: true,
+                    evidence: ResolveEvidence(
+                        sourceFamily: "documentation",
+                        source: "apple",
+                        path: "/documentation/swiftui/navigationsplitview",
+                        title: "NavigationSplitView",
+                        summary: "A view that presents columns."
+                    ),
+                    candidates: [],
+                    resolveDiagnostics: [],
+                    fetchDiagnostics: []
+                )
+            }
             func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {
                 DocumentationContent(title: id, body: "", url: URL(string: "https://example.com")!)
             }
@@ -107,12 +124,65 @@ struct DocumentationServiceContractTests {
         let config = DocumentationConfig(cachePath: "/tmp")
 
         let search = try await service.search(query: "SwiftUI", config: config)
+        let resolve = try await service.resolve(
+            intent: ResolveIntent(framework: "SwiftUI", symbol: "NavigationSplitView"),
+            config: config
+        )
         let fetch = try await service.fetch(id: "/documentation/swiftui/view", config: config)
         let list = try await service.listTechnologies(config: config)
 
         #expect(search.isEmpty)
+        #expect(resolve.confidence == .high)
+        #expect(resolve.verifiedByFetch)
+        #expect(resolve.evidence?.source == "apple")
         #expect(fetch.title == "/documentation/swiftui/view")
         #expect(list.isEmpty)
+    }
+
+    @Test("MockDocumentationAdapter returns configured resolve result")
+    func mockResolveResult() async throws {
+        let expected = ResolveResult(
+            canonicalPath: "/documentation/appkit/nswindow/toolbarstyle",
+            confidence: .high,
+            verifiedByFetch: true,
+            evidence: ResolveEvidence(
+                sourceFamily: "documentation",
+                source: "local",
+                path: "/documentation/appkit/nswindow/toolbarstyle",
+                title: "toolbarStyle",
+                summary: "The style of the window toolbar."
+            ),
+            candidates: [
+                ResolveCandidate(
+                    path: "/documentation/appkit/nswindow/toolbarstyle",
+                    title: "toolbarStyle",
+                    source: .direct,
+                    matchQuality: .exact,
+                    verifiedByFetch: true,
+                    confidence: .high
+                )
+            ],
+            resolveDiagnostics: [
+                ResolveDiagnostic(stage: "direct_path", status: "hit", reason: "fetch_verified")
+            ],
+            fetchDiagnostics: [
+                FetchAttemptDiagnostic(source: "local", status: "hit")
+            ]
+        )
+
+        let service = MockDocumentationAdapter(resolveResult: expected)
+        let result = try await service.resolve(
+            intent: ResolveIntent(
+                framework: "AppKit",
+                type: "NSWindow",
+                member: "toolbarStyle",
+                memberKind: "property"
+            ),
+            config: DocumentationConfig(cachePath: "/tmp")
+        )
+
+        #expect(result == expected)
+        #expect(result.canonicalPath == "/documentation/appkit/nswindow/toolbarstyle")
     }
 
     @Test("SearchResult source field is preserved through adapter contract")
@@ -168,6 +238,10 @@ struct DocumentationServiceContractTests {
             DocumentationErrorScenario(
                 error: .internalError(message: "unexpected nil"),
                 expectedDescription: "Internal error: unexpected nil"
+            ),
+            DocumentationErrorScenario(
+                error: .invalidResolveIntent(message: "member requires type"),
+                expectedDescription: "Invalid resolve intent: member requires type"
             )
         ]
     )

@@ -6,6 +6,7 @@ public enum DocumentationError: Error, LocalizedError, Sendable, Equatable {
     case parsingError(reason: String)
     case unauthorized
     case invalidConfiguration(message: String)
+    case invalidResolveIntent(message: String)
     case incompatibleVersion(adapter: String, core: String)
     case internalError(message: String)
     case unsupportedSourceType(id: String, sourceKind: String, attempts: [FetchAttemptDiagnostic])
@@ -23,6 +24,8 @@ public enum DocumentationError: Error, LocalizedError, Sendable, Equatable {
             return "Unauthorized access."
         case .invalidConfiguration(let message):
             return "Invalid configuration: \(message)"
+        case .invalidResolveIntent(let message):
+            return "Invalid resolve intent: \(message)"
         case .incompatibleVersion(let adapter, let core):
             return "Incompatible adapter/core versions. adapter=\(adapter), core=\(core)"
         case .internalError(let message):

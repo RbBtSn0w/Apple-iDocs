@@ -20,6 +20,8 @@ const DEFAULT_COUNTS = Object.freeze({
   not_applicable: 0
 });
 
+export const AUDIT_CAPABILITIES = Object.freeze(["resolve", "fetch", "search"]);
+
 export function createSeededSampler(pool, { seed = 1, sampleSize = 40 } = {}) {
   const eligible = pool.filter(testCase => testCase.ciEligible !== false);
   const groups = new Map();
@@ -52,6 +54,34 @@ export function createSeededSampler(pool, { seed = 1, sampleSize = 40 } = {}) {
   return sample;
 }
 
+export function caseCapability(testCase = {}) {
+  if (testCase.capability != null) {
+    const capability = String(testCase.capability);
+    if (AUDIT_CAPABILITIES.includes(capability)) {
+      return capability;
+    }
+    throw new Error(`unsupported capability: ${capability}`);
+  }
+
+  if (testCase.fetchPath || testCase.canonicalPathOnly === true) {
+    return "fetch";
+  }
+
+  const queryShape = String(testCase.queryShape ?? "");
+  const sourceFamily = String(testCase.sourceFamily ?? "documentation");
+  if (sourceFamily === "documentation" && (queryShape === "exact_symbol" || queryShape === "member_property")) {
+    return "resolve";
+  }
+
+  return "search";
+}
+
+export function isP0IssueEligible(result = {}) {
+  const capability = result.capability ?? caseCapability(result);
+  if (result.p0IssueEligible === false) return false;
+  return capability === "resolve" || capability === "fetch";
+}
+
 export function classifyProductResult(testCase, rawResult = {}) {
   const normalized = normalizeRawResult(rawResult);
 
@@ -68,8 +98,8 @@ export function classifyProductResult(testCase, rawResult = {}) {
     return buildClassification("empty", pass ? "pass" : "fail", normalized);
   }
 
-  const canonicalPaths = (testCase.canonicalPaths ?? []).map(normalizePath);
-  const actualPath = normalizePath(normalized.path ?? "");
+  const canonicalPaths = (testCase.canonicalPaths ?? []).map(normalizeComparablePath);
+  const actualPath = normalizeComparablePath(normalized.path ?? "");
   const expectedFramework = String(testCase.framework ?? "").toLowerCase();
 
   if (canonicalPaths.length > 0 && canonicalPaths.includes(actualPath)) {
@@ -92,6 +122,7 @@ export function computeFailureFingerprint(failures) {
   const stableInput = failures
     .map(failure => ({
       caseId: failure.caseId,
+      capability: failure.capability,
       expectedOutcome: failure.expectedOutcome,
       classification: failure.classification
     }))
@@ -121,6 +152,7 @@ export function actionableIDocsFailures(results) {
     result.targetId === "idocs"
       && result.verdict === "fail"
       && result.classification !== "network_error"
+      && isP0IssueEligible(result)
   );
 }
 
@@ -182,6 +214,10 @@ export function renderAuditMarkdown(audit) {
     "",
     renderProductSummary(audit),
     "",
+    "## Capability Summary",
+    "",
+    renderCapabilitySummary(audit),
+    "",
     "## Failure Heatmap",
     "",
     renderFailureHeatmap(audit),
@@ -227,25 +263,47 @@ export function renderProductSummary(audit) {
   return renderMarkdownTable(["Product", "Pass", "Fail", "Infra", "N/A"], rows);
 }
 
+export function renderCapabilitySummary(audit) {
+  const summary = {};
+  for (const result of audit.results) {
+    const capability = result.capability ?? "unknown";
+    summary[capability] ??= { ...DEFAULT_COUNTS };
+    if (Object.prototype.hasOwnProperty.call(summary[capability], result.verdict)) {
+      summary[capability][result.verdict] += 1;
+    }
+  }
+  const rows = Object.entries(summary).map(([capability, counts]) => [
+    capability,
+    counts.pass,
+    counts.fail,
+    counts.infra,
+    counts.not_applicable
+  ]);
+  return rows.length === 0
+    ? "No capability results recorded."
+    : renderMarkdownTable(["Capability", "Pass", "Fail", "Infra", "N/A"], rows);
+}
+
 export function renderFailureHeatmap(audit) {
   const failures = audit.results.filter(result => result.verdict === "fail" || result.verdict === "infra");
   if (failures.length === 0) return "No failures recorded.";
   const counts = new Map();
   for (const result of failures) {
-    const key = [result.queryShape, result.framework, result.targetId, result.classification].join("||");
+    const key = [result.capability ?? "unknown", result.queryShape, result.framework, result.targetId, result.classification].join("||");
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const rows = [...counts.entries()].map(([key, count]) => [...key.split("||"), count]);
-  return renderMarkdownTable(["Query Shape", "Framework", "Product", "Failure Class", "Count"], rows);
+  return renderMarkdownTable(["Capability", "Query Shape", "Framework", "Product", "Failure Class", "Count"], rows);
 }
 
 export function renderIDocsFailures(audit) {
   const failures = actionableIDocsFailures(audit.results);
   if (failures.length === 0) return "No actionable iDocs golden-truth failures.";
   return renderMarkdownTable(
-    ["Case", "Query", "Expected", "Classification", "Top Evidence", "repro command"],
+    ["Case", "Capability", "Query", "Expected", "Classification", "Top Evidence", "repro command"],
     failures.map(failure => [
       failure.caseId,
+      failure.capability,
       failure.query,
       failure.expectedOutcome,
       failure.classification,
@@ -282,6 +340,7 @@ export function buildIssueCollection(audit) {
   }
   const fingerprint = computeFailureFingerprint(failures.map(failure => ({
     caseId: failure.caseId,
+    capability: failure.capability,
     expectedOutcome: failure.expectedOutcome,
     classification: failure.classification
   })));
@@ -307,9 +366,10 @@ export function renderIssueBody(audit, fingerprint) {
     "## Failing cases",
     "",
     renderMarkdownTable(
-      ["Case", "Query", "Expected", "Classification", "Repro"],
+      ["Case", "Capability", "Query", "Expected", "Classification", "Repro"],
       failures.map(failure => [
         failure.caseId,
+        failure.capability,
         failure.query,
         failure.expectedOutcome,
         failure.classification,
@@ -406,6 +466,11 @@ function isModuleOnlyPath(path, expectedFramework) {
 
 function normalizePath(path) {
   return String(path ?? "").trim().replace(/^https:\/\/developer\.apple\.com/, "").replace(/\/$/, "").toLowerCase();
+}
+
+function normalizeComparablePath(path) {
+  return normalizePath(path)
+    .replace(/-swift\.(property|struct|enum|class|protocol|method|typealias)$/, "");
 }
 
 function competitorBinName(targetId) {

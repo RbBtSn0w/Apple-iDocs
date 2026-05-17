@@ -160,7 +160,7 @@ public struct SearchResult: Codable, Sendable {
         self.queryAttempt = queryAttempt
     }
 
-    private static func inferMatchScope(path: String, kind: DocumentKind) -> SearchMatchScope {
+    static func inferMatchScope(path: String, kind: DocumentKind) -> SearchMatchScope {
         switch kind {
         case .framework:
             return .module

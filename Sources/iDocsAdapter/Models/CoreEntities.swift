@@ -158,6 +158,229 @@ public struct DocumentationSearchResponse: Sendable, Equatable {
     }
 }
 
+public enum ResolveConfidence: String, Sendable, Codable, Equatable {
+    case high
+    case medium
+    case low
+    case unresolved
+}
+
+public enum ResolveCandidateSource: String, Sendable, Codable, Equatable {
+    case direct
+    case searchFallback = "search_fallback"
+}
+
+public enum ResolveMatchQuality: String, Sendable, Codable, Equatable {
+    case exact
+    case partial
+    case mismatch
+    case unknown
+}
+
+public struct ResolveIntent: Sendable, Codable, Equatable {
+    public let framework: String?
+    public let symbol: String?
+    public let type: String?
+    public let member: String?
+    public let memberKind: String?
+    public let sourceFamily: String
+
+    enum CodingKeys: String, CodingKey {
+        case framework
+        case symbol
+        case type
+        case member
+        case memberKind = "member_kind"
+        case sourceFamily = "source_family"
+    }
+
+    public init(
+        framework: String? = nil,
+        symbol: String? = nil,
+        type: String? = nil,
+        member: String? = nil,
+        memberKind: String? = nil,
+        sourceFamily: String? = nil
+    ) {
+        self.framework = Self.trimmed(framework)
+        self.symbol = Self.trimmed(symbol)
+        self.type = Self.trimmed(type)
+        self.member = Self.trimmed(member)
+        self.memberKind = Self.trimmed(memberKind)
+        self.sourceFamily = Self.trimmed(sourceFamily) ?? "documentation"
+    }
+
+    public var validationErrorMessage: String? {
+        guard framework != nil else {
+            return "framework is required"
+        }
+
+        guard sourceFamily == "documentation" else {
+            return "source-family must be documentation"
+        }
+
+        if member != nil && type == nil {
+            return "member requires type"
+        }
+
+        if symbol != nil && (type != nil || member != nil) {
+            return "symbol cannot be combined with type or member"
+        }
+
+        if symbol != nil {
+            return nil
+        }
+
+        if type != nil {
+            return nil
+        }
+
+        return "one of symbol or type is required"
+    }
+
+    public var isValid: Bool {
+        validationErrorMessage == nil
+    }
+
+    private static func trimmed(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+public struct ResolveEvidence: Sendable, Codable, Equatable {
+    public let sourceFamily: String
+    public let source: String
+    public let path: String
+    public let title: String
+    public let summary: String?
+
+    enum CodingKeys: String, CodingKey {
+        case sourceFamily = "source_family"
+        case source
+        case path
+        case title
+        case summary
+    }
+
+    public init(
+        sourceFamily: String,
+        source: String,
+        path: String,
+        title: String,
+        summary: String? = nil
+    ) {
+        self.sourceFamily = sourceFamily
+        self.source = source
+        self.path = path
+        self.title = title
+        self.summary = summary
+    }
+}
+
+public struct ResolveCandidate: Sendable, Codable, Equatable {
+    public let path: String
+    public let title: String?
+    public let source: ResolveCandidateSource
+    public let matchQuality: ResolveMatchQuality
+    public let verifiedByFetch: Bool
+    public let confidence: ResolveConfidence
+
+    enum CodingKeys: String, CodingKey {
+        case path
+        case title
+        case source
+        case matchQuality = "match_quality"
+        case verifiedByFetch = "verified_by_fetch"
+        case confidence
+    }
+
+    public init(
+        path: String,
+        title: String?,
+        source: ResolveCandidateSource,
+        matchQuality: ResolveMatchQuality,
+        verifiedByFetch: Bool,
+        confidence: ResolveConfidence
+    ) {
+        self.path = path
+        self.title = title
+        self.source = source
+        self.matchQuality = matchQuality
+        self.verifiedByFetch = verifiedByFetch
+        self.confidence = confidence
+    }
+}
+
+public struct ResolveDiagnostic: Sendable, Codable, Equatable {
+    public let stage: String
+    public let status: String
+    public let reason: String?
+    public let pathAttempt: String?
+    public let queryAttempt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case stage
+        case status
+        case reason
+        case pathAttempt = "path_attempt"
+        case queryAttempt = "query_attempt"
+    }
+
+    public init(
+        stage: String,
+        status: String,
+        reason: String? = nil,
+        pathAttempt: String? = nil,
+        queryAttempt: String? = nil
+    ) {
+        self.stage = stage
+        self.status = status
+        self.reason = reason
+        self.pathAttempt = pathAttempt
+        self.queryAttempt = queryAttempt
+    }
+}
+
+public struct ResolveResult: Sendable, Codable, Equatable {
+    public let canonicalPath: String?
+    public let confidence: ResolveConfidence
+    public let verifiedByFetch: Bool
+    public let evidence: ResolveEvidence?
+    public let candidates: [ResolveCandidate]
+    public let resolveDiagnostics: [ResolveDiagnostic]
+    public let fetchDiagnostics: [FetchAttemptDiagnostic]
+
+    enum CodingKeys: String, CodingKey {
+        case canonicalPath = "canonical_path"
+        case confidence
+        case verifiedByFetch = "verified_by_fetch"
+        case evidence
+        case candidates
+        case resolveDiagnostics = "resolve_diagnostics"
+        case fetchDiagnostics = "fetch_diagnostics"
+    }
+
+    public init(
+        canonicalPath: String?,
+        confidence: ResolveConfidence,
+        verifiedByFetch: Bool,
+        evidence: ResolveEvidence?,
+        candidates: [ResolveCandidate],
+        resolveDiagnostics: [ResolveDiagnostic],
+        fetchDiagnostics: [FetchAttemptDiagnostic]
+    ) {
+        self.canonicalPath = canonicalPath
+        self.confidence = confidence
+        self.verifiedByFetch = verifiedByFetch
+        self.evidence = evidence
+        self.candidates = candidates
+        self.resolveDiagnostics = resolveDiagnostics
+        self.fetchDiagnostics = fetchDiagnostics
+    }
+}
+
 public struct Technology: Sendable, Equatable {
     public let name: String
     public let id: String
