@@ -46,6 +46,9 @@ jobs:
       - name: Verify npm publish script
         run: bash ./scripts/test-publish-npm-package.sh
 
+      - name: Verify Homebrew publish script
+        run: bash ./scripts/test-publish-homebrew-formula.sh
+
       - name: Verify release configuration
         run: bash ./scripts/test-release-config.sh
 
@@ -139,3 +142,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./scripts/publish-npm-package.sh github
+
+      - name: Publish Homebrew formula
+        if: success()
+        env:
+          HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          ./scripts/publish-homebrew-formula.sh
