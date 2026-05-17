@@ -84,6 +84,9 @@ jobs:
     needs: [build-and-test, e2e-cli-offline]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: macos-15
+    outputs:
+      package_version: ${{ steps.release-result.outputs.version }}
+      released: ${{ steps.release-result.outputs.released }}
     permissions:
       contents: write
       id-token: write
@@ -129,24 +132,62 @@ jobs:
           cd npm
           npx semantic-release@25
 
-      - name: Publish to npmjs.org
+      - name: Resolve release result
+        id: release-result
         if: success()
+        run: |
+          version="$(node -p "JSON.parse(require('fs').readFileSync('npm/package.json', 'utf8')).version")"
+          tag="$(git tag --points-at HEAD --list "v$version")"
+          if [ -z "$tag" ]; then
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "semantic-release did not create a release tag; skipping package publication."
+            exit 0
+          fi
+          echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npmjs.org
+        if: steps.release-result.outputs.released == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           ./scripts/publish-npm-package.sh npmjs
 
       - name: Publish to GitHub Packages
-        if: success()
+        if: steps.release-result.outputs.released == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./scripts/publish-npm-package.sh github
 
+  publish-homebrew:
+    name: Publish Homebrew
+    needs: release
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      needs.release.outputs.released == 'true'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Homebrew tap token
+        id: homebrew-tap-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: RbBtSn0w
+          repositories: homebrew-tap
+
       - name: Publish Homebrew formula
-        if: success()
         env:
           HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.homebrew-tap-token.outputs.token }}
         run: |
-          ./scripts/publish-homebrew-formula.sh
+          ./scripts/publish-homebrew-formula.sh "${{ needs.release.outputs.package_version }}"

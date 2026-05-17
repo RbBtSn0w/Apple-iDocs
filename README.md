@@ -27,7 +27,7 @@ brew install rbbtsn0w/tap/idocs
 idocs --help
 ```
 
-The Homebrew formula is published to [RbBtSn0w/homebrew-tap](https://github.com/RbBtSn0w/homebrew-tap) from the release workflow after the GitHub Release assets are available.
+The Homebrew formula is published to [RbBtSn0w/homebrew-tap](https://github.com/RbBtSn0w/homebrew-tap) from the `publish-homebrew` job after the GitHub Release assets are available. The job mints a short-lived tap token from the shared release-bot GitHub App using `RELEASE_BOT_APP_ID` and `RELEASE_BOT_PRIVATE_KEY`.
 
 ### Install from npm
 

@@ -76,13 +76,68 @@ assertIncludes(
 );
 assertIncludes(
   workflow,
-  "HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
-  "release workflow must require HOMEBREW_TAP_TOKEN for tap writes"
+  "  publish-homebrew:",
+  "release workflow must isolate Homebrew formula publication in its own job"
 );
 assertIncludes(
   workflow,
-  "./scripts/publish-homebrew-formula.sh",
-  "release workflow must publish the Homebrew formula"
+  "    needs: release",
+  "Homebrew formula publication must wait for the release job"
+);
+assertIncludes(
+  workflow,
+  "package_version: ${{ steps.release-result.outputs.version }}",
+  "release job must expose the semantic-release package version"
+);
+assertIncludes(
+  workflow,
+  "released: ${{ steps.release-result.outputs.released }}",
+  "release job must expose whether semantic-release created a release"
+);
+assertIncludes(
+  workflow,
+  "git tag --points-at HEAD --list \"v$version\"",
+  "release workflow must detect no-release runs from the generated release tag"
+);
+assertIncludes(
+  workflow,
+  "if: steps.release-result.outputs.released == 'true'",
+  "npm package publication must skip when semantic-release creates no release"
+);
+assertIncludes(
+  workflow,
+  "needs.release.outputs.released == 'true'",
+  "Homebrew formula publication must skip when semantic-release creates no release"
+);
+assertIncludes(
+  workflow,
+  "actions/create-github-app-token@v3",
+  "release workflow must mint a short-lived GitHub App token for Homebrew tap writes"
+);
+assertIncludes(
+  workflow,
+  "app-id: ${{ vars.RELEASE_BOT_APP_ID }}",
+  "release workflow must use the configured release-bot app id"
+);
+assertIncludes(
+  workflow,
+  "private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}",
+  "release workflow must use the configured release-bot private key"
+);
+assertIncludes(
+  workflow,
+  "repositories: homebrew-tap",
+  "release workflow must scope the release-bot token to the Homebrew tap repository"
+);
+assertIncludes(
+  workflow,
+  "HOMEBREW_TAP_TOKEN: ${{ steps.homebrew-tap-token.outputs.token }}",
+  "release workflow must pass the short-lived release-bot token to the Homebrew publisher"
+);
+assertIncludes(
+  workflow,
+  "./scripts/publish-homebrew-formula.sh \"${{ needs.release.outputs.package_version }}\"",
+  "Homebrew formula publisher must use the semantic-release version from the release job"
 );
 assertOrder(
   workflow,
@@ -96,6 +151,9 @@ assertOrder(
   "./scripts/publish-homebrew-formula.sh",
   "Homebrew formula publication must run after GitHub Packages publish"
 );
+if (workflow.includes("secrets.HOMEBREW_TAP_TOKEN") || workflow.includes("secrets.HOMEBREW_APP_PRIVATE_KEY")) {
+  fail("release workflow must not depend on legacy Homebrew PAT/private-key credentials");
+}
 
 if (packageJson.engines?.node !== expectedNodeEngine) {
   fail(`npm package must require Node ${expectedNodeEngine} for @semantic-release/exec`);
