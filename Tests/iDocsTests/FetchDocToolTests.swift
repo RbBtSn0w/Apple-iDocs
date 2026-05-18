@@ -73,6 +73,47 @@ struct FetchDocToolTests {
         #expect(markdown.contains("# Remote"))
     }
 
+    @Test("FetchDocTool fetches Apple DocC content with object identifier")
+    func remoteObjectIdentifierSucceedsFromApple() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-remote-object-identifier", fileManager: mockFS)
+        let path = "/documentation/swiftui/navigationsplitview"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.dataURL(for: path))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.docCJSONWithObjectIdentifier(
+                title: "NavigationSplitView",
+                identifierURL: "doc://com.apple.documentation/documentation/swiftui/navigationsplitview",
+                abstract: "A view that presents views in columns."
+            ),
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data("# Sosumi NavigationSplitView\n\nFallback content.".utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL, contentType: "text/markdown")
+        )
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        let output = try await tool.runDetailed(path: path)
+
+        #expect(output.source == .apple)
+        #expect(output.markdown.contains("# NavigationSplitView"))
+        #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple])
+        #expect(!output.sourceAttempts.map(\.source).contains(.sosumi))
+    }
+
     @Test("FetchDocTool falls back to sosumi markdown when apple remote fails")
     func sosumiFallback() async throws {
         let mockFS = MockFileSystem()
@@ -319,6 +360,46 @@ struct FetchDocToolTests {
             #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
             #expect(output.sourceAttempts.last?.status == .hit)
         }
+    }
+
+    @Test("FetchDocTool records object identifier missing URL decode failure before fallback")
+    func objectIdentifierMissingURLFallsBackWithDecodeDiagnostic() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-object-identifier-missing-url", fileManager: mockFS)
+        let path = "/documentation/swiftui/navigationsplitview"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.dataURL(for: path))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.docCJSONWithObjectIdentifierMissingURL(
+                title: "NavigationSplitView",
+                abstract: "A view that presents views in columns."
+            ),
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data("# NavigationSplitView\n\nFallback content.".utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL, contentType: "text/markdown")
+        )
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        let output = try await tool.runDetailed(path: path)
+
+        #expect(output.source == .sosumi)
+        #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
+        #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+        #expect(output.sourceAttempts.last?.status == .hit)
     }
 
     @Test("FetchDocTool records Apple HTTP status before successful fallback")
