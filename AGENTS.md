@@ -2,13 +2,15 @@
 
 # iDocs Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-05-18
+Auto-generated from all feature plans. Last updated: 2026-05-19
 
 ## Active Technologies
 - Swift 6.0 project settings plus Node.js ES modules for benchmark scripts + Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner (013-agent-resolve-entry)
 - Existing disk cache for fetch; benchmark fixture JSON under `specs/008-mcp-service-benchmark/fixtures/`; no new persistent service storage (013-agent-resolve-entry)
 - Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack (014-fix-docc-identifier)
 - Existing fetch disk cache only; no cache format migration because encoded `DocCContent.identifier` remains a string (014-fix-docc-identifier)
+- Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack (015-resilient-docc-ingestion)
+- Existing fetch disk cache only; normalized successful Apple content encodes to stable `DocCContent` shape (015-resilient-docc-ingestion)
 
 - Swift 6.0（项目设置）+ shell scripts + Tuist, swift-argument-parser, swift-log；外部目标为 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai` (008-mcp-service-benchmark)
 
@@ -43,10 +45,10 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 - **Agent-Facing Documentation Entry**: `idocs resolve` is the P0 agent-facing capability for structured Apple documentation evidence retrieval. Agents should prefer structured resolve intents for API evidence, use `idocs fetch` as the canonical evidence authority for known paths, and treat `idocs search` as exploration and candidate discovery rather than the primary correctness path.
 
 ## Recent Changes
+- 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
+- 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
 - 014-fix-docc-identifier: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
-- 013-agent-resolve-entry: Added Swift 6.0 project settings plus Node.js ES modules for benchmark scripts + Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner
 
-- 008-mcp-service-benchmark: Added Swift 6.0（项目设置）+ shell scripts + Tuist, swift-argument-parser, swift-log；外部目标为 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai`
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
@@ -54,5 +56,5 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/014-fix-docc-identifier/plan.md
+specs/015-resilient-docc-ingestion/plan.md
 <!-- SPECKIT END -->

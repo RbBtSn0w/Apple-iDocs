@@ -62,13 +62,25 @@ public actor AppleJSONAPI {
     }
     
     public func fetchDoc(path: String) async throws -> DocCContent {
+        try await fetchDocDetailed(path: path).content
+    }
+
+    public func fetchDocDetailed(path: String) async throws -> AppleDocCIngestionResult {
         guard let url = URLHelpers.dataURL(for: path) else {
             throw iDocsError.invalidURL
         }
         
         let data = try await fetchWithRetry(url: url)
-        let decoder = JSONDecoder()
-        return try decoder.decode(DocCContent.self, from: data)
+        do {
+            return try AppleDocCIngestion().normalize(data, requestedPath: path)
+        } catch let ingestionError as AppleDocCIngestionError {
+            if let content = try? JSONDecoder().decode(DocCContent.self, from: data) {
+                return AppleDocCIngestionResult(content: content, diagnostics: [])
+            }
+            throw ingestionError
+        } catch {
+            return AppleDocCIngestionResult(content: try JSONDecoder().decode(DocCContent.self, from: data), diagnostics: [])
+        }
     }
 
     public func fetchTechnologies() async throws -> [Technology] {
