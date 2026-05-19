@@ -62,6 +62,15 @@ struct AppleDocCIngestionTests {
         #expect(object["identifier"] as? String == "doc://com.apple.SwiftUI/documentation/SwiftUI/NavigationSplitView")
         #expect(object["raw"] == nil)
         #expect(object["jsonValue"] == nil)
+
+        let abstract = try #require(object["abstract"] as? [[String: Any]])
+        #expect(abstract.first?["type"] as? String == "text")
+        #expect(abstract.first?["text"] as? String == "Known abstract.")
+
+        let primary = try #require(object["primaryContentSections"] as? [[String: Any]])
+        #expect(primary.first?["kind"] as? String == "content")
+        let blocks = try #require(primary.first?["content"] as? [[String: Any]])
+        #expect(blocks.first?["type"] as? String == "paragraph")
     }
 
     @Test("AppleDocCIngestion fails with path-aware diagnostic when required title is missing")
@@ -77,5 +86,115 @@ struct AppleDocCIngestionTests {
             #expect(error.diagnostic.path == "metadata.title")
             #expect(error.diagnostic.reason == "missing_required_title")
         }
+    }
+
+    @Test("AppleDocCIngestion rejects references-only payload as non-renderable")
+    func referencesOnlyPayloadFailsRenderableContentGate() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "references": {
+                "doc://com.apple.documentation/documentation/swiftui/text": {
+                    "title": "Text",
+                    "url": "/documentation/swiftui/text"
+                }
+            }
+        }
+        """.utf8)
+
+        do {
+            _ = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+            Issue.record("Expected missing renderable content failure")
+        } catch let error as AppleDocCIngestionError {
+            #expect(error.diagnostic.path == "primaryContentSections")
+            #expect(error.diagnostic.reason == "missing_renderable_content")
+        }
+    }
+
+    @Test("AppleDocCIngestion records skipped loose section diagnostics")
+    func recordsSkippedLooseSectionDiagnostics() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                { "type": "text", "text": "Renderable abstract." },
+                { "type": "codeVoice" }
+            ],
+            "topicSections": [
+                { "title": "Topics", "identifiers": [] },
+                "bad topic"
+            ],
+            "relationshipsSections": [
+                { "title": "Related", "identifiers": [] }
+            ],
+            "seeAlsoSections": [
+                { "identifiers": ["doc://com.apple.documentation/documentation/swiftui/text"] }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+
+        #expect(result.diagnostics.contains { $0.path == "abstract[1].code" && $0.reason == "missing_code_voice_code" })
+        #expect(result.diagnostics.contains { $0.path == "topicSections[0].identifiers" && $0.reason == "missing_topic_identifiers" })
+        #expect(result.diagnostics.contains { $0.path == "topicSections[1]" && $0.reason == "topic_section_not_object" })
+        #expect(result.diagnostics.contains { $0.path == "relationshipsSections[0].identifiers" && $0.reason == "missing_relationship_identifiers" })
+        #expect(result.diagnostics.contains { $0.path == "seeAlsoSections[0].title" && $0.reason == "missing_see_also_title" })
+    }
+
+    @Test("AppleDocCIngestion maps declarations and clamps invalid headings")
+    func mapsDeclarationsAndClampsInvalidHeadings() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "primaryContentSections": [
+                {
+                    "kind": "declarations",
+                    "declarations": [
+                        {
+                            "tokens": [
+                                { "kind": "keyword", "text": "struct" },
+                                { "kind": "text", "text": " " },
+                                { "kind": "identifier", "text": "View" }
+                            ],
+                            "languages": ["swift"]
+                        }
+                    ]
+                },
+                {
+                    "kind": "content",
+                    "content": [
+                        { "type": "heading", "level": -1, "text": "Overview" },
+                        { "type": "codeListing", "syntax": "swift", "code": ["let value = 1", 42] }
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+
+        guard case .declarations(let declarations)? = result.content.primaryContentSections?.first else {
+            Issue.record("Expected declarations section")
+            return
+        }
+        #expect(declarations.declarations.first?.tokens.map(\.text).joined() == "struct View")
+        #expect(result.diagnostics.contains { $0.path == "primaryContentSections[1].content[0].level" && $0.reason == "invalid_heading_level" })
+        #expect(result.diagnostics.contains { $0.path == "primaryContentSections[1].content[1].code[1]" && $0.reason == "code_listing_line_not_string" })
     }
 }

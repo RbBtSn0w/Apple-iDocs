@@ -113,7 +113,7 @@ public struct AppleDocCIngestion: Sendable {
         let seeAlso = seeAlsoSections(from: object["seeAlsoSections"], path: "seeAlsoSections", diagnostics: &diagnostics)
         let references = references(from: object["references"], path: "references", diagnostics: &diagnostics)
 
-        if abstract?.isEmpty != false && primary?.isEmpty != false && references?.isEmpty != false {
+        if (abstract?.isEmpty ?? true) && (primary?.isEmpty ?? true) {
             throw failure(path: "primaryContentSections", reason: "missing_renderable_content")
         }
 
@@ -164,14 +164,54 @@ public struct AppleDocCIngestion: Sendable {
                 guard !blocks.isEmpty else { return nil }
                 return .content(ContentBlockSection(content: blocks))
             case "declarations":
-                diagnostics.append(partial(path: sectionPath, reason: "unsupported_section_kind", detail: kind))
-                return nil
+                return declarationsSection(from: object, path: sectionPath, diagnostics: &diagnostics).map(ContentSection.declarations)
             default:
                 diagnostics.append(partial(path: sectionPath, reason: "unknown_section_kind", detail: kind))
                 return nil
             }
         }
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private func declarationsSection(from object: [String: JSONValue], path: String, diagnostics: inout [AppleDocCDiagnostic]) -> DeclarationsSection? {
+        guard case .array(let values) = object["declarations"] else {
+            diagnostics.append(partial(path: "\(path).declarations", reason: "missing_declarations"))
+            return nil
+        }
+        let declarations = values.enumerated().compactMap { index, value -> Declaration? in
+            let declarationPath = "\(path).declarations[\(index)]"
+            guard case .object(let object) = value else {
+                diagnostics.append(partial(path: declarationPath, reason: "declaration_not_object"))
+                return nil
+            }
+            guard case .array(let tokenValues) = object["tokens"] else {
+                diagnostics.append(partial(path: "\(declarationPath).tokens", reason: "missing_declaration_tokens"))
+                return nil
+            }
+            let tokens = tokenValues.enumerated().compactMap { tokenIndex, value -> DeclarationToken? in
+                let tokenPath = "\(declarationPath).tokens[\(tokenIndex)]"
+                guard case .object(let token) = value else {
+                    diagnostics.append(partial(path: tokenPath, reason: "declaration_token_not_object"))
+                    return nil
+                }
+                guard let kind = string("kind", in: token) else {
+                    diagnostics.append(partial(path: "\(tokenPath).kind", reason: "missing_declaration_token_kind"))
+                    return nil
+                }
+                guard let text = string("text", in: token) else {
+                    diagnostics.append(partial(path: "\(tokenPath).text", reason: "missing_declaration_token_text"))
+                    return nil
+                }
+                return DeclarationToken(kind: kind, text: text, identifier: string("identifier", in: token))
+            }
+            guard !tokens.isEmpty else { return nil }
+            return Declaration(
+                tokens: tokens,
+                languages: nonEmptyStringArray(from: object["languages"]),
+                platforms: nonEmptyStringArray(from: object["platforms"])
+            )
+        }
+        return declarations.isEmpty ? nil : DeclarationsSection(declarations: declarations)
     }
 
     private func contentBlocks(from value: JSONValue?, path: String, diagnostics: inout [AppleDocCDiagnostic]) -> [ContentBlock] {
@@ -202,7 +242,11 @@ public struct AppleDocCIngestion: Sendable {
             }
             let level: Int
             if case .number(let value) = object["level"] {
-                level = Int(value)
+                let rawLevel = Int(value)
+                level = min(max(rawLevel, 0), 6)
+                if level != rawLevel {
+                    diagnostics.append(partial(path: "\(path).level", reason: "invalid_heading_level", detail: "\(rawLevel)"))
+                }
             } else {
                 level = 2
             }
@@ -212,8 +256,9 @@ public struct AppleDocCIngestion: Sendable {
                 diagnostics.append(partial(path: "\(path).code", reason: "missing_code_listing_lines"))
                 return nil
             }
-            let code = lines.compactMap { value -> String? in
+            let code = lines.enumerated().compactMap { index, value -> String? in
                 if case .string(let line) = value { return line }
+                diagnostics.append(partial(path: "\(path).code[\(index)]", reason: "code_listing_line_not_string"))
                 return nil
             }
             return code.isEmpty ? nil : .codeListing(syntax: string("syntax", in: object), code: code)
@@ -243,9 +288,17 @@ public struct AppleDocCIngestion: Sendable {
 
         switch type {
         case "text":
-            return string("text", in: object).map(InlineContent.text)
+            guard let text = string("text", in: object) else {
+                diagnostics.append(partial(path: "\(path).text", reason: "missing_text"))
+                return nil
+            }
+            return .text(text)
         case "codeVoice":
-            return string("code", in: object).map(InlineContent.codeVoice)
+            guard let code = string("code", in: object) else {
+                diagnostics.append(partial(path: "\(path).code", reason: "missing_code_voice_code"))
+                return nil
+            }
+            return .codeVoice(code)
         case "strong":
             return .strong(inlineArray(from: object["inlineContent"], path: "\(path).inlineContent", diagnostics: &diagnostics) ?? [])
         case "emphasis":
@@ -271,33 +324,66 @@ public struct AppleDocCIngestion: Sendable {
     private func topicSections(from value: JSONValue?, path: String, diagnostics: inout [AppleDocCDiagnostic]) -> [TopicSection]? {
         guard case .array(let values) = value else { return nil }
         let sections = values.enumerated().compactMap { index, value -> TopicSection? in
-            guard case .object(let object) = value else { return nil }
-            guard let title = string("title", in: object) else { return nil }
+            let sectionPath = "\(path)[\(index)]"
+            guard case .object(let object) = value else {
+                diagnostics.append(partial(path: sectionPath, reason: "topic_section_not_object"))
+                return nil
+            }
+            guard let title = string("title", in: object) else {
+                diagnostics.append(partial(path: "\(sectionPath).title", reason: "missing_topic_title"))
+                return nil
+            }
             let identifiers = stringArray(from: object["identifiers"])
-            return identifiers.isEmpty ? nil : TopicSection(title: title, identifiers: identifiers)
+            guard !identifiers.isEmpty else {
+                diagnostics.append(partial(path: "\(sectionPath).identifiers", reason: "missing_topic_identifiers"))
+                return nil
+            }
+            return TopicSection(title: title, identifiers: identifiers)
         }
         return sections.isEmpty ? nil : sections
     }
 
     private func relationshipSections(from value: JSONValue?, path: String, diagnostics: inout [AppleDocCDiagnostic]) -> [RelationshipSection]? {
         guard case .array(let values) = value else { return nil }
-        let sections = values.compactMap { value -> RelationshipSection? in
-            guard case .object(let object) = value else { return nil }
-            guard let title = string("title", in: object) else { return nil }
+        let sections = values.enumerated().compactMap { index, value -> RelationshipSection? in
+            let sectionPath = "\(path)[\(index)]"
+            guard case .object(let object) = value else {
+                diagnostics.append(partial(path: sectionPath, reason: "relationship_section_not_object"))
+                return nil
+            }
+            guard let title = string("title", in: object) else {
+                diagnostics.append(partial(path: "\(sectionPath).title", reason: "missing_relationship_title"))
+                return nil
+            }
             let type = string("type", in: object) ?? "relationship"
             let identifiers = stringArray(from: object["identifiers"])
-            return identifiers.isEmpty ? nil : RelationshipSection(type: type, title: title, identifiers: identifiers)
+            guard !identifiers.isEmpty else {
+                diagnostics.append(partial(path: "\(sectionPath).identifiers", reason: "missing_relationship_identifiers"))
+                return nil
+            }
+            return RelationshipSection(type: type, title: title, identifiers: identifiers)
         }
         return sections.isEmpty ? nil : sections
     }
 
     private func seeAlsoSections(from value: JSONValue?, path: String, diagnostics: inout [AppleDocCDiagnostic]) -> [SeeAlsoSection]? {
         guard case .array(let values) = value else { return nil }
-        let sections = values.compactMap { value -> SeeAlsoSection? in
-            guard case .object(let object) = value else { return nil }
-            guard let title = string("title", in: object) else { return nil }
+        let sections = values.enumerated().compactMap { index, value -> SeeAlsoSection? in
+            let sectionPath = "\(path)[\(index)]"
+            guard case .object(let object) = value else {
+                diagnostics.append(partial(path: sectionPath, reason: "see_also_section_not_object"))
+                return nil
+            }
+            guard let title = string("title", in: object) else {
+                diagnostics.append(partial(path: "\(sectionPath).title", reason: "missing_see_also_title"))
+                return nil
+            }
             let identifiers = stringArray(from: object["identifiers"])
-            return identifiers.isEmpty ? nil : SeeAlsoSection(title: title, identifiers: identifiers)
+            guard !identifiers.isEmpty else {
+                diagnostics.append(partial(path: "\(sectionPath).identifiers", reason: "missing_see_also_identifiers"))
+                return nil
+            }
+            return SeeAlsoSection(title: title, identifiers: identifiers)
         }
         return sections.isEmpty ? nil : sections
     }
@@ -332,12 +418,16 @@ public struct AppleDocCIngestion: Sendable {
         }
     }
 
+    private func nonEmptyStringArray(from value: JSONValue?) -> [String]? {
+        let strings = stringArray(from: value)
+        return strings.isEmpty ? nil : strings
+    }
+
     private func string(at path: String, in root: [String: JSONValue]) -> String? {
-        let parts = path.split(separator: ".").map(String.init)
         var current: JSONValue? = .object(root)
-        for part in parts {
+        for part in path.split(separator: ".") {
             guard case .object(let object) = current else { return nil }
-            current = object[part]
+            current = object[String(part)]
         }
         if case .string(let value) = current {
             return value

@@ -46,7 +46,6 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 
 ## Recent Changes
 - 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
-- 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
 - 014-fix-docc-identifier: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
 
 

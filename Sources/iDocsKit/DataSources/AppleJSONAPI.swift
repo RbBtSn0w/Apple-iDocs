@@ -74,9 +74,6 @@ public actor AppleJSONAPI {
         do {
             return try AppleDocCIngestion().normalize(data, requestedPath: path)
         } catch let ingestionError as AppleDocCIngestionError {
-            if let content = try? JSONDecoder().decode(DocCContent.self, from: data) {
-                return AppleDocCIngestionResult(content: content, diagnostics: [])
-            }
             throw ingestionError
         } catch {
             return AppleDocCIngestionResult(content: try JSONDecoder().decode(DocCContent.self, from: data), diagnostics: [])

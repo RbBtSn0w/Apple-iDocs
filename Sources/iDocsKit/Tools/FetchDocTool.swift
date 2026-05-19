@@ -136,14 +136,16 @@ public struct FetchDocTool {
     }
 
     private func appleHitAttempt(for diagnostics: [AppleDocCDiagnostic]) -> FetchSourceAttempt {
-        guard let diagnostic = diagnostics.first(where: { $0.severity == .partial }) else {
+        let partials = diagnostics.filter { $0.severity == .partial }
+        guard let diagnostic = partials.first else {
             return FetchSourceAttempt(source: .apple, status: .hit)
         }
+        let hint = partials.count > 1 ? "\(diagnostic.reason) (and \(partials.count - 1) more)" : diagnostic.reason
         return FetchSourceAttempt(
             source: .apple,
             status: .hit,
             reason: "remote_decode_partial.\(diagnostic.path)",
-            hint: diagnostic.reason
+            hint: hint
         )
     }
 
