@@ -202,6 +202,62 @@ enum MockPayloads {
         """.data(using: .utf8)!
     }
 
+    static func docCJSONWithUnknownContentBlock(title: String, identifierURL: String) -> Data {
+        """
+        {
+            "identifier": {
+                "url": "\(identifierURL)",
+                "interfaceLanguage": "swift"
+            },
+            "metadata": {
+                "title": "\(title)",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                {
+                    "type": "text",
+                    "text": "Known abstract."
+                }
+            ],
+            "primaryContentSections": [
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "inlineContent": [
+                                {
+                                    "type": "text",
+                                    "text": "Known paragraph."
+                                }
+                            ]
+                        },
+                        {
+                            "type": "newAppleBlock",
+                            "payload": {
+                                "unexpected": true
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+    }
+
+    static func docCJSONMissingRequiredCore() -> Data {
+        """
+        {
+            "identifier": {
+                "interfaceLanguage": "swift"
+            },
+            "metadata": {},
+            "primaryContentSections": []
+        }
+        """.data(using: .utf8)!
+    }
+
     static func technologyGraphJSON(references: [(title: String, path: String, abstract: String, role: String)]) -> Data {
         let renderedReferences = references.map { reference in
             """

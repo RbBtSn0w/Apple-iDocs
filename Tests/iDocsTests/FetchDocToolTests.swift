@@ -114,6 +114,47 @@ struct FetchDocToolTests {
         #expect(!output.sourceAttempts.map(\.source).contains(.sosumi))
     }
 
+    @Test("FetchDocTool uses Apple source for partial DocC payload with diagnostics")
+    func partialApplePayloadSucceedsWithoutSosumi() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-partial-apple-payload", fileManager: mockFS)
+        let path = "/documentation/swiftui/navigationsplitview"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.dataURL(for: path))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.docCJSONWithUnknownContentBlock(
+                title: "NavigationSplitView",
+                identifierURL: "doc://com.apple.SwiftUI/documentation/SwiftUI/NavigationSplitView"
+            ),
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data("# Sosumi NavigationSplitView\n\nFallback content.".utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL, contentType: "text/markdown")
+        )
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        let output = try await tool.runDetailed(path: path)
+
+        #expect(output.source == .apple)
+        #expect(output.markdown.contains("# NavigationSplitView"))
+        #expect(output.markdown.contains("Known paragraph."))
+        #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple])
+        #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_partial.primaryContentSections[0].content[1]")
+    }
+
     @Test("FetchDocTool falls back to sosumi markdown when apple remote fails")
     func sosumiFallback() async throws {
         let mockFS = MockFileSystem()
@@ -357,7 +398,7 @@ struct FetchDocToolTests {
 
             #expect(output.source == .sosumi)
             #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
-            #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+            #expect(output.sourceAttempts.first { $0.source == .apple }?.reason?.hasPrefix("remote_decode_failed") == true)
             #expect(output.sourceAttempts.last?.status == .hit)
         }
     }
@@ -398,8 +439,44 @@ struct FetchDocToolTests {
 
         #expect(output.source == .sosumi)
         #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
-        #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+        #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed.identifier.url")
         #expect(output.sourceAttempts.last?.status == .hit)
+    }
+
+    @Test("FetchDocTool records path-aware Apple decode failure before fallback")
+    func missingRequiredCoreFallsBackWithPathAwareDiagnostic() async throws {
+        let mockFS = MockFileSystem()
+        let diskCache = DiskCache(name: "docs-test-missing-core-diagnostic", fileManager: mockFS)
+        let path = "/documentation/swiftui/navigationsplitview"
+
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.dataURL(for: path))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.docCJSONMissingRequiredCore(),
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: path))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: Data("# NavigationSplitView\n\nFallback content.".utf8),
+            response: MockPayloads.httpResponse(url: sosumiURL, contentType: "text/markdown")
+        )
+
+        let tool = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: mockFS, searchProvider: MockSearchProvider(), cacheDirectory: cacheDirectory),
+            diskCache: diskCache
+        )
+
+        let output = try await tool.runDetailed(path: path)
+
+        #expect(output.source == .sosumi)
+        #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
+        #expect(output.sourceAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed.metadata.title")
     }
 
     @Test("FetchDocTool records Apple HTTP status before successful fallback")
@@ -472,7 +549,7 @@ struct FetchDocToolTests {
             Issue.record("Expected aggregate fetch failure.")
         } catch let error as iDocsError {
             #expect(error.fetchAttempts.map(\.source) == [.cache, .local, .apple, .sosumi])
-            #expect(error.fetchAttempts.first { $0.source == .apple }?.reason == "remote_decode_failed")
+            #expect(error.fetchAttempts.first { $0.source == .apple }?.reason?.hasPrefix("remote_decode_failed") == true)
             #expect(error.fetchAttempts.first { $0.source == .sosumi }?.reason == "http_500")
         }
     }
