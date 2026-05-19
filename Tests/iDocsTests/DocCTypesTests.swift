@@ -99,4 +99,71 @@ struct DocCTypesTests {
         let kindData = try encoder.encode(kind)
         #expect(try decoder.decode(DocumentKind.self, from: kindData) == .class)
     }
+
+    @Test("DocCContent decodes object identifier URL as string")
+    func docCContentDecodesObjectIdentifier() throws {
+        let data = MockPayloads.docCJSONWithObjectIdentifier(
+            title: "NavigationSplitView",
+            identifierURL: "doc://com.apple.documentation/documentation/swiftui/navigationsplitview",
+            abstract: "A view that presents views in columns."
+        )
+
+        let content = try JSONDecoder().decode(DocCContent.self, from: data)
+
+        #expect(content.identifier == "doc://com.apple.documentation/documentation/swiftui/navigationsplitview")
+    }
+
+    @Test("DocCContent preserves string identifier when encoded")
+    func docCContentEncodesIdentifierAsString() throws {
+        let data = MockPayloads.docCJSONWithObjectIdentifier(
+            title: "NavigationSplitView",
+            identifierURL: "doc://com.apple.documentation/documentation/swiftui/navigationsplitview",
+            abstract: "A view that presents views in columns."
+        )
+        let content = try JSONDecoder().decode(DocCContent.self, from: data)
+
+        let encoded = try JSONEncoder().encode(content)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+        #expect(object["identifier"] as? String == "doc://com.apple.documentation/documentation/swiftui/navigationsplitview")
+    }
+
+    @Test("DocCContent ignores nonessential object identifier metadata")
+    func docCContentIgnoresObjectIdentifierMetadata() throws {
+        let data = """
+        {
+            "identifier": {
+                "url": "doc://com.apple.documentation/documentation/swiftui/view",
+                "interfaceLanguage": { "name": "Swift" }
+            },
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let content = try JSONDecoder().decode(DocCContent.self, from: data)
+
+        #expect(content.identifier == "doc://com.apple.documentation/documentation/swiftui/view")
+    }
+
+    @Test("DocCContent rejects invalid identifier shape")
+    func docCContentRejectsInvalidIdentifierShape() throws {
+        let data = """
+        {
+            "identifier": 42,
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(DocCContent.self, from: data)
+        }
+    }
 }

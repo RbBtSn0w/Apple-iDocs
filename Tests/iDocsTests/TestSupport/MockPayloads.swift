@@ -159,6 +159,49 @@ enum MockPayloads {
         """.data(using: .utf8)!
     }
 
+    static func docCJSONWithObjectIdentifier(title: String, identifierURL: String, abstract: String) -> Data {
+        """
+        {
+            "identifier": {
+                "url": "\(identifierURL)",
+                "interfaceLanguage": "swift"
+            },
+            "metadata": {
+                "title": "\(title)",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                {
+                    "type": "text",
+                    "text": "\(abstract)"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+    }
+
+    static func docCJSONWithObjectIdentifierMissingURL(title: String, abstract: String) -> Data {
+        """
+        {
+            "identifier": {
+                "interfaceLanguage": "swift"
+            },
+            "metadata": {
+                "title": "\(title)",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                {
+                    "type": "text",
+                    "text": "\(abstract)"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+    }
+
     static func technologyGraphJSON(references: [(title: String, path: String, abstract: String, role: String)]) -> Data {
         let renderedReferences = references.map { reference in
             """

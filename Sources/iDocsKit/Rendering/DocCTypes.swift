@@ -225,7 +225,18 @@ public struct DocCContent: Codable, Sendable {
     public let relationshipsSections: [RelationshipSection]?
     public let seeAlsoSections: [SeeAlsoSection]?
     public let references: [String: DocCReference]?
-    
+
+    enum CodingKeys: String, CodingKey {
+        case identifier
+        case metadata
+        case abstract
+        case primaryContentSections
+        case topicSections
+        case relationshipsSections
+        case seeAlsoSections
+        case references
+    }
+
     public init(identifier: String, metadata: DocCMetadata, abstract: [InlineContent]? = nil, primaryContentSections: [ContentSection]? = nil, topicSections: [TopicSection]? = nil, relationshipsSections: [RelationshipSection]? = nil, seeAlsoSections: [SeeAlsoSection]? = nil, references: [String: DocCReference]? = nil) {
         self.identifier = identifier
         self.metadata = metadata
@@ -235,6 +246,38 @@ public struct DocCContent: Codable, Sendable {
         self.relationshipsSections = relationshipsSections
         self.seeAlsoSections = seeAlsoSections
         self.references = references
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        do {
+            self.identifier = try container.decode(String.self, forKey: .identifier)
+        } catch DecodingError.typeMismatch {
+            self.identifier = try container.decode(IdentifierObject.self, forKey: .identifier).url
+        }
+        self.metadata = try container.decode(DocCMetadata.self, forKey: .metadata)
+        self.abstract = try container.decodeIfPresent([InlineContent].self, forKey: .abstract)
+        self.primaryContentSections = try container.decodeIfPresent([ContentSection].self, forKey: .primaryContentSections)
+        self.topicSections = try container.decodeIfPresent([TopicSection].self, forKey: .topicSections)
+        self.relationshipsSections = try container.decodeIfPresent([RelationshipSection].self, forKey: .relationshipsSections)
+        self.seeAlsoSections = try container.decodeIfPresent([SeeAlsoSection].self, forKey: .seeAlsoSections)
+        self.references = try container.decodeIfPresent([String: DocCReference].self, forKey: .references)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(identifier, forKey: .identifier)
+        try container.encode(metadata, forKey: .metadata)
+        try container.encodeIfPresent(abstract, forKey: .abstract)
+        try container.encodeIfPresent(primaryContentSections, forKey: .primaryContentSections)
+        try container.encodeIfPresent(topicSections, forKey: .topicSections)
+        try container.encodeIfPresent(relationshipsSections, forKey: .relationshipsSections)
+        try container.encodeIfPresent(seeAlsoSections, forKey: .seeAlsoSections)
+        try container.encodeIfPresent(references, forKey: .references)
+    }
+
+    private struct IdentifierObject: Decodable {
+        let url: String
     }
 }
 
