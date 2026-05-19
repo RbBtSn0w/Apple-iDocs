@@ -197,4 +197,187 @@ struct AppleDocCIngestionTests {
         #expect(result.diagnostics.contains { $0.path == "primaryContentSections[1].content[0].level" && $0.reason == "invalid_heading_level" })
         #expect(result.diagnostics.contains { $0.path == "primaryContentSections[1].content[1].code[1]" && $0.reason == "code_listing_line_not_string" })
     }
+
+    @Test("AppleDocCIngestion preserves metadata platforms and normalizes fallback identifier path")
+    func preservesPlatformsAndNormalizesFallbackIdentifierPath() throws {
+        let data = Data("""
+        {
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": [
+                    {
+                        "name": "iOS",
+                        "introducedAt": "17.0",
+                        "deprecatedAt": null,
+                        "beta": false
+                    }
+                ]
+            },
+            "abstract": [
+                { "type": "text", "text": "Renderable abstract." }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "documentation/swiftui/view")
+
+        #expect(result.content.identifier == "doc://com.apple.documentation/documentation/swiftui/view")
+        #expect(result.content.metadata.platforms?.first?.name == "iOS")
+        #expect(result.content.metadata.platforms?.first?.introducedAt == "17.0")
+        #expect(result.content.metadata.platforms?.first?.beta == false)
+    }
+
+    @Test("AppleDocCIngestion rejects empty decorated inline content")
+    func rejectsEmptyDecoratedInlineContent() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                { "type": "strong", "inlineContent": [] },
+                { "type": "emphasis" }
+            ]
+        }
+        """.utf8)
+
+        do {
+            _ = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+            Issue.record("Expected missing renderable content failure")
+        } catch let error as AppleDocCIngestionError {
+            #expect(error.diagnostic.reason == "missing_renderable_content")
+        }
+    }
+
+    @Test("AppleDocCIngestion maps stable section and block cases")
+    func mapsStableSectionAndBlockCases() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "primaryContentSections": [
+                {
+                    "kind": "parameters",
+                    "parameters": [
+                        {
+                            "name": "body",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "inlineContent": [{ "type": "text", "text": "A body view." }]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "properties",
+                    "properties": [
+                        {
+                            "name": "value",
+                            "content": [
+                                {
+                                    "type": "aside",
+                                    "style": "note",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "inlineContent": [{ "type": "text", "text": "Stored value." }]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "unorderedList",
+                            "items": [[
+                                {
+                                    "type": "paragraph",
+                                    "inlineContent": [{ "type": "text", "text": "Item" }]
+                                }
+                            ]]
+                        },
+                        {
+                            "type": "table",
+                            "header": [[
+                                {
+                                    "type": "paragraph",
+                                    "inlineContent": [{ "type": "text", "text": "Column" }]
+                                }
+                            ]],
+                            "rows": [[[
+                                {
+                                    "type": "paragraph",
+                                    "inlineContent": [{ "type": "text", "text": "Value" }]
+                                }
+                            ]]]
+                        }
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+
+        #expect(result.content.primaryContentSections?.count == 3)
+        guard case .parameters(let parameters)? = result.content.primaryContentSections?.first else {
+            Issue.record("Expected parameters section")
+            return
+        }
+        #expect(parameters.parameters.first?.name == "body")
+    }
+
+    @Test("AppleDocCIngestion records malformed top-level and array element diagnostics")
+    func recordsMalformedTopLevelAndArrayElementDiagnostics() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": "wrong",
+            "primaryContentSections": [
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "inlineContent": [{ "type": "text", "text": "Renderable." }]
+                        }
+                    ]
+                }
+            ],
+            "topicSections": [
+                {
+                    "title": "Topics",
+                    "identifiers": [
+                        "doc://com.apple.documentation/documentation/swiftui/text",
+                        42
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+
+        #expect(result.diagnostics.contains { $0.path == "abstract" && $0.reason == "inline_array_not_array" })
+        #expect(result.diagnostics.contains { $0.path == "topicSections[0].identifiers[1]" && $0.reason == "string_array_element_not_string" })
+    }
 }
