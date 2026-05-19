@@ -289,6 +289,10 @@ public enum ContentSection: Codable, Sendable {
     
     enum CodingKeys: String, CodingKey {
         case kind
+        case declarations
+        case parameters
+        case content
+        case properties
     }
     
     public init(from decoder: Decoder) throws {
@@ -310,7 +314,21 @@ public enum ContentSection: Codable, Sendable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        // Implementation for encoding
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .declarations(let section):
+            try container.encode("declarations", forKey: .kind)
+            try container.encode(section.declarations, forKey: .declarations)
+        case .parameters(let section):
+            try container.encode("parameters", forKey: .kind)
+            try container.encode(section.parameters, forKey: .parameters)
+        case .content(let section):
+            try container.encode("content", forKey: .kind)
+            try container.encode(section.content, forKey: .content)
+        case .properties(let section):
+            try container.encode("properties", forKey: .kind)
+            try container.encode(section.properties, forKey: .properties)
+        }
     }
 }
 
@@ -414,7 +432,35 @@ public enum ContentBlock: Codable, Sendable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        // Implementation for encoding
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .paragraph(let inlineContent):
+            try container.encode("paragraph", forKey: .type)
+            try container.encode(inlineContent, forKey: .inlineContent)
+        case .heading(let level, let text, let anchor):
+            try container.encode("heading", forKey: .type)
+            try container.encode(level, forKey: .level)
+            try container.encode(text, forKey: .text)
+            try container.encodeIfPresent(anchor, forKey: .anchor)
+        case .codeListing(let syntax, let code):
+            try container.encode("codeListing", forKey: .type)
+            try container.encodeIfPresent(syntax, forKey: .syntax)
+            try container.encode(code, forKey: .code)
+        case .aside(let style, let content):
+            try container.encode("aside", forKey: .type)
+            try container.encode(style, forKey: .style)
+            try container.encode(content, forKey: .content)
+        case .unorderedList(let items):
+            try container.encode("unorderedList", forKey: .type)
+            try container.encode(items, forKey: .items)
+        case .orderedList(let items):
+            try container.encode("orderedList", forKey: .type)
+            try container.encode(items, forKey: .items)
+        case .table(let header, let rows):
+            try container.encode("table", forKey: .type)
+            try container.encode(header, forKey: .header)
+            try container.encode(rows, forKey: .rows)
+        }
     }
 }
 
@@ -472,7 +518,33 @@ public enum InlineContent: Codable, Sendable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        // Implementation for encoding
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .text(let text):
+            try container.encode("text", forKey: .type)
+            try container.encode(text, forKey: .text)
+        case .codeVoice(let code):
+            try container.encode("codeVoice", forKey: .type)
+            try container.encode(code, forKey: .code)
+        case .strong(let inlineContent):
+            try container.encode("strong", forKey: .type)
+            try container.encode(inlineContent, forKey: .inlineContent)
+        case .emphasis(let inlineContent):
+            try container.encode("emphasis", forKey: .type)
+            try container.encode(inlineContent, forKey: .inlineContent)
+        case .reference(let identifier, let title):
+            try container.encode("reference", forKey: .type)
+            try container.encode(identifier, forKey: .identifier)
+            try container.encodeIfPresent(title, forKey: .title)
+        case .image(let identifier, let altText):
+            try container.encode("image", forKey: .type)
+            try container.encode(identifier, forKey: .identifier)
+            try container.encodeIfPresent(altText, forKey: .alt)
+        case .link(let destination, let title):
+            try container.encode("link", forKey: .type)
+            try container.encode(destination, forKey: .destination)
+            try container.encode(title, forKey: .title)
+        }
     }
 }
 

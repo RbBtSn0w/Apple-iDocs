@@ -92,11 +92,12 @@ public struct FetchDocTool {
         // 3. Try Apple Remote API
         if sourceKind != .help {
             do {
-                let content = try await appleAPI.fetchDoc(path: path)
+                let result = try await appleAPI.fetchDocDetailed(path: path)
+                let content = result.content
                 if let data = try? JSONEncoder().encode(content) {
                     try? await diskCache.set(path, value: data, ttl: 3600 * 24)
                 }
-                attempts.append(FetchSourceAttempt(source: .apple, status: .hit))
+                attempts.append(appleHitAttempt(for: result.diagnostics))
                 return FetchDocResult(markdown: try renderer.render(content), source: .apple, sourceAttempts: attempts)
             } catch {
                 attempts.append(FetchSourceAttempt(source: .apple, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
@@ -119,6 +120,9 @@ public struct FetchDocTool {
     }
 
     private func fetchFailureReason(for error: Error) -> String {
+        if let ingestionError = error as? AppleDocCIngestionError {
+            return "remote_decode_failed.\(ingestionError.diagnostic.path)"
+        }
         if error is DecodingError {
             return "remote_decode_failed"
         }
@@ -129,6 +133,20 @@ public struct FetchDocTool {
             return "remote_network_failure"
         }
         return "fetch_failed"
+    }
+
+    private func appleHitAttempt(for diagnostics: [AppleDocCDiagnostic]) -> FetchSourceAttempt {
+        let partials = diagnostics.filter { $0.severity == .partial }
+        guard let diagnostic = partials.first else {
+            return FetchSourceAttempt(source: .apple, status: .hit)
+        }
+        let hint = partials.count > 1 ? "\(diagnostic.reason) (and \(partials.count - 1) more)" : diagnostic.reason
+        return FetchSourceAttempt(
+            source: .apple,
+            status: .hit,
+            reason: "remote_decode_partial.\(diagnostic.path)",
+            hint: hint
+        )
     }
 
     private func localFetchFailureReason(for error: Error) -> String {

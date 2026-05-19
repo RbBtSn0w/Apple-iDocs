@@ -6,7 +6,7 @@ enum DocCHelpers {
         DocCContent(
             identifier: "doc://com.example/documentation/example",
             metadata: DocCMetadata(title: title, role: "symbol", platforms: nil),
-            abstract: nil,
+            abstract: [.text("Content for \(title).")],
             primaryContentSections: nil,
             topicSections: nil,
             relationshipsSections: nil,
