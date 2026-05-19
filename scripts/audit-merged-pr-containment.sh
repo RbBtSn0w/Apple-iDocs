@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_BRANCH="${BASE_BRANCH:-main}"
+PR_LIMIT="${PR_LIMIT:-50}"
+REPOSITORY="${GITHUB_REPOSITORY:-}"
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/audit-merged-pr-containment.sh
+
+Environment:
+  BASE_BRANCH  Branch that must contain merged PR commits. Default: main
+  PR_LIMIT     Number of recent merged PRs to inspect. Default: 50
+  GITHUB_REPOSITORY  Optional owner/name repository override for gh.
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI is required." >&2
+  exit 127
+fi
+
+remote_ref="origin/${BASE_BRANCH}"
+git fetch origin "${BASE_BRANCH}" --quiet
+
+if ! git rev-parse --verify --quiet "${remote_ref}" >/dev/null; then
+  echo "Base ref not found: ${remote_ref}" >&2
+  exit 1
+fi
+
+repo_args=()
+if [[ -n "${REPOSITORY}" ]]; then
+  repo_args=(--repo "${REPOSITORY}")
+fi
+
+rows="$(
+  gh pr list "${repo_args[@]}" \
+    --state merged \
+    --limit "${PR_LIMIT}" \
+    --json number,title,baseRefName,mergeCommit,url \
+    --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
+)"
+
+missing=0
+while IFS=$'\t' read -r number pr_base oid url title; do
+  [[ -n "${number}" ]] || continue
+
+  if git merge-base --is-ancestor "${oid}" "${remote_ref}"; then
+    continue
+  fi
+
+  missing=$((missing + 1))
+  echo "::error title=Merged PR not contained in ${BASE_BRANCH}::#${number} (${pr_base}) ${oid} ${url} ${title}"
+done <<< "${rows}"
+
+if (( missing > 0 )); then
+  echo "Found ${missing} merged PR commit(s) not contained in ${remote_ref}." >&2
+  exit 1
+fi
+
+echo "All inspected merged PR commits are contained in ${remote_ref}."
