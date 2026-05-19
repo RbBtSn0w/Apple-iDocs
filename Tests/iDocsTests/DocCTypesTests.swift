@@ -127,4 +127,43 @@ struct DocCTypesTests {
 
         #expect(object["identifier"] as? String == "doc://com.apple.documentation/documentation/swiftui/navigationsplitview")
     }
+
+    @Test("DocCContent ignores nonessential object identifier metadata")
+    func docCContentIgnoresObjectIdentifierMetadata() throws {
+        let data = """
+        {
+            "identifier": {
+                "url": "doc://com.apple.documentation/documentation/swiftui/view",
+                "interfaceLanguage": { "name": "Swift" }
+            },
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let content = try JSONDecoder().decode(DocCContent.self, from: data)
+
+        #expect(content.identifier == "doc://com.apple.documentation/documentation/swiftui/view")
+    }
+
+    @Test("DocCContent rejects invalid identifier shape")
+    func docCContentRejectsInvalidIdentifierShape() throws {
+        let data = """
+        {
+            "identifier": 42,
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(DocCContent.self, from: data)
+        }
+    }
 }
