@@ -49,18 +49,23 @@ if ! git rev-parse --verify --quiet "${target_ref}" >/dev/null; then
   exit 1
 fi
 
-repo_args=()
 if [[ -n "${REPOSITORY}" ]]; then
-  repo_args=(--repo "${REPOSITORY}")
+  rows="$(
+    "${GH_BIN}" pr list --repo "${REPOSITORY}" \
+      --state merged \
+      --limit "${PR_LIMIT}" \
+      --json number,title,baseRefName,mergeCommit,url \
+      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
+  )"
+else
+  rows="$(
+    "${GH_BIN}" pr list \
+      --state merged \
+      --limit "${PR_LIMIT}" \
+      --json number,title,baseRefName,mergeCommit,url \
+      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
+  )"
 fi
-
-rows="$(
-  "${GH_BIN}" pr list "${repo_args[@]}" \
-    --state merged \
-    --limit "${PR_LIMIT}" \
-    --json number,title,baseRefName,mergeCommit,url \
-    --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
-)"
 
 missing=0
 while IFS=$'\t' read -r number pr_base oid url title; do
