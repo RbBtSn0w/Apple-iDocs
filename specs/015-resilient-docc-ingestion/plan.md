@@ -9,14 +9,14 @@ Add a Swift-native tolerant Apple remote DocC ingestion boundary that can normal
 
 ## Technical Context
 
-**Language/Version**: Swift 6.0 project settings  
-**Primary Dependencies**: Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack  
-**Storage**: Existing fetch disk cache only; normalized successful Apple content encodes to stable `DocCContent` shape  
-**Testing**: `./scripts/tuist-silent.sh test`; optional temporary-cache live smoke through `IDOCS_CACHE_PATH=$(mktemp -d ...) ./scripts/tuist-silent.sh run idocs fetch /documentation/swiftui/navigationsplitview --json`  
-**Target Platform**: macOS CLI and macOS CI runner  
-**Project Type**: Swift CLI with adapter/library targets  
-**Performance Goals**: Avoid extra network calls when Apple remote payload has usable core evidence; fallback only when Apple cannot normalize usable content  
-**Constraints**: CLI-only runtime; no Node/Python/MCP/database dependency; no public `DocCContent` shape change; no `[String: Any]`; fetch source order preserved; diagnostics remain machine-readable  
+**Language/Version**: Swift 6.0 project settings
+**Primary Dependencies**: Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
+**Storage**: Existing fetch disk cache only; normalized successful Apple content encodes to stable `DocCContent` shape
+**Testing**: `./scripts/tuist-silent.sh test`; optional temporary-cache live smoke through `IDOCS_CACHE_PATH=$(mktemp -d ...) ./scripts/tuist-silent.sh run idocs fetch /documentation/swiftui/navigationsplitview --json`
+**Target Platform**: macOS CLI and macOS CI runner
+**Project Type**: Swift CLI with adapter/library targets
+**Performance Goals**: Avoid extra network calls when Apple remote payload has usable core evidence; fallback only when Apple cannot normalize usable content
+**Constraints**: CLI-only runtime; no Node/Python/MCP/database dependency; no public `DocCContent` shape change; no `[String: Any]`; fetch source order preserved; diagnostics remain machine-readable
 **Scale/Scope**: Apple remote DocC payload ingestion only. Cache/local stable decode stays unchanged except for shared model compatibility.
 
 ## Constitution Check

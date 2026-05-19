@@ -23,7 +23,16 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-if ! command -v gh >/dev/null 2>&1; then
+GH_BIN="${GH_BIN:-}"
+if [[ -z "${GH_BIN}" ]]; then
+  if command -v gh >/dev/null 2>&1; then
+    GH_BIN="$(command -v gh)"
+  elif [[ -x "/opt/homebrew/bin/gh" ]]; then
+    GH_BIN="/opt/homebrew/bin/gh"
+  fi
+fi
+
+if [[ -z "${GH_BIN}" ]]; then
   echo "gh CLI is required." >&2
   exit 127
 fi
@@ -46,7 +55,7 @@ if [[ -n "${REPOSITORY}" ]]; then
 fi
 
 rows="$(
-  gh pr list "${repo_args[@]}" \
+  "${GH_BIN}" pr list "${repo_args[@]}" \
     --state merged \
     --limit "${PR_LIMIT}" \
     --json number,title,baseRefName,mergeCommit,url \

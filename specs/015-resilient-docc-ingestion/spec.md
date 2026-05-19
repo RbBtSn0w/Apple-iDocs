@@ -1,8 +1,8 @@
 # Feature Specification: Resilient DocC Ingestion
 
-**Feature Branch**: `015-resilient-docc-ingestion`  
-**Created**: 2026-05-19  
-**Status**: In Review  
+**Feature Branch**: `015-resilient-docc-ingestion`
+**Created**: 2026-05-19
+**Status**: In Review
 **Input**: User description: "Implement the balanced 015 design: keep iDocs Swift-native and public models stable, but add a tolerant Apple remote DocC ingestion boundary using typed loose JSON, partial rendering, and path-aware diagnostics so Apple schema drift does not unnecessarily stop fetch."
 
 ## User Scenarios & Testing *(mandatory)*
