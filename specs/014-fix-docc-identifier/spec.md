@@ -2,7 +2,7 @@
 
 **Feature Branch**: `014-fix-docc-identifier`  
 **Created**: 2026-05-18  
-**Status**: In Review  
+**Status**: Verified
 **Input**: User description: "Fix `idocs fetch` when current Apple DocC content represents `identifier` as an object containing a URL instead of the older string form. Preserve the public content shape, cache stability, source ordering, and fallback diagnostics."
 
 ## User Scenarios & Testing *(mandatory)*
