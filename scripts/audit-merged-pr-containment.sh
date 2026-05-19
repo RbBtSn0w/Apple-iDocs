@@ -5,6 +5,7 @@ BASE_BRANCH="${BASE_BRANCH:-main}"
 BASE_REF="${BASE_REF:-}"
 PR_LIMIT="${PR_LIMIT:-50}"
 REPOSITORY="${GITHUB_REPOSITORY:-}"
+MERGED_AFTER="${MERGED_AFTER:-}"
 
 usage() {
   cat <<'USAGE'
@@ -14,6 +15,7 @@ Environment:
   BASE_BRANCH  Branch that must contain merged PR commits. Default: main
   BASE_REF     Optional git ref to inspect instead of origin/$BASE_BRANCH.
   PR_LIMIT     Number of recent merged PRs to inspect. Default: 50
+  MERGED_AFTER Optional ISO-8601 timestamp; older merged PRs are ignored.
   GITHUB_REPOSITORY  Optional owner/name repository override for gh.
 USAGE
 }
@@ -54,22 +56,26 @@ if [[ -n "${REPOSITORY}" ]]; then
     "${GH_BIN}" pr list --repo "${REPOSITORY}" \
       --state merged \
       --limit "${PR_LIMIT}" \
-      --json number,title,baseRefName,mergeCommit,url \
-      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
+      --json number,title,baseRefName,mergeCommit,mergedAt,url \
+      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .mergedAt, .url, .title] | @tsv'
   )"
 else
   rows="$(
     "${GH_BIN}" pr list \
       --state merged \
       --limit "${PR_LIMIT}" \
-      --json number,title,baseRefName,mergeCommit,url \
-      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .url, .title] | @tsv'
+      --json number,title,baseRefName,mergeCommit,mergedAt,url \
+      --jq '.[] | select(.mergeCommit.oid != null) | [.number, .baseRefName, .mergeCommit.oid, .mergedAt, .url, .title] | @tsv'
   )"
 fi
 
 missing=0
-while IFS=$'\t' read -r number pr_base oid url title; do
+while IFS=$'\t' read -r number pr_base oid merged_at url title; do
   [[ -n "${number}" ]] || continue
+
+  if [[ -n "${MERGED_AFTER}" && "${merged_at}" < "${MERGED_AFTER}" ]]; then
+    continue
+  fi
 
   if git merge-base --is-ancestor "${oid}" "${target_ref}"; then
     continue
