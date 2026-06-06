@@ -50,6 +50,13 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 
 
 <!-- MANUAL ADDITIONS START -->
+## Additional Grounded Workflows
+
+- **Silent CLI Workflow**: Prefer `./scripts/tuist-silent.sh` for headless local work. Useful commands include `./scripts/tuist-silent.sh build iDocs`, `./scripts/tuist-silent.sh run idocs --help`, `./scripts/tuist-silent.sh test`, `./scripts/tuist-silent.sh test iDocsAdapterTests`, and `./scripts/tuist-silent.sh test-all`.
+- **Source Checkout CLI Usage**: When validating commands from this checkout, replace installed `idocs` calls with `./scripts/tuist-silent.sh run idocs <args...>`. Agent and benchmark workflows can isolate state with `IDOCS_CACHE_PATH` and `IDOCS_USAGE_LOG_PATH`.
+- **Local npm/E2E Validation**: Use `./scripts/e2e-cli.sh offline` for deterministic link and pack validation. Use `./scripts/e2e-cli.sh live` only when network-dependent Apple documentation checks are intended.
+- **Quality Gates**: Run focused gates as needed with `./scripts/arch-gate.sh`, `./scripts/spec-trace-gate.sh`, `./scripts/coverage-gate.sh 60`, and `./scripts/benchmark/check-local-cli-latency.sh`.
+- **Release Packaging Smoke**: Use `./scripts/test-release-config.sh` to verify semantic-release/Homebrew workflow wiring and `./scripts/release-package.sh` to build the GitHub Release archive plus checksum.
 <!-- MANUAL ADDITIONS END -->
 
 <!-- SPECKIT START -->
