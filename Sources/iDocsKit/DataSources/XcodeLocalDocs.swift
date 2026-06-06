@@ -34,18 +34,25 @@ public struct XcodeLocalDocs {
     
     public let cacheDirectory: URL
     private static let sharedIndexStoreQueryCache = IndexStoreQueryCache()
-    
+
     public init(fileManager: any FileSystem = FileManager.default, 
                 searchProvider: any SearchProvider = SpotlightSearchProvider(),
                 cacheDirectory: URL? = nil) {
+        self.init(fileManager: fileManager, searchProvider: searchProvider, cacheDirectory: cacheDirectory, indexStoreQueryCache: XcodeLocalDocs.sharedIndexStoreQueryCache)
+    }
+
+    init(fileManager: any FileSystem, 
+         searchProvider: any SearchProvider,
+         cacheDirectory: URL?,
+         indexStoreQueryCache: IndexStoreQueryCache) {
         self.fileManager = fileManager
         self.searchProvider = searchProvider
-        self.indexStoreQueryCache = XcodeLocalDocs.sharedIndexStoreQueryCache
+        self.indexStoreQueryCache = indexStoreQueryCache
         if let cacheDirectory {
             self.cacheDirectory = cacheDirectory
         } else {
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            self.cacheDirectory = home.appendingPathComponent("Library/Developer/Xcode/DocumentationCache")
+            let userHome = URL(fileURLWithPath: NSHomeDirectory())
+            self.cacheDirectory = userHome.appendingPathComponent("Library/Developer/Xcode/DocumentationCache")
         }
     }
     

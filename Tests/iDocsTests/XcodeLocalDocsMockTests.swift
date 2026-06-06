@@ -11,7 +11,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
         
         // Mock a directory structure
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
@@ -29,7 +29,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let mockURL = URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/swiftui/view.json")
@@ -45,7 +45,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         mockSearch.mockResults = []
@@ -69,7 +69,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -94,7 +94,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -120,7 +120,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -148,7 +148,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -179,7 +179,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -208,7 +208,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -234,7 +234,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -263,7 +263,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -287,7 +287,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         let sdkURL = docs.cacheDirectory.appendingPathComponent("26.3")
@@ -312,7 +312,7 @@ struct XcodeLocalDocsMockTests {
         let mockFS = MockFileSystem()
         let mockSearch = MockSearchProvider()
         let cacheDirectory = URL(fileURLWithPath: "/tmp/DocumentationCache", isDirectory: true)
-        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory)
+        let docs = XcodeLocalDocs(fileManager: mockFS, searchProvider: mockSearch, cacheDirectory: cacheDirectory, indexStoreQueryCache: IndexStoreQueryCache())
 
         mockFS.virtualFiles[docs.cacheDirectory.path + "/"] = Data()
         mockSearch.mockResults = [URL(fileURLWithPath: "/tmp/DocumentationCache/documentation/placeholder.json")]

@@ -234,7 +234,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: sosumi,
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -272,7 +272,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -322,7 +322,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -375,7 +375,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -433,7 +433,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -484,7 +484,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -535,7 +535,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -586,7 +586,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -637,7 +637,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -771,7 +771,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5)
         )
 
@@ -821,6 +821,12 @@ struct ToolTests {
             data: MockPayloads.emptySearchJSON,
             response: MockPayloads.httpResponse(url: appleURL)
         )
+        let techURL = try #require(URLHelpers.technologiesURL())
+        appleSession.setResponse(
+            for: techURL,
+            data: MockPayloads.technologiesJSON,
+            response: MockPayloads.httpResponse(url: techURL)
+        )
 
         let sosumiSession = MockNetworkSession()
         let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
@@ -833,7 +839,7 @@ struct ToolTests {
         let tool = SearchDocsTool(
             api: AppleJSONAPI(session: appleSession),
             sosumiAPI: SosumiAPI(session: sosumiSession),
-            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider(), cacheDirectory: nil, indexStoreQueryCache: IndexStoreQueryCache()),
             memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5),
             remoteSearchTimeoutSeconds: 0
         )
