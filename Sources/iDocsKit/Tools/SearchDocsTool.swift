@@ -164,6 +164,31 @@ public struct SearchDocsTool {
                     )
                 )
                 logger.info("Apple remote returned no results, trying sosumi fallback.")
+                if shouldSkipSosumiFallback(for: query) {
+                    stages.append(
+                        DocumentationSearchStageTiming(
+                            name: "sosumi",
+                            status: .skipped,
+                            durationMs: 0,
+                            resultCount: 0,
+                            reason: "opaque_miss_query",
+                            hint: "Skipping broad sosumi fallback for an opaque miss query to avoid noisy unrelated candidates.",
+                            queryAttempt: query
+                        )
+                    )
+                    if !localModuleFallbackResults.isEmpty {
+                        return buildOutput(
+                            results: localModuleFallbackResults,
+                            stages: stages,
+                            totalStart: totalStart
+                        )
+                    }
+                    return buildOutput(
+                        results: [],
+                        stages: stages,
+                        totalStart: totalStart
+                    )
+                }
             } else {
                 let mapped = annotateResults(appleResults, queryAttempt: query)
                 let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
@@ -370,6 +395,14 @@ public struct SearchDocsTool {
         }
         guard keywords.count >= 3 else { return nil }
         return keywords.prefix(7).joined(separator: " ")
+    }
+
+    private func shouldSkipSosumiFallback(for query: String) -> Bool {
+        guard !query.contains(where: \.isWhitespace) else { return false }
+        guard query.count >= 16 else { return false }
+        guard let first = query.first, first.isLowercase else { return false }
+        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
+        return query.lowercased() == query
     }
 
     private func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {

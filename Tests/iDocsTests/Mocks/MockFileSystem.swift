@@ -4,6 +4,7 @@ import Foundation
 public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public var virtualFiles: [String: Data] = [:]
     public var stubbedError: Error?
+    public private(set) var readCallCountByPath: [String: Int] = [:]
     
     public init(virtualFiles: [String: Data] = [:], stubbedError: Error? = nil) {
         self.virtualFiles = Dictionary(
@@ -51,6 +52,7 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public func read(from url: URL) throws -> Data {
         if let error = stubbedError { throw error }
         let canonical = Self.canonicalPath(url.path)
+        readCallCountByPath[canonical, default: 0] += 1
         guard let key = virtualFiles.keys.first(where: { Self.canonicalPath($0) == canonical }),
               let data = virtualFiles[key] else {
             throw MockError.fileNotFound
@@ -61,6 +63,7 @@ public final class MockFileSystem: FileSystem, @unchecked Sendable {
     public func reset() {
         virtualFiles.removeAll()
         stubbedError = nil
+        readCallCountByPath.removeAll()
     }
 
     private static func canonicalPath(_ path: String) -> String {

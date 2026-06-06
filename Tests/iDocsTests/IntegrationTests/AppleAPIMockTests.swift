@@ -35,6 +35,8 @@ struct AppleAPIMockTests {
         await #expect(throws: Error.self) {
             try await api.search(query: "test")
         }
+
+        #expect(mockSession.requestCount == 1)
     }
 }
 

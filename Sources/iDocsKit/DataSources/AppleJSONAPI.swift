@@ -112,6 +112,9 @@ public actor AppleJSONAPI {
             } catch {
                 lastError = error
                 logger.error("Attempt \(attempt) failed with error: \(error.localizedDescription)")
+                if !shouldRetry(after: error) {
+                    throw error
+                }
             }
             
             if attempt < maxRetries {
@@ -121,6 +124,36 @@ public actor AppleJSONAPI {
         }
         
         throw lastError ?? iDocsError.maxRetriesReached
+    }
+
+    private func shouldRetry(after error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut,
+                 .networkConnectionLost,
+                 .cannotFindHost,
+                 .cannotConnectToHost,
+                 .dnsLookupFailed,
+                 .resourceUnavailable,
+                 .notConnectedToInternet:
+                return true
+            default:
+                return false
+            }
+        }
+
+        guard let idocsError = error as? iDocsError else {
+            return true
+        }
+
+        switch idocsError {
+        case .httpError(let statusCode):
+            return statusCode == 403 || statusCode == 429
+        case .maxRetriesReached:
+            return true
+        default:
+            return false
+        }
     }
 
     private nonisolated func documentKind(kind: String?, role: String?, type: String?) -> DocumentKind {

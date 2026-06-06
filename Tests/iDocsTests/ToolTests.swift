@@ -810,4 +810,41 @@ struct ToolTests {
         #expect(apiSession.requestCount == 0)
         #expect(sosumiSession.requestCount == 0)
     }
+
+    @Test("SearchDocsTool skips sosumi fallback for opaque long misses")
+    func searchToolSkipsSosumiForOpaqueLongMisses() async throws {
+        let query = "qwertyzzdocnotfound"
+        let appleSession = MockNetworkSession()
+        let appleURL = try #require(URLHelpers.searchURL(query: query))
+        appleSession.setResponse(
+            for: appleURL,
+            data: MockPayloads.emptySearchJSON,
+            response: MockPayloads.httpResponse(url: appleURL)
+        )
+
+        let sosumiSession = MockNetworkSession()
+        let sosumiURL = try #require(URLHelpers.sosumiSearchURL(query: query))
+        sosumiSession.setResponse(
+            for: sosumiURL,
+            data: MockPayloads.sosumiSearchJSON,
+            response: MockPayloads.httpResponse(url: sosumiURL)
+        )
+
+        let tool = SearchDocsTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: MockFileSystem(), searchProvider: MockSearchProvider()),
+            memoryCache: MemoryCache<String, [SearchResult]>(capacity: 5),
+            remoteSearchTimeoutSeconds: 0
+        )
+
+        let output = try await tool.runDetailed(query: query)
+
+        #expect(output.results.isEmpty)
+        #expect(appleSession.requestedURLs.filter { $0 == appleURL }.count == 1)
+        #expect(sosumiSession.requestCount == 0)
+        #expect(output.instrumentation.stages.last?.name == "sosumi")
+        #expect(output.instrumentation.stages.last?.status == .skipped)
+        #expect(output.instrumentation.stages.last?.reason == "opaque_miss_query")
+    }
 }
