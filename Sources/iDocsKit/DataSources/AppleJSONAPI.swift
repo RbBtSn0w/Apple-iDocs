@@ -127,6 +127,9 @@ public actor AppleJSONAPI {
     }
 
     private func shouldRetry(after error: Error) -> Bool {
+        if error is CancellationError {
+            return false
+        }
         if let urlError = error as? URLError {
             switch urlError.code {
             case .timedOut,

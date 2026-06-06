@@ -141,7 +141,7 @@ public struct XcodeLocalDocs {
             }
         }
 
-        if shouldShortCircuitOpaqueMissQuery(trimmed) {
+        if trimmed.isOpaqueMissQuery {
             logger.info("Skipping expensive local miss path for opaque query: \(trimmed)")
             return []
         }
@@ -373,13 +373,6 @@ public struct XcodeLocalDocs {
         return true
     }
 
-    private func shouldShortCircuitOpaqueMissQuery(_ query: String) -> Bool {
-        guard !query.contains(where: \.isWhitespace) else { return false }
-        guard query.count >= 16 else { return false }
-        guard let first = query.first, first.isLowercase else { return false }
-        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
-        return query.lowercased() == query
-    }
 
     private func extractModuleHint(from query: String) -> String? {
         let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
@@ -483,7 +476,7 @@ public struct XcodeLocalDocs {
                 }
             }
 
-            searchStart = end
+            searchStart = matchRange.upperBound
         }
 
         return ranked
@@ -554,12 +547,16 @@ public struct XcodeLocalDocInfo: Codable, Sendable {
 
 actor IndexStoreQueryCache {
     private var entries: [String: [IndexStoreQueryMatch]] = [:]
+    private let maxEntries = 1000
 
     func results(for key: String) -> [IndexStoreQueryMatch]? {
         entries[key]
     }
 
     func setResults(_ results: [IndexStoreQueryMatch], for key: String) {
+        if entries.count >= maxEntries, let firstKey = entries.keys.first {
+            entries.removeValue(forKey: firstKey)
+        }
         entries[key] = results
     }
 }

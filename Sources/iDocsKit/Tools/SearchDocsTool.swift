@@ -163,8 +163,8 @@ public struct SearchDocsTool {
                         queryAttempt: query
                     )
                 )
-                logger.info("Apple remote returned no results, trying sosumi fallback.")
-                if shouldSkipSosumiFallback(for: query) {
+                logger.info("Apple remote returned no results.")
+                if query.isOpaqueMissQuery {
                     stages.append(
                         DocumentationSearchStageTiming(
                             name: "sosumi",
@@ -176,19 +176,13 @@ public struct SearchDocsTool {
                             queryAttempt: query
                         )
                     )
-                    if !localModuleFallbackResults.isEmpty {
-                        return buildOutput(
-                            results: localModuleFallbackResults,
-                            stages: stages,
-                            totalStart: totalStart
-                        )
-                    }
                     return buildOutput(
-                        results: [],
+                        results: localModuleFallbackResults,
                         stages: stages,
                         totalStart: totalStart
                     )
                 }
+                logger.info("Trying sosumi fallback.")
             } else {
                 let mapped = annotateResults(appleResults, queryAttempt: query)
                 let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
@@ -397,13 +391,6 @@ public struct SearchDocsTool {
         return keywords.prefix(7).joined(separator: " ")
     }
 
-    private func shouldSkipSosumiFallback(for query: String) -> Bool {
-        guard !query.contains(where: \.isWhitespace) else { return false }
-        guard query.count >= 16 else { return false }
-        guard let first = query.first, first.isLowercase else { return false }
-        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
-        return query.lowercased() == query
-    }
 
     private func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {
         let duration = start.duration(to: ContinuousClock.now)
