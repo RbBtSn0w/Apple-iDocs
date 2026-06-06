@@ -30,19 +30,29 @@ public struct XcodeLocalDocs {
     ]
     private let fileManager: any FileSystem
     private let searchProvider: any SearchProvider
+    private let indexStoreQueryCache: IndexStoreQueryCache
     
     public let cacheDirectory: URL
-    
+    private static let sharedIndexStoreQueryCache = IndexStoreQueryCache()
+
     public init(fileManager: any FileSystem = FileManager.default, 
                 searchProvider: any SearchProvider = SpotlightSearchProvider(),
                 cacheDirectory: URL? = nil) {
+        self.init(fileManager: fileManager, searchProvider: searchProvider, cacheDirectory: cacheDirectory, indexStoreQueryCache: XcodeLocalDocs.sharedIndexStoreQueryCache)
+    }
+
+    init(fileManager: any FileSystem, 
+         searchProvider: any SearchProvider,
+         cacheDirectory: URL?,
+         indexStoreQueryCache: IndexStoreQueryCache) {
         self.fileManager = fileManager
         self.searchProvider = searchProvider
+        self.indexStoreQueryCache = indexStoreQueryCache
         if let cacheDirectory {
             self.cacheDirectory = cacheDirectory
         } else {
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            self.cacheDirectory = home.appendingPathComponent("Library/Developer/Xcode/DocumentationCache")
+            let userHome = URL(fileURLWithPath: NSHomeDirectory())
+            self.cacheDirectory = userHome.appendingPathComponent("Library/Developer/Xcode/DocumentationCache")
         }
     }
     
@@ -131,7 +141,7 @@ public struct XcodeLocalDocs {
             }
         }
 
-        if shouldShortCircuitOpaqueMissQuery(trimmed) {
+        if trimmed.isOpaqueMissQuery {
             logger.info("Skipping expensive local miss path for opaque query: \(trimmed)")
             return []
         }
@@ -154,7 +164,7 @@ public struct XcodeLocalDocs {
         // scan DeveloperDocumentation.index store files and recover
         // /documentation/... identifiers directly from index payloads.
         if results.isEmpty {
-            let indexResults = try searchDeveloperDocumentationIndexes(query: trimmed, sdks: sdks, limit: 50)
+            let indexResults = try await searchDeveloperDocumentationIndexes(query: trimmed, sdks: sdks, limit: 50)
             if !indexResults.isEmpty {
                 logger.info("Recovered \(indexResults.count) matches from DeveloperDocumentation.index for: \(trimmed)")
                 results = indexResults
@@ -363,13 +373,6 @@ public struct XcodeLocalDocs {
         return true
     }
 
-    private func shouldShortCircuitOpaqueMissQuery(_ query: String) -> Bool {
-        guard !query.contains(where: \.isWhitespace) else { return false }
-        guard query.count >= 16 else { return false }
-        guard let first = query.first, first.isLowercase else { return false }
-        guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
-        return query.lowercased() == query
-    }
 
     private func extractModuleHint(from query: String) -> String? {
         let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
@@ -392,7 +395,7 @@ public struct XcodeLocalDocs {
         return "Unknown"
     }
 
-    private func searchDeveloperDocumentationIndexes(query: String, sdks: [XcodeLocalDocInfo], limit: Int) throws -> [SearchResult] {
+    private func searchDeveloperDocumentationIndexes(query: String, sdks: [XcodeLocalDocInfo], limit: Int) async throws -> [SearchResult] {
         let tokens = tokenize(query: query)
         guard !tokens.isEmpty else { return [] }
 
@@ -404,12 +407,17 @@ public struct XcodeLocalDocs {
             guard !storeURLs.isEmpty else { continue }
 
             for storeDB in storeURLs {
-                for path in extractDocumentationPaths(from: storeDB) {
-                    if seen.contains(path) { continue }
-                    let score = scoreForPath(path, tokens: tokens)
-                    guard score > 0 else { continue }
-                    seen.insert(path)
-                    ranked.append((path, score))
+                let cacheKey = indexStoreQueryCacheKey(for: storeDB, tokens: tokens)
+                let cached = await indexStoreQueryCache.results(for: cacheKey)
+                let storeMatches = cached ?? rankDocumentationPaths(from: storeDB, tokens: tokens, limit: limit)
+                if cached == nil {
+                    await indexStoreQueryCache.setResults(storeMatches, for: cacheKey)
+                }
+
+                for match in storeMatches {
+                    if seen.contains(match.path) { continue }
+                    seen.insert(match.path)
+                    ranked.append((match.path, match.score))
                 }
             }
         }
@@ -433,7 +441,7 @@ public struct XcodeLocalDocs {
             }
     }
 
-    private func extractDocumentationPaths(from url: URL) -> [String] {
+    private func rankDocumentationPaths(from url: URL, tokens: [String], limit: Int) -> [IndexStoreQueryMatch] {
         let data: Data
         do {
             if fileManager is FileManager {
@@ -445,45 +453,39 @@ public struct XcodeLocalDocs {
             return []
         }
 
-        let prefix = Array("/documentation/".utf8)
+        let prefix = Data("/documentation/".utf8)
         var matches = Set<String>()
+        var ranked: [IndexStoreQueryMatch] = []
         let maxPathLength = 240
 
-        data.withUnsafeBytes { rawBuffer in
-            let bytes = rawBuffer.bindMemory(to: UInt8.self)
-            guard bytes.count > prefix.count else { return }
-
-            var i = 0
-            while i + prefix.count < bytes.count {
-                var found = true
-                for j in 0..<prefix.count where bytes[i + j] != prefix[j] {
-                    found = false
-                    break
-                }
-                if !found {
-                    i += 1
-                    continue
-                }
-
-                var end = i + prefix.count
-                while end < bytes.count && end - i < maxPathLength && isPathByte(bytes[end]) {
-                    end += 1
-                }
-
-                let length = end - i
-                if length > prefix.count + 1,
-                   let base = bytes.baseAddress {
-                    let candidate = Data(bytes: base.advanced(by: i), count: length)
-                    if let path = String(data: candidate, encoding: .utf8),
-                       path.hasPrefix("/documentation/") {
-                        matches.insert(path)
-                    }
-                }
-                i = end
+        var searchStart = data.startIndex
+        while searchStart < data.endIndex,
+              let matchRange = data.range(of: prefix, options: [], in: searchStart..<data.endIndex) {
+            var end = matchRange.upperBound
+            while end < data.endIndex && end - matchRange.lowerBound < maxPathLength && isPathByte(data[end]) {
+                end += 1
             }
+
+            let candidate = data[matchRange.lowerBound..<end]
+            if candidate.count > prefix.count + 1,
+               let path = String(data: candidate, encoding: .utf8),
+               matches.insert(path).inserted {
+                let score = scoreForPath(path, tokens: tokens)
+                if score > 0 {
+                    ranked.append(IndexStoreQueryMatch(path: path, score: score))
+                }
+            }
+
+            searchStart = matchRange.upperBound
         }
 
-        return Array(matches)
+        return ranked
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score { return lhs.path < rhs.path }
+                return lhs.score > rhs.score
+            }
+            .prefix(limit)
+            .map { $0 }
     }
 
     private func isPathByte(_ byte: UInt8) -> Bool {
@@ -527,6 +529,10 @@ public struct XcodeLocalDocs {
         let normalized = raw.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
         return normalized
     }
+
+    private func indexStoreQueryCacheKey(for storeURL: URL, tokens: [String]) -> String {
+        "\(storeURL.path)::\(tokens.joined(separator: "|"))"
+    }
 }
 
 // MARK: - Entity Definition
@@ -537,4 +543,25 @@ public struct XcodeLocalDocInfo: Codable, Sendable {
     public let cachePath: URL
     public let hasIndex: Bool
     public let lastModified: Date
+}
+
+actor IndexStoreQueryCache {
+    private var entries: [String: [IndexStoreQueryMatch]] = [:]
+    private let maxEntries = 1000
+
+    func results(for key: String) -> [IndexStoreQueryMatch]? {
+        entries[key]
+    }
+
+    func setResults(_ results: [IndexStoreQueryMatch], for key: String) {
+        if entries.count >= maxEntries, let firstKey = entries.keys.first {
+            entries.removeValue(forKey: firstKey)
+        }
+        entries[key] = results
+    }
+}
+
+struct IndexStoreQueryMatch: Sendable {
+    let path: String
+    let score: Double
 }

@@ -22,6 +22,7 @@ Applies to `search` and `fetch` operations.
 - A source attempt is considered fallback-eligible when:
   - returns no matching result/content, or
   - fails with recoverable retrieval error.
+- **Exception:** For `search`, if an `apple` attempt returns no matching result for an "opaque miss query" (a single, long, lowercase, non-whitespace alphanumeric string), the `sosumi` fallback is explicitly skipped to avoid noisy unrelated candidates.
 - First successful hit terminates the chain.
 - If all sources fail/miss, return standardized terminal error.
 

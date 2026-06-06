@@ -163,7 +163,26 @@ public struct SearchDocsTool {
                         queryAttempt: query
                     )
                 )
-                logger.info("Apple remote returned no results, trying sosumi fallback.")
+                logger.info("Apple remote returned no results.")
+                if query.isOpaqueMissQuery {
+                    stages.append(
+                        DocumentationSearchStageTiming(
+                            name: "sosumi",
+                            status: .skipped,
+                            durationMs: 0,
+                            resultCount: 0,
+                            reason: "opaque_miss_query",
+                            hint: "Skipping broad sosumi fallback for an opaque miss query to avoid noisy unrelated candidates.",
+                            queryAttempt: query
+                        )
+                    )
+                    return buildOutput(
+                        results: localModuleFallbackResults,
+                        stages: stages,
+                        totalStart: totalStart
+                    )
+                }
+                logger.info("Trying sosumi fallback.")
             } else {
                 let mapped = annotateResults(appleResults, queryAttempt: query)
                 let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
@@ -371,6 +390,7 @@ public struct SearchDocsTool {
         guard keywords.count >= 3 else { return nil }
         return keywords.prefix(7).joined(separator: " ")
     }
+
 
     private func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {
         let duration = start.duration(to: ContinuousClock.now)
