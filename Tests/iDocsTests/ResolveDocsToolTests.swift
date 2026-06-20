@@ -80,6 +80,50 @@ struct ResolveDocsToolTests {
         #expect(result.fetchDiagnostics?.map(\.reason) == ["http_404", nil])
     }
 
+    @Test("ResolveDocsTool recovers SwiftUI modifier signature path without a hardcoded alias")
+    func methodSignatureGuessRecoversModifierPath() async throws {
+        // Regression for issue #21: `View navigationTitle` resolve must reach
+        // `/documentation/swiftui/view/navigationtitle(_:)` even though the bare
+        // slug 404s and no hardcoded alias exists for it.
+        let recorder = PathRecorder()
+        let tool = ResolveDocsTool(
+            fetch: { path in
+                await recorder.record(path)
+                if path == "/documentation/swiftui/view/navigationtitle" {
+                    throw iDocsError.aggregateFetchFailure(
+                        path: path,
+                        attempts: [
+                            FetchSourceAttempt(source: .apple, status: .error, reason: "http_404", statusCode: 404)
+                        ]
+                    )
+                }
+                #expect(path == "/documentation/swiftui/view/navigationtitle(_:)")
+                return FetchDocResult(
+                    markdown: "# navigationTitle(_:)\n\nConfigures the navigation title.",
+                    source: .apple,
+                    sourceAttempts: [FetchSourceAttempt(source: .apple, status: .hit)]
+                )
+            }
+        )
+
+        let result = try await tool.run(
+            intent: ResolveDocsIntent(
+                framework: "SwiftUI",
+                type: "View",
+                member: "navigationTitle",
+                memberKind: "method"
+            )
+        )
+
+        #expect(result.canonicalPath == "/documentation/swiftui/view/navigationtitle(_:)")
+        #expect(result.confidence == .high)
+        #expect(result.verifiedByFetch)
+        #expect(await recorder.paths == [
+            "/documentation/swiftui/view/navigationtitle",
+            "/documentation/swiftui/view/navigationtitle(_:)"
+        ])
+    }
+
     @Test("ResolveDocsTool keeps unresolved when search fallback misses required symbol")
     func fallbackWrongSymbolStaysUnresolved() async throws {
         let tool = ResolveDocsTool(
