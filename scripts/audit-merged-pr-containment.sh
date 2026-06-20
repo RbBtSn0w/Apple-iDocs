@@ -6,6 +6,7 @@ BASE_REF="${BASE_REF:-}"
 PR_LIMIT="${PR_LIMIT:-50}"
 REPOSITORY="${GITHUB_REPOSITORY:-}"
 MERGED_AFTER="${MERGED_AFTER:-}"
+EXCLUDE_PRS="${EXCLUDE_PRS:-}"
 
 usage() {
   cat <<'USAGE'
@@ -16,8 +17,26 @@ Environment:
   BASE_REF     Optional git ref to inspect instead of origin/$BASE_BRANCH.
   PR_LIMIT     Number of recent merged PRs to inspect. Default: 50
   MERGED_AFTER Optional ISO-8601 timestamp; older merged PRs are ignored.
+               Prefer EXCLUDE_PRS over a blanket date floor so the audit keeps
+               covering historical PRs and only documented exceptions are skipped.
+  EXCLUDE_PRS  Optional comma/space-separated PR numbers to treat as known,
+               intentional exceptions (e.g. a recorded merge SHA that was
+               orphaned by a history rewrite while the content still landed on
+               the base branch). Excluded PRs are reported as notices, not errors.
   GITHUB_REPOSITORY  Optional owner/name repository override for gh.
 USAGE
+}
+
+# Normalize EXCLUDE_PRS into a space-padded lookup string: " 4 7 ".
+normalized_excludes=" "
+if [[ -n "${EXCLUDE_PRS}" ]]; then
+  for token in ${EXCLUDE_PRS//,/ }; do
+    [[ -n "${token}" ]] && normalized_excludes+="${token} "
+  done
+fi
+
+is_excluded() {
+  [[ "${normalized_excludes}" == *" ${1} "* ]]
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -74,6 +93,11 @@ while IFS=$'\t' read -r number pr_base oid merged_at url title; do
   [[ -n "${number}" ]] || continue
 
   if [[ -n "${MERGED_AFTER}" && "${merged_at}" < "${MERGED_AFTER}" ]]; then
+    continue
+  fi
+
+  if is_excluded "${number}"; then
+    echo "::notice title=Merged PR containment exception::#${number} skipped via EXCLUDE_PRS ${url}"
     continue
   fi
 
