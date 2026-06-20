@@ -396,8 +396,11 @@ public struct ResolveDocsTool {
         guard let type = intent.type else { return [] }
         if let member = intent.member {
             let base = "/documentation/\(frameworkSlug)/\(slug(type))"
-            let direct = "\(base)/\(slug(member))"
-            return uniquePaths([direct] + knownMemberAliases(framework: framework, type: type, member: member).map { "\(base)/\($0)" })
+            let memberSlug = slug(member)
+            let direct = "\(base)/\(memberSlug)"
+            let knownAliases = knownMemberAliases(framework: framework, type: type, member: member)
+            let signatureGuesses = signatureCandidates(memberSlug: memberSlug, memberKind: intent.memberKind)
+            return uniquePaths([direct] + (knownAliases + signatureGuesses).map { "\(base)/\($0)" })
         }
         return ["/documentation/\(frameworkSlug)/\(slug(type))"]
     }
@@ -407,6 +410,24 @@ public struct ResolveDocsTool {
         switch key {
         case "uikit/uiviewcontroller/present":
             return ["present(_:animated:completion:)"]
+        default:
+            return []
+        }
+    }
+
+    /// Apple renders callable members with their signature in the path slug
+    /// (e.g. `navigationtitle(_:)`), so the bare slug 404s for most methods.
+    /// Generate the common single-unlabeled-argument and no-argument signature
+    /// forms for callable member kinds. These are only guesses: fetch
+    /// verification stays the correctness gate, and a miss falls through to the
+    /// search fallback exactly as before. Labeled-argument signatures still rely
+    /// on `knownMemberAliases` or the search fallback. Takes the already-slugged
+    /// member to avoid recomputing `slug(member)`.
+    private func signatureCandidates(memberSlug: String, memberKind: String?) -> [String] {
+        guard let memberKind = memberKind?.lowercased() else { return [] }
+        switch memberKind {
+        case "method", "function", "initializer":
+            return ["\(memberSlug)(_:)", "\(memberSlug)()"]
         default:
             return []
         }
