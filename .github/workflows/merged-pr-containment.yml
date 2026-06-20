@@ -25,5 +25,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_BRANCH: main
           PR_LIMIT: 50
-          MERGED_AFTER: "2026-05-19T00:00:00Z"
+          # Audit the full recent history instead of a blanket date floor.
+          # #4: recorded merge SHA was orphaned by a history rewrite; the content
+          # still landed on main (450cf0d). See docs/release/merged-pr-containment.md.
+          EXCLUDE_PRS: "4"
         run: bash ./scripts/audit-merged-pr-containment.sh
