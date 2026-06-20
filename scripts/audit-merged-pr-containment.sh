@@ -28,9 +28,12 @@ USAGE
 }
 
 # Normalize EXCLUDE_PRS into a space-padded lookup string: " 4 7 ".
+# Split on commas/whitespace via a quoted array read so a value such as `*`
+# cannot trigger word splitting or pathname expansion (globbing).
 normalized_excludes=" "
 if [[ -n "${EXCLUDE_PRS}" ]]; then
-  for token in ${EXCLUDE_PRS//,/ }; do
+  IFS=', ' read -r -a exclude_tokens <<< "${EXCLUDE_PRS}"
+  for token in "${exclude_tokens[@]}"; do
     [[ -n "${token}" ]] && normalized_excludes+="${token} "
   done
 fi
@@ -98,6 +101,22 @@ while IFS=$'\t' read -r number pr_base oid merged_at url title; do
 
   if is_excluded "${number}"; then
     echo "::notice title=Merged PR containment exception::#${number} skipped via EXCLUDE_PRS ${url}"
+    continue
+  fi
+
+  # An orphaned/unreachable merge SHA may be absent from the local checkout.
+  # `git merge-base --is-ancestor` would then exit 128 ("Not a valid commit
+  # name"), which is indistinguishable from the "not an ancestor" exit 1 and
+  # leaks a raw fatal: message. Resolve the object's presence explicitly first,
+  # attempting a targeted fetch, so containment is decided deterministically and
+  # the report explains *why* the commit is missing.
+  if ! git cat-file -e "${oid}^{commit}" 2>/dev/null; then
+    git fetch --quiet origin "${oid}" 2>/dev/null || true
+  fi
+
+  if ! git cat-file -e "${oid}^{commit}" 2>/dev/null; then
+    missing=$((missing + 1))
+    echo "::error title=Merged PR commit unreachable from ${target_ref}::#${number} (${pr_base}) ${oid} object not found in repository ${url} ${title}"
     continue
   fi
 

@@ -14,12 +14,13 @@ trap 'rm -rf "${workdir}"' EXIT
 
 # A SHA that is reachable from HEAD (always contained).
 contained_oid="$(git -C "${repo_root}" rev-parse HEAD)"
-# A SHA that is not an ancestor of HEAD: the orphaned PR #4 merge commit.
-# Fall back to a synthetic all-zero-ish SHA if that object is absent locally.
-missing_oid="1004b89ed80da3235b812dc0f2169baf2a96d588"
-if ! git -C "${repo_root}" cat-file -e "${missing_oid}^{commit}" 2>/dev/null; then
-  missing_oid="0000000000000000000000000000000000000004"
-fi
+# A real commit object that exists but is not an ancestor of HEAD. Fabricated
+# via commit-tree so the test is deterministic regardless of which historical
+# orphans happen to be present locally: `git merge-base --is-ancestor` returns a
+# controlled exit 1 (not 128) for a valid-but-unreachable object. The commit is
+# a harmless dangling object that future `git gc` reclaims.
+empty_tree="$(git -C "${repo_root}" hash-object -w -t tree /dev/null)"
+missing_oid="$(git -C "${repo_root}" commit-tree "${empty_tree}" -m 'synthetic unreachable commit for audit test')"
 
 make_stub_gh() {
   # $1: path to write the stub; remaining lines come from stdin as TSV rows.
@@ -68,5 +69,33 @@ run_case "missing commit fails" 1 "${stub2}"
 
 # Case 3: same missing commit, excluded via EXCLUDE_PRS -> exit 0.
 run_case "excluded pr passes" 0 "${stub2}" EXCLUDE_PRS=4
+
+# Case 4: an absent object reports a controlled exit 1, never a raw git 128.
+# Run inside an isolated repo with no `origin` remote so the script's targeted
+# fetch fails instantly without touching the network.
+iso_repo="${workdir}/iso-repo"
+git init -q "${iso_repo}"
+git -C "${iso_repo}" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "base"
+iso_base="$(git -C "${iso_repo}" rev-parse HEAD)"
+absent_oid="0000000000000000000000000000000000000004"
+stub4="${workdir}/gh-absent"
+printf '5\tmain\t%s\t2026-04-24T05:08:10Z\thttps://x/5\tabsent object pr\n' "${absent_oid}" \
+  | make_stub_gh "${stub4}"
+set +e
+( cd "${iso_repo}" && env GH_BIN="${stub4}" BASE_REF="${iso_base}" bash "${script}" ) \
+  >"${workdir}/out.log" 2>&1
+absent_exit=$?
+set -e
+if [[ "${absent_exit}" -ne 1 ]]; then
+  echo "FAIL: absent object controlled exit (expected 1, got ${absent_exit})"
+  cat "${workdir}/out.log"
+  exit 1
+fi
+if ! grep -q "object not found in repository" "${workdir}/out.log"; then
+  echo "FAIL: absent object did not produce the expected diagnostic"
+  cat "${workdir}/out.log"
+  exit 1
+fi
+echo "ok: absent object controlled exit"
 
 echo "All audit-merged-pr-containment tests passed."
