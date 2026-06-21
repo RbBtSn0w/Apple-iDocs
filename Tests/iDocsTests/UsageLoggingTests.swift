@@ -260,6 +260,47 @@ struct UsageLoggingTests {
         #expect(payload["source"] as? String == "apple")
     }
 
+    @Test("DefaultDocumentationAdapter reuses injected API clients across fetch and list paths")
+    func adapterReusesInjectedAPIClientsAcrossFetchAndListPaths() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let appleSession = MockNetworkSession()
+        let sosumiSession = MockNetworkSession()
+        let fetchPath = "/documentation/swiftui/view"
+        let fetchURL = try #require(URLHelpers.dataURL(for: fetchPath))
+        let technologiesURL = try #require(URLHelpers.technologiesURL())
+
+        appleSession.setResponse(
+            for: fetchURL,
+            data: MockPayloads.docCJSONWithObjectIdentifier(
+                title: "View",
+                identifierURL: "doc://com.apple.documentation/documentation/swiftui/view",
+                abstract: "A SwiftUI view."
+            ),
+            response: MockPayloads.httpResponse(url: fetchURL)
+        )
+        appleSession.setResponse(
+            for: technologiesURL,
+            data: MockPayloads.technologiesJSON,
+            response: MockPayloads.httpResponse(url: technologiesURL)
+        )
+
+        let adapter = try DefaultDocumentationAdapter(
+            appleAPI: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession)
+        )
+        let config = DocumentationConfig(cachePath: temporaryDirectory.appendingPathComponent("cache").path)
+
+        _ = try await adapter.fetch(id: fetchPath, config: config)
+        let technologies = try await adapter.listTechnologies(config: config)
+
+        #expect(!technologies.isEmpty)
+        #expect(appleSession.requestCount == 2)
+        #expect(appleSession.requestedURLs == [fetchURL, technologiesURL])
+        #expect(sosumiSession.requestCount == 0)
+    }
+
     private func makeMockAppleAPI(queries: [String]) -> AppleJSONAPI {
         let session = MockNetworkSession()
         for query in queries {
