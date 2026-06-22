@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppleDocCInlineContentParser {
+struct AppleDocCInlineContentParser: Sendable {
     func parseArray(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [InlineContent]? {
         guard let value else { return nil }
         guard case .array(let values) = value else {

@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppleDocCPrimarySectionParser {
+struct AppleDocCPrimarySectionParser: Sendable {
     private let blockParser = AppleDocCBlockContentParser()
 
     func parseSections(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [ContentSection]? {
@@ -145,7 +145,7 @@ struct AppleDocCPrimarySectionParser {
     }
 }
 
-struct AppleDocCTopicSectionParser {
+struct AppleDocCTopicSectionParser: Sendable {
     func parse(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [TopicSection]? {
         guard let value else { return nil }
         guard case .array(let values) = value else {
@@ -173,7 +173,7 @@ struct AppleDocCTopicSectionParser {
     }
 }
 
-struct AppleDocCRelationshipSectionParser {
+struct AppleDocCRelationshipSectionParser: Sendable {
     func parse(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [RelationshipSection]? {
         guard let value else { return nil }
         guard case .array(let values) = value else {
@@ -201,7 +201,7 @@ struct AppleDocCRelationshipSectionParser {
     }
 }
 
-struct AppleDocCSeeAlsoSectionParser {
+struct AppleDocCSeeAlsoSectionParser: Sendable {
     func parse(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [SeeAlsoSection]? {
         guard let value else { return nil }
         guard case .array(let values) = value else {
@@ -229,7 +229,7 @@ struct AppleDocCSeeAlsoSectionParser {
     }
 }
 
-struct AppleDocCReferenceParser {
+struct AppleDocCReferenceParser: Sendable {
     private let inlineParser = AppleDocCInlineContentParser()
 
     func parse(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [String: DocCReference]? {
@@ -258,7 +258,7 @@ struct AppleDocCReferenceParser {
     }
 }
 
-struct AppleDocCPlatformParser {
+struct AppleDocCPlatformParser: Sendable {
     func parse(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [PlatformAvailability]? {
         guard let value else { return nil }
         guard case .array(let values) = value else {

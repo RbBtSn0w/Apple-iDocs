@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppleDocCParsingContext {
+struct AppleDocCParsingContext: Sendable {
     let root: [String: JSONValue]
     let requestedPath: String?
     var diagnostics: [AppleDocCDiagnostic] = []

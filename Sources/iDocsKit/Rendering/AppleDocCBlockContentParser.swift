@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppleDocCBlockContentParser {
+struct AppleDocCBlockContentParser: Sendable {
     private let inlineParser = AppleDocCInlineContentParser()
 
     func parseBlocks(from value: JSONValue?, path: String, context: inout AppleDocCParsingContext) -> [ContentBlock] {
