@@ -85,26 +85,34 @@ struct DocCTypesTests {
         _ = try decoder.decode(InlineContent.self, from: linkJSON)
     }
 
-    @Test("DocC ContentBlock rejects unknown types")
-    func contentBlockRejectsUnknownType() throws {
+    @Test("DocC ContentBlock preserves unknown types")
+    func contentBlockPreservesUnknownType() throws {
         let data = """
         {"type":"newAppleBlock","payload":{"unexpected":true}}
         """.data(using: .utf8)!
 
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(ContentBlock.self, from: data)
+        let block = try JSONDecoder().decode(ContentBlock.self, from: data)
+
+        guard case .unknown(let type) = block else {
+            Issue.record("Expected unknown content block")
+            return
         }
+        #expect(type == "newAppleBlock")
     }
 
-    @Test("DocC InlineContent rejects unknown types")
-    func inlineContentRejectsUnknownType() throws {
+    @Test("DocC InlineContent preserves unknown types")
+    func inlineContentPreservesUnknownType() throws {
         let data = """
         {"type":"newAppleInline","payload":{"unexpected":true}}
         """.data(using: .utf8)!
 
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(InlineContent.self, from: data)
+        let inline = try JSONDecoder().decode(InlineContent.self, from: data)
+
+        guard case .unknown(let type) = inline else {
+            Issue.record("Expected unknown inline content")
+            return
         }
+        #expect(type == "newAppleInline")
     }
     
     @Test("SourceLanguage and DocumentKind Codable")

@@ -378,6 +378,7 @@ public enum ContentBlock: Codable, Sendable {
     case unorderedList([[ContentBlock]])
     case orderedList([[ContentBlock]])
     case table(header: [[ContentBlock]], rows: [[[ContentBlock]]])
+    case unknown(type: String)
     
     enum CodingKeys: String, CodingKey {
         case type
@@ -427,11 +428,7 @@ public enum ContentBlock: Codable, Sendable {
                 rows: try container.decode([[[ContentBlock]]].self, forKey: .rows)
             )
         default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown DocC content block type: \(type)"
-            )
+            self = .unknown(type: type)
         }
     }
     
@@ -464,6 +461,8 @@ public enum ContentBlock: Codable, Sendable {
             try container.encode("table", forKey: .type)
             try container.encode(header, forKey: .header)
             try container.encode(rows, forKey: .rows)
+        case .unknown(let type):
+            try container.encode(type, forKey: .type)
         }
     }
 }
@@ -476,6 +475,7 @@ public enum InlineContent: Codable, Sendable {
     case reference(identifier: String, title: String?)
     case image(identifier: String, altText: String?)
     case link(destination: String, title: [InlineContent])
+    case unknown(type: String)
     
     enum CodingKeys: String, CodingKey {
         case type
@@ -517,11 +517,7 @@ public enum InlineContent: Codable, Sendable {
                 title: try container.decode([InlineContent].self, forKey: .title)
             )
         default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown DocC inline content type: \(type)"
-            )
+            self = .unknown(type: type)
         }
     }
     
@@ -552,6 +548,8 @@ public enum InlineContent: Codable, Sendable {
             try container.encode("link", forKey: .type)
             try container.encode(destination, forKey: .destination)
             try container.encode(title, forKey: .title)
+        case .unknown(let type):
+            try container.encode(type, forKey: .type)
         }
     }
 }
