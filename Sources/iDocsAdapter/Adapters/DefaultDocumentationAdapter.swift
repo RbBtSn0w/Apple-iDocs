@@ -4,6 +4,8 @@ import iDocsKit
 public struct DefaultDocumentationAdapter: DocumentationService {
     private let adapterVersion: String
     private let logger: any DocumentationLogger
+    private let appleAPI: AppleJSONAPI
+    private let sosumiAPI: SosumiAPI
     private let searchPerformer: @Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput
     private let resolvePerformer: @Sendable (ResolveIntent, DocumentationConfig) async throws -> ResolveDocsResult
     private let technologiesPerformer: @Sendable () async throws -> [Technology]
@@ -12,6 +14,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     public init(
         adapterVersion: String = "1.0.0",
         logger: any DocumentationLogger = NoopDocumentationLogger(),
+        appleAPI: AppleJSONAPI? = nil,
+        sosumiAPI: SosumiAPI? = nil,
         searchPerformer: (@Sendable (String) async throws -> SearchDocsRunOutput)? = nil,
         configuredSearchPerformer: (@Sendable (String, DocumentationConfig) async throws -> SearchDocsRunOutput)? = nil,
         configuredResolvePerformer: (@Sendable (ResolveIntent, DocumentationConfig) async throws -> ResolveDocsResult)? = nil,
@@ -20,8 +24,10 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     ) throws {
         self.adapterVersion = adapterVersion
         self.logger = logger
-        let defaultAppleAPI = AppleJSONAPI()
-        let defaultSosumiAPI = SosumiAPI()
+        let defaultAppleAPI = appleAPI ?? AppleJSONAPI()
+        let defaultSosumiAPI = sosumiAPI ?? SosumiAPI()
+        self.appleAPI = defaultAppleAPI
+        self.sosumiAPI = defaultSosumiAPI
         self.searchPerformer = configuredSearchPerformer ?? { query, config in
             if let searchPerformer {
                 return try await searchPerformer(query)
@@ -74,7 +80,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             ).run(intent: Self.mapResolveIntent(intent))
         }
         self.technologiesPerformer = technologiesPerformer ?? {
-            try await AppleJSONAPI().fetchTechnologies().map { Technology(name: $0.name, id: $0.url, category: $0.kind) }
+            try await defaultAppleAPI.fetchTechnologies().map { Technology(name: $0.name, id: $0.url, category: $0.kind) }
         }
         self.usageRecorder = usageRecorder
         try Self.validateVersionCompatibility(adapterVersion: adapterVersion, core: coreVersion)
@@ -201,8 +207,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 URL(fileURLWithPath: $0, isDirectory: true)
             }
             let output = try await FetchDocTool(
-                api: AppleJSONAPI(),
-                sosumiAPI: SosumiAPI(),
+                api: appleAPI,
+                sosumiAPI: sosumiAPI,
                 xcodeDocs: XcodeLocalDocs(
                     fileManager: FileManager.default,
                     searchProvider: SpotlightSearchProvider(),
