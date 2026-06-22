@@ -427,7 +427,11 @@ public enum ContentBlock: Codable, Sendable {
                 rows: try container.decode([[[ContentBlock]]].self, forKey: .rows)
             )
         default:
-            self = .paragraph([]) // Fallback
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown DocC content block type: \(type)"
+            )
         }
     }
     
@@ -513,7 +517,11 @@ public enum InlineContent: Codable, Sendable {
                 title: try container.decode([InlineContent].self, forKey: .title)
             )
         default:
-            self = .text("") // Fallback
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown DocC inline content type: \(type)"
+            )
         }
     }
     

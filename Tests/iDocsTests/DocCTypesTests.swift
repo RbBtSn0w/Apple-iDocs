@@ -84,6 +84,28 @@ struct DocCTypesTests {
         """.data(using: .utf8)!
         _ = try decoder.decode(InlineContent.self, from: linkJSON)
     }
+
+    @Test("DocC ContentBlock rejects unknown types")
+    func contentBlockRejectsUnknownType() throws {
+        let data = """
+        {"type":"newAppleBlock","payload":{"unexpected":true}}
+        """.data(using: .utf8)!
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(ContentBlock.self, from: data)
+        }
+    }
+
+    @Test("DocC InlineContent rejects unknown types")
+    func inlineContentRejectsUnknownType() throws {
+        let data = """
+        {"type":"newAppleInline","payload":{"unexpected":true}}
+        """.data(using: .utf8)!
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(InlineContent.self, from: data)
+        }
+    }
     
     @Test("SourceLanguage and DocumentKind Codable")
     func testEnums() throws {
