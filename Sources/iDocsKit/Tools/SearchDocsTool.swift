@@ -34,87 +34,103 @@ public struct SearchDocsTool {
         logger.info("Searching Apple documentation for: \(query)")
         let totalStart = ContinuousClock.now
         var stages: [DocumentationSearchStageTiming] = []
-        var localModuleFallbackResults: [SearchResult] = []
 
-        // 0. Try Memory Cache
-        let cacheStart = ContinuousClock.now
-        if let cached = await memoryCache.get(query) {
-            let mapped = cached.map { result in
-                SearchResult(
-                    title: result.title,
-                    abstract: result.abstract,
-                    path: result.path,
-                    kind: result.kind,
-                    source: .cache,
-                    relevance: result.relevance,
-                    sourceKind: result.sourceKind,
-                    fetchSupported: result.fetchSupported,
-                    fetchSupportReason: result.fetchSupportReason,
-                    matchScope: result.matchScope,
-                    queryAttempt: result.queryAttempt ?? query
-                )
-            }
-            stages.append(
-                DocumentationSearchStageTiming(
-                    name: "cache",
-                    status: .hit,
-                    durationMs: durationInMilliseconds(since: cacheStart),
-                    resultCount: mapped.count,
-                    queryAttempt: query
-                )
-            )
-            logger.info("Memory cache hit for: \(query)")
+        let cacheStage = await searchCache(query: query)
+        stages.append(cacheStage.stage)
+        if let cached = cacheStage.results {
             return buildOutput(
-                results: mapped,
+                results: cached,
                 stages: stages,
                 totalStart: totalStart
             )
         }
-        stages.append(
+
+        let localStage = await searchLocal(query: query)
+        stages.append(localStage.stage)
+        if let local = localStage.results {
+            return buildOutput(
+                results: local,
+                stages: stages,
+                totalStart: totalStart
+            )
+        }
+
+        let appleStage = await searchApple(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
+        stages.append(contentsOf: appleStage.stages)
+        if let apple = appleStage.results {
+            return buildOutput(
+                results: apple,
+                stages: stages,
+                totalStart: totalStart
+            )
+        }
+
+        let sosumiStage = await searchSosumi(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
+        stages.append(contentsOf: sosumiStage.stages)
+        return buildOutput(
+            results: sosumiStage.results,
+            stages: stages,
+            totalStart: totalStart
+        )
+    }
+
+    private func searchCache(query: String) async -> (results: [SearchResult]?, stage: DocumentationSearchStageTiming) {
+        let cacheStart = ContinuousClock.now
+        guard let cached = await memoryCache.get(query) else {
+            return (
+                nil,
+                DocumentationSearchStageTiming(
+                    name: "cache",
+                    status: .miss,
+                    durationMs: durationInMilliseconds(since: cacheStart),
+                    resultCount: 0,
+                    reason: "cache_miss",
+                    queryAttempt: query
+                )
+            )
+        }
+
+        let mapped = cached.map { result in
+            SearchResult(
+                title: result.title,
+                abstract: result.abstract,
+                path: result.path,
+                kind: result.kind,
+                source: .cache,
+                relevance: result.relevance,
+                sourceKind: result.sourceKind,
+                fetchSupported: result.fetchSupported,
+                fetchSupportReason: result.fetchSupportReason,
+                matchScope: result.matchScope,
+                queryAttempt: result.queryAttempt ?? query
+            )
+        }
+        logger.info("Memory cache hit for: \(query)")
+        return (
+            mapped,
             DocumentationSearchStageTiming(
                 name: "cache",
-                status: .miss,
+                status: .hit,
                 durationMs: durationInMilliseconds(since: cacheStart),
-                resultCount: 0,
-                reason: "cache_miss",
+                resultCount: mapped.count,
                 queryAttempt: query
             )
         )
-        
-        // 1. Try Local Xcode
+    }
+
+    private func searchLocal(query: String) async -> (
+        results: [SearchResult]?,
+        moduleFallbackResults: [SearchResult],
+        stage: DocumentationSearchStageTiming
+    ) {
         let localStart = ContinuousClock.now
         do {
             let localResults = try await xcodeDocs.search(query: query)
-            if !localResults.isEmpty {
-                let mapped = annotateResults(localResults, queryAttempt: query)
-                let shouldContinueRemote = shouldContinueRemoteSearch(afterLocalResults: mapped, originalQuery: query)
-                stages.append(
-                    DocumentationSearchStageTiming(
-                        name: "local",
-                        status: .hit,
-                        durationMs: durationInMilliseconds(since: localStart),
-                        resultCount: mapped.count,
-                        reason: shouldContinueRemote ? "local_module_fallback" : nil,
-                        hint: shouldContinueRemote
-                            ? "Only module-level local results were found; remote Apple and sosumi fallbacks will be attempted for symbol-level evidence."
-                            : nil,
-                        queryAttempt: query
-                    )
-                )
-                logger.info("Found \(mapped.count) matches in local Xcode documentation.")
-                if shouldContinueRemote {
-                    localModuleFallbackResults = mapped
-                } else {
-                    await memoryCache.set(query, value: mapped)
-                    return buildOutput(
-                        results: mapped,
-                        stages: stages,
-                        totalStart: totalStart
-                    )
-                }
-            } else {
+            if localResults.isEmpty {
                 let localUnavailable = !xcodeDocs.isDocumentationCacheAvailable()
-                stages.append(
+                return (
+                    nil,
+                    [],
                     DocumentationSearchStageTiming(
                         name: "local",
                         status: .miss,
@@ -128,8 +144,34 @@ public struct SearchDocsTool {
                     )
                 )
             }
+
+            let mapped = annotateResults(localResults, queryAttempt: query)
+            let shouldContinueRemote = shouldContinueRemoteSearch(afterLocalResults: mapped, originalQuery: query)
+            logger.info("Found \(mapped.count) matches in local Xcode documentation.")
+            if !shouldContinueRemote {
+                await memoryCache.set(query, value: mapped)
+            }
+
+            return (
+                shouldContinueRemote ? nil : mapped,
+                shouldContinueRemote ? mapped : [],
+                DocumentationSearchStageTiming(
+                    name: "local",
+                    status: .hit,
+                    durationMs: durationInMilliseconds(since: localStart),
+                    resultCount: mapped.count,
+                    reason: shouldContinueRemote ? "local_module_fallback" : nil,
+                    hint: shouldContinueRemote
+                        ? "Only module-level local results were found; remote Apple and sosumi fallbacks will be attempted for symbol-level evidence."
+                        : nil,
+                    queryAttempt: query
+                )
+            )
         } catch {
-            stages.append(
+            logger.warning("Local Xcode search failed: \(error.localizedDescription)")
+            return (
+                nil,
+                [],
                 DocumentationSearchStageTiming(
                     name: "local",
                     status: .error,
@@ -140,10 +182,13 @@ public struct SearchDocsTool {
                     queryAttempt: query
                 )
             )
-            logger.warning("Local Xcode search failed: \(error.localizedDescription)")
         }
-        
-        // 2. Try Apple Remote API
+    }
+
+    private func searchApple(query: String, localModuleFallbackResults: [SearchResult]) async -> (
+        results: [SearchResult]?,
+        stages: [DocumentationSearchStageTiming]
+    ) {
         let appleStart = ContinuousClock.now
         do {
             logger.info("Falling back to Apple remote API search.")
@@ -152,77 +197,72 @@ public struct SearchDocsTool {
                 try await appleAPI.search(query: query)
             }
             if appleResults.isEmpty {
-                stages.append(
-                    DocumentationSearchStageTiming(
-                        name: "apple",
-                        status: .miss,
-                        durationMs: durationInMilliseconds(since: appleStart),
-                        resultCount: 0,
-                        reason: "remote_no_results",
-                        hint: searchQualityMissHint(stage: "apple"),
-                        queryAttempt: query
-                    )
-                )
                 logger.info("Apple remote returned no results.")
-                if query.isOpaqueMissQuery {
-                    stages.append(
-                        DocumentationSearchStageTiming(
-                            name: "sosumi",
-                            status: .skipped,
-                            durationMs: 0,
-                            resultCount: 0,
-                            reason: "opaque_miss_query",
-                            hint: "Skipping broad sosumi fallback for an opaque miss query to avoid noisy unrelated candidates.",
-                            queryAttempt: query
-                        )
-                    )
-                    return buildOutput(
-                        results: localModuleFallbackResults,
-                        stages: stages,
-                        totalStart: totalStart
-                    )
-                }
-                logger.info("Trying sosumi fallback.")
-            } else {
-                let mapped = annotateResults(appleResults, queryAttempt: query)
-                let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
-                stages.append(
-                    DocumentationSearchStageTiming(
-                        name: "apple",
-                        status: ranked.isEmpty ? .miss : .hit,
-                        durationMs: durationInMilliseconds(since: appleStart),
-                        resultCount: ranked.count,
-                        reason: ranked.isEmpty ? "low_confidence_remote_results" : nil,
-                        hint: ranked.isEmpty ? lowConfidenceRemoteHint(stage: "apple") : nil,
-                        queryAttempt: query
-                    )
-                )
-                if !ranked.isEmpty {
-                    await memoryCache.set(query, value: ranked)
-                    return buildOutput(
-                        results: ranked,
-                        stages: stages,
-                        totalStart: totalStart
-                    )
-                }
-                logger.info("Apple remote returned only low-confidence results, trying sosumi fallback.")
-            }
-        } catch {
-            stages.append(
-                DocumentationSearchStageTiming(
+                let appleStage = DocumentationSearchStageTiming(
                     name: "apple",
-                    status: .error,
+                    status: .miss,
                     durationMs: durationInMilliseconds(since: appleStart),
                     resultCount: 0,
-                    reason: remoteErrorReason(for: error),
-                    hint: remoteErrorHint(for: error),
+                    reason: "remote_no_results",
+                    hint: searchQualityMissHint(stage: "apple"),
                     queryAttempt: query
                 )
-            )
-            logger.warning("Apple remote search failed: \(error.localizedDescription). Trying sosumi fallback.")
-        }
+                if query.isOpaqueMissQuery {
+                    let sosumiSkippedStage = DocumentationSearchStageTiming(
+                        name: "sosumi",
+                        status: .skipped,
+                        durationMs: 0,
+                        resultCount: 0,
+                        reason: "opaque_miss_query",
+                        hint: "Skipping broad sosumi fallback for an opaque miss query to avoid noisy unrelated candidates.",
+                        queryAttempt: query
+                    )
+                    return (localModuleFallbackResults, [appleStage, sosumiSkippedStage])
+                }
+                logger.info("Trying sosumi fallback.")
+                return (nil, [appleStage])
+            }
 
-        // 3. Try sosumi fallback
+            let mapped = annotateResults(appleResults, queryAttempt: query)
+            let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
+            let stage = DocumentationSearchStageTiming(
+                name: "apple",
+                status: ranked.isEmpty ? .miss : .hit,
+                durationMs: durationInMilliseconds(since: appleStart),
+                resultCount: ranked.count,
+                reason: ranked.isEmpty ? "low_confidence_remote_results" : nil,
+                hint: ranked.isEmpty ? lowConfidenceRemoteHint(stage: "apple") : nil,
+                queryAttempt: query
+            )
+            if !ranked.isEmpty {
+                await memoryCache.set(query, value: ranked)
+                return (ranked, [stage])
+            }
+            logger.info("Apple remote returned only low-confidence results, trying sosumi fallback.")
+            return (nil, [stage])
+        } catch {
+            logger.warning("Apple remote search failed: \(error.localizedDescription). Trying sosumi fallback.")
+            return (
+                nil,
+                [
+                    DocumentationSearchStageTiming(
+                        name: "apple",
+                        status: .error,
+                        durationMs: durationInMilliseconds(since: appleStart),
+                        resultCount: 0,
+                        reason: remoteErrorReason(for: error),
+                        hint: remoteErrorHint(for: error),
+                        queryAttempt: query
+                    )
+                ]
+            )
+        }
+    }
+
+    private func searchSosumi(query: String, localModuleFallbackResults: [SearchResult]) async -> (
+        results: [SearchResult],
+        stages: [DocumentationSearchStageTiming]
+    ) {
         let sosumiStart = ContinuousClock.now
         do {
             let sosumiAPI = self.sosumiAPI
@@ -231,24 +271,18 @@ public struct SearchDocsTool {
             }
             let mapped = annotateResults(sosumiResults, queryAttempt: query)
             let ranked = SearchResultRanker(query: query).rankedRemoteResults(mapped)
-            stages.append(
-                DocumentationSearchStageTiming(
-                    name: "sosumi",
-                    status: ranked.isEmpty ? .miss : .hit,
-                    durationMs: durationInMilliseconds(since: sosumiStart),
-                    resultCount: ranked.count,
-                    reason: mapped.isEmpty ? "remote_no_results" : (ranked.isEmpty ? "low_confidence_remote_results" : nil),
-                    hint: mapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : (ranked.isEmpty ? lowConfidenceRemoteHint(stage: "sosumi") : nil),
-                    queryAttempt: query
-                )
+            let stage = DocumentationSearchStageTiming(
+                name: "sosumi",
+                status: ranked.isEmpty ? .miss : .hit,
+                durationMs: durationInMilliseconds(since: sosumiStart),
+                resultCount: ranked.count,
+                reason: mapped.isEmpty ? "remote_no_results" : (ranked.isEmpty ? "low_confidence_remote_results" : nil),
+                hint: mapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : (ranked.isEmpty ? lowConfidenceRemoteHint(stage: "sosumi") : nil),
+                queryAttempt: query
             )
             if !ranked.isEmpty {
                 await memoryCache.set(query, value: ranked)
-                return buildOutput(
-                    results: ranked,
-                    stages: stages,
-                    totalStart: totalStart
-                )
+                return (ranked, [stage])
             }
 
             if let fallbackQuery = keywordFallbackQuery(for: query), fallbackQuery != query {
@@ -258,75 +292,47 @@ public struct SearchDocsTool {
                 }
                 let fallbackMapped = annotateResults(fallbackResults, queryAttempt: fallbackQuery)
                 let fallbackRanked = SearchResultRanker(query: query).rankedRemoteResults(fallbackMapped)
-                stages.append(
-                    DocumentationSearchStageTiming(
-                        name: "sosumi",
-                        status: fallbackRanked.isEmpty ? .miss : .hit,
-                        durationMs: durationInMilliseconds(since: fallbackStart),
-                        resultCount: fallbackRanked.count,
-                        reason: fallbackMapped.isEmpty ? "remote_no_results" : (fallbackRanked.isEmpty ? "low_confidence_remote_results" : nil),
-                        hint: fallbackMapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : (fallbackRanked.isEmpty ? lowConfidenceRemoteHint(stage: "sosumi") : nil),
-                        queryAttempt: fallbackQuery
-                    )
+                let fallbackStage = DocumentationSearchStageTiming(
+                    name: "sosumi",
+                    status: fallbackRanked.isEmpty ? .miss : .hit,
+                    durationMs: durationInMilliseconds(since: fallbackStart),
+                    resultCount: fallbackRanked.count,
+                    reason: fallbackMapped.isEmpty ? "remote_no_results" : (fallbackRanked.isEmpty ? "low_confidence_remote_results" : nil),
+                    hint: fallbackMapped.isEmpty ? searchQualityMissHint(stage: "sosumi") : (fallbackRanked.isEmpty ? lowConfidenceRemoteHint(stage: "sosumi") : nil),
+                    queryAttempt: fallbackQuery
                 )
                 if !fallbackRanked.isEmpty {
                     await memoryCache.set(query, value: fallbackRanked)
-                    return buildOutput(
-                        results: fallbackRanked,
-                        stages: stages,
-                        totalStart: totalStart
-                    )
+                    return (fallbackRanked, [stage, fallbackStage])
                 }
 
                 if !localModuleFallbackResults.isEmpty {
-                    return buildOutput(
-                        results: localModuleFallbackResults,
-                        stages: stages,
-                        totalStart: totalStart
-                    )
+                    return (localModuleFallbackResults, [stage, fallbackStage])
                 }
 
-                return buildOutput(
-                    results: fallbackRanked,
-                    stages: stages,
-                    totalStart: totalStart
-                )
+                return (fallbackRanked, [stage, fallbackStage])
             }
 
             if !localModuleFallbackResults.isEmpty {
-                return buildOutput(
-                    results: localModuleFallbackResults,
-                    stages: stages,
-                    totalStart: totalStart
-                )
+                return (localModuleFallbackResults, [stage])
             }
 
-            return buildOutput(results: ranked, stages: stages, totalStart: totalStart)
+            return (ranked, [stage])
         } catch {
-            stages.append(
-                DocumentationSearchStageTiming(
-                    name: "sosumi",
-                    status: .error,
-                    durationMs: durationInMilliseconds(since: sosumiStart),
-                    resultCount: 0,
-                    reason: remoteErrorReason(for: error),
-                    hint: remoteErrorHint(for: error),
-                    queryAttempt: query
-                )
-            )
             logger.warning("Sosumi search failed: \(error.localizedDescription). Returning empty results.")
-            if !localModuleFallbackResults.isEmpty {
-                return buildOutput(
-                    results: localModuleFallbackResults,
-                    stages: stages,
-                    totalStart: totalStart
-                )
-            }
-            return buildOutput(
-                results: [],
-                stages: stages,
-                totalStart: totalStart
+            let stage = DocumentationSearchStageTiming(
+                name: "sosumi",
+                status: .error,
+                durationMs: durationInMilliseconds(since: sosumiStart),
+                resultCount: 0,
+                reason: remoteErrorReason(for: error),
+                hint: remoteErrorHint(for: error),
+                queryAttempt: query
             )
+            if !localModuleFallbackResults.isEmpty {
+                return (localModuleFallbackResults, [stage])
+            }
+            return ([], [stage])
         }
     }
 

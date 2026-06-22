@@ -87,6 +87,8 @@ public struct DocCRenderer {
                 table += "| " + row.map { renderBlocks($0) }.joined(separator: " | ") + " |\n"
             }
             return table
+        case .unknown:
+            return ""
         }
     }
     
@@ -112,6 +114,8 @@ public struct DocCRenderer {
             return "![\(alt ?? id)](\(id))"
         case .link(let dest, let title):
             return "[\(renderInline(title))](\(dest))"
+        case .unknown:
+            return ""
         }
     }
     

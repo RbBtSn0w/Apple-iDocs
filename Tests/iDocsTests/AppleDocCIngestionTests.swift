@@ -152,6 +152,57 @@ struct AppleDocCIngestionTests {
         #expect(result.diagnostics.contains { $0.path == "seeAlsoSections[0].title" && $0.reason == "missing_see_also_title" })
     }
 
+    @Test("AppleDocCIngestion preserves inline images and diagnoses malformed images")
+    func preservesInlineImagesAndDiagnosesMalformedImages() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/swiftui/view",
+            "metadata": {
+                "title": "View",
+                "role": "symbol",
+                "platforms": []
+            },
+            "abstract": [
+                { "type": "text", "text": "Renderable abstract." }
+            ],
+            "primaryContentSections": [
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "inlineContent": [
+                                { "type": "text", "text": "Image: " },
+                                { "type": "image", "identifier": "doc://image", "alt": "Preview" },
+                                { "type": "image", "alt": "Missing identifier" }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/swiftui/view")
+
+        guard case .content(let section)? = result.content.primaryContentSections?.first,
+              case .paragraph(let inline)? = section.content.first else {
+            Issue.record("Expected content paragraph")
+            return
+        }
+
+        #expect(inline.contains { content in
+            if case .image(let identifier, let altText) = content {
+                return identifier == "doc://image" && altText == "Preview"
+            }
+            return false
+        })
+        #expect(result.diagnostics.contains {
+            $0.path == "primaryContentSections[0].content[0].inlineContent[2].identifier"
+                && $0.reason == "missing_image_identifier"
+        })
+    }
+
     @Test("AppleDocCIngestion maps declarations and clamps invalid headings")
     func mapsDeclarationsAndClampsInvalidHeadings() throws {
         let data = Data("""

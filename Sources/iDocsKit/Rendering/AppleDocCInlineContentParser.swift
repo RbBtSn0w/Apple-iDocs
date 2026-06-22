@@ -48,6 +48,12 @@ struct AppleDocCInlineContentParser: Sendable {
                 return nil
             }
             return .reference(identifier: identifier, title: context.string("title", in: object))
+        case "image":
+            guard let identifier = context.string("identifier", in: object) else {
+                context.appendPartial(path: "\(path).identifier", reason: "missing_image_identifier")
+                return nil
+            }
+            return .image(identifier: identifier, altText: context.string("alt", in: object))
         case "link":
             guard let destination = context.string("destination", in: object) else {
                 context.appendPartial(path: "\(path).destination", reason: "missing_link_destination")
