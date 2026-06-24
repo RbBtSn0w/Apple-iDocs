@@ -33,7 +33,7 @@ public enum AppleSourceKind: String, Codable, Sendable, Equatable {
 
     public init(path: String) {
         let normalized = URLHelpers.normalizePath(path).lowercased()
-        if normalized.hasPrefix("/documentation/") || normalized == "/documentation" {
+        if DocumentationPath.isWithinNamespace(normalized) {
             self = .documentation
         } else if normalized.hasPrefix("/help/") || normalized == "/help" {
             self = .help
@@ -172,7 +172,7 @@ public struct SearchResult: Codable, Sendable {
         }
 
         let normalized = URLHelpers.normalizePath(path).lowercased()
-        guard normalized.hasPrefix("/documentation/") else {
+        guard normalized.hasPrefix(DocumentationPath.prefix) else {
             return .path
         }
 

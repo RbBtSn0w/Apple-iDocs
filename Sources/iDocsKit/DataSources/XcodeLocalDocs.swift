@@ -153,7 +153,7 @@ public struct XcodeLocalDocs {
                 return SearchResult(
                     title: fileName,
                     abstract: "Matched in local Xcode documentation index.",
-                    path: "/documentation/\(fileName)",
+                    path: DocumentationPath.make(fileName),
                     kind: .overview,
                     source: .local
                 )
@@ -224,7 +224,7 @@ public struct XcodeLocalDocs {
                     SearchResult(
                         title: module,
                         abstract: "Matched module name in local Xcode documentation.",
-                        path: "/documentation/\(module)",
+                        path: DocumentationPath.make(module),
                         kind: .framework,
                         source: .local
                     )
@@ -269,7 +269,7 @@ public struct XcodeLocalDocs {
                     SearchResult(
                         title: normalizedTitle,
                         abstract: "Matched module name in local Xcode documentation index.",
-                        path: "/documentation/\(normalizedTitle)",
+                        path: DocumentationPath.make(normalizedTitle),
                         kind: .framework,
                         source: .local
                     )
@@ -453,7 +453,7 @@ public struct XcodeLocalDocs {
             return []
         }
 
-        let prefix = Data("/documentation/".utf8)
+        let prefix = Data(DocumentationPath.prefix.utf8)
         var matches = Set<String>()
         var ranked: [IndexStoreQueryMatch] = []
         let maxPathLength = 240

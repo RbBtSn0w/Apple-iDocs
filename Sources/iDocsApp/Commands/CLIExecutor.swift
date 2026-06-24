@@ -14,7 +14,7 @@ public enum CLIExecutor {
             let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
             let response = try await adapter.searchDetailed(query: query, config: config)
             let results = response.results
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
             let source = primarySource(from: results.map(\.source))
             let diagnostics = response.diagnostics?.stages.map(Self.mapDiagnosticPayload)
 
@@ -72,7 +72,7 @@ public enum CLIExecutor {
             return 0
         } catch {
             let message = CLIErrorPresenter.message(for: error)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
             if outputFormat == .json {
                 _ = writeJSONPayload(
                     CLICommandPayload(
@@ -111,7 +111,7 @@ public enum CLIExecutor {
             let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
             let content = try await adapter.fetch(id: id, config: config)
             let source = content.metadata["source"]
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
 
             if outputFormat == .json {
                 return writeJSONPayload(
@@ -151,7 +151,7 @@ public enum CLIExecutor {
             return 0
         } catch {
             let message = CLIErrorPresenter.message(for: error)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
             if outputFormat == .json {
                 _ = writeJSONPayload(
                     CLICommandPayload(
@@ -190,7 +190,7 @@ public enum CLIExecutor {
             let adapter = try CLIEnvironment.serviceFactory()
             let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
             let result = try await adapter.resolve(intent: intent, config: config)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
 
             if outputFormat == .json {
                 return writeJSONPayload(
@@ -220,7 +220,7 @@ public enum CLIExecutor {
             return 1
         } catch {
             let message = CLIErrorPresenter.message(for: error)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
             if outputFormat == .json {
                 _ = writeJSONPayload(
                     resolvePayload(
@@ -252,7 +252,7 @@ public enum CLIExecutor {
                 technologyCategoryFilter: category
             )
             let technologies = try await adapter.listTechnologies(config: config)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
 
             if outputFormat == .json {
                 return writeJSONPayload(
@@ -293,7 +293,7 @@ public enum CLIExecutor {
             return 0
         } catch {
             let message = CLIErrorPresenter.message(for: error)
-            let durationMs = durationInMilliseconds(since: start)
+            let durationMs = start.millisecondsElapsed()
             if outputFormat == .json {
                 _ = writeJSONPayload(
                     CLICommandPayload(
@@ -318,12 +318,6 @@ public enum CLIExecutor {
             CLIEnvironment.writeStderr(message)
             return 1
         }
-    }
-
-    private static func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {
-        let duration = start.duration(to: ContinuousClock.now)
-        return Double(duration.components.seconds) * 1_000
-            + Double(duration.components.attoseconds) / 1_000_000_000_000_000
     }
 
     private static func primarySource(from sources: [RetrievalSource?]) -> String? {

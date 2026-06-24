@@ -139,7 +139,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .failure,
                     query: query,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: 0,
                     source: nil,
                     errorCategory: errorCategory(for: mappedError),
@@ -165,7 +165,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     query: resolveUsageQuery(from: intent),
                     id: result.canonicalPath,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: result.canonicalPath == nil ? 0 : 1,
                     source: result.evidence?.source
                 ),
@@ -182,7 +182,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .failure,
                     query: resolveUsageQuery(from: intent),
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: 0,
                     source: nil,
                     errorCategory: errorCategory(for: mappedError),
@@ -234,7 +234,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .success,
                     id: id,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: 1,
                     source: output.source.rawValue
                 ),
@@ -251,7 +251,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .failure,
                     id: id,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: 0,
                     source: nil,
                     errorCategory: errorCategory(for: mappedError),
@@ -275,7 +275,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .success,
                     category: config.technologyCategoryFilter,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: filtered.count,
                     source: filtered.isEmpty ? nil : "apple"
                 ),
@@ -292,7 +292,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                     status: .failure,
                     category: config.technologyCategoryFilter,
                     localeIdentifier: config.locale.identifier,
-                    durationMs: durationInMilliseconds(since: start),
+                    durationMs: start.millisecondsElapsed(),
                     resultCount: 0,
                     source: nil,
                     errorCategory: errorCategory(for: mappedError),
@@ -537,12 +537,6 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                 context: ["path": usageLogPath, "error": error.localizedDescription]
             )
         }
-    }
-
-    private func durationInMilliseconds(since start: ContinuousClock.Instant) -> Double {
-        let duration = start.duration(to: ContinuousClock.now)
-        return Double(duration.components.seconds) * 1_000
-            + Double(duration.components.attoseconds) / 1_000_000_000_000_000
     }
 
     private func filterTechnologies(
