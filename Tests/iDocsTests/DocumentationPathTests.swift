@@ -25,10 +25,12 @@ struct DocumentationPathTests {
         #expect(!DocumentationPath.isWithinNamespace("/help/xcode"))
     }
 
-    @Test("isWithinNamespace normalizes raw paths before checking")
+    @Test("isWithinNamespace normalizes and lowercases raw paths before checking")
     func namespaceMembershipNormalizesInput() {
         #expect(DocumentationPath.isWithinNamespace("documentation/swiftui"))
         #expect(DocumentationPath.isWithinNamespace("  /documentation/swiftui  "))
+        #expect(DocumentationPath.isWithinNamespace("/Documentation/SwiftUI"))
+        #expect(DocumentationPath.isWithinNamespace("/DOCUMENTATION"))
         #expect(!DocumentationPath.isWithinNamespace("help/xcode"))
     }
 

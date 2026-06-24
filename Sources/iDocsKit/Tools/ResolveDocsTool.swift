@@ -444,12 +444,13 @@ public struct ResolveDocsTool {
 
         guard let type = intent.type else { return [] }
         if let member = intent.member {
-            let base = DocumentationPath.make(frameworkSlug, slug(type))
+            let baseSegments = [frameworkSlug, slug(type)]
             let memberSlug = slug(member)
-            let direct = "\(base)/\(memberSlug)"
+            let direct = DocumentationPath.make(baseSegments + [memberSlug])
             let knownAliases = knownMemberAliases(framework: framework, type: type, member: member)
             let signatureGuesses = signatureCandidates(memberSlug: memberSlug, memberKind: intent.memberKind)
-            return uniquePaths([direct] + (knownAliases + signatureGuesses).map { "\(base)/\($0)" })
+            let memberCandidates = (knownAliases + signatureGuesses).map { DocumentationPath.make(baseSegments + [$0]) }
+            return uniquePaths([direct] + memberCandidates)
         }
         return [DocumentationPath.make(frameworkSlug, slug(type))]
     }

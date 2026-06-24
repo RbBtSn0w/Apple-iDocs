@@ -27,10 +27,10 @@ public enum DocumentationPath {
     }
 
     /// True when `path` is the documentation root or one of its children. The path
-    /// is normalized (trimmed, leading slash) internally, so callers may pass raw
-    /// paths; the check stays case-sensitive against the lowercase `prefix`.
+    /// is normalized (trimmed, leading slash) and lowercased internally, so callers
+    /// may pass raw or mixed-case paths and still match the lowercase `prefix`/`root`.
     public static func isWithinNamespace(_ path: String) -> Bool {
-        let normalized = URLHelpers.normalizePath(path)
+        let normalized = URLHelpers.normalizePath(path).lowercased()
         return normalized.hasPrefix(prefix) || normalized == root
     }
 }
