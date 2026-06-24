@@ -326,7 +326,7 @@ public actor AppleJSONAPI {
 
     private func technologyRootPath(for technology: Technology) -> String? {
         let normalized = URLHelpers.normalizePath(technology.url)
-        guard normalized.hasPrefix("/documentation/") else {
+        guard normalized.hasPrefix(DocumentationPath.prefix) else {
             return nil
         }
 
@@ -335,7 +335,7 @@ public actor AppleJSONAPI {
             return nil
         }
 
-        return "/documentation/\(components[1])"
+        return DocumentationPath.make(String(components[1]))
     }
 
     private nonisolated func isTechnologyGraphMiss(_ error: Error) -> Bool {
@@ -369,7 +369,7 @@ public actor AppleJSONAPI {
 
                     let path = item.url
                         ?? item.destination?.identifier.flatMap(pathFromDocIdentifier)
-                        ?? "/documentation/\(name)"
+                        ?? DocumentationPath.make(name)
 
                     let category = item.kind
                         ?? item.tags?.first
@@ -384,7 +384,7 @@ public actor AppleJSONAPI {
     }
 
     private func pathFromDocIdentifier(_ identifier: String) -> String? {
-        guard let markerRange = identifier.range(of: "/documentation/") else {
+        guard let markerRange = identifier.range(of: DocumentationPath.prefix) else {
             return nil
         }
         return String(identifier[markerRange.lowerBound...])

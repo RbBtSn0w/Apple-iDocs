@@ -206,23 +206,63 @@ public struct ResolveDocsTool {
         }
     }
 
+    /// Mutable evidence accumulated as the resolver walks its phases. Direct-path
+    /// resolution and the search fallback both append to these and a final
+    /// unresolved result reports whatever they gathered.
+    private struct Accumulator {
+        var candidates: [ResolveDocsCandidate] = []
+        var resolveDiagnostics: [ResolveDocsDiagnostic] = []
+        var fetchDiagnostics: [FetchSourceAttempt] = []
+    }
+
     public func run(intent: ResolveDocsIntent) async throws -> ResolveDocsResult {
         if let validationError = intent.validationErrorMessage {
             throw ResolveDocsError.invalidIntent(validationError)
         }
 
-        var candidates: [ResolveDocsCandidate] = []
-        var resolveDiagnostics: [ResolveDocsDiagnostic] = []
-        var fetchDiagnostics: [FetchSourceAttempt] = []
+        var accumulator = Accumulator()
 
+        if let resolved = await resolveDirectPaths(intent: intent, accumulator: &accumulator) {
+            return resolved
+        }
+
+        if let resolved = await resolveSearchFallback(intent: intent, accumulator: &accumulator) {
+            return resolved
+        }
+
+        accumulator.resolveDiagnostics.append(
+            ResolveDocsDiagnostic(
+                stage: "resolve",
+                status: "unresolved",
+                reason: "no_fetch_verified_candidate"
+            )
+        )
+        return ResolveDocsResult(
+            canonicalPath: nil,
+            confidence: .unresolved,
+            verifiedByFetch: false,
+            evidence: nil,
+            candidates: accumulator.candidates,
+            resolveDiagnostics: accumulator.resolveDiagnostics,
+            fetchDiagnostics: accumulator.fetchDiagnostics.isEmpty ? nil : accumulator.fetchDiagnostics
+        )
+    }
+
+    /// Tries each derived direct path in order, returning a high-confidence result
+    /// on the first fetch-verified, member-kind-matching hit. Misses and mismatches
+    /// are recorded as candidates/diagnostics and resolution continues.
+    private func resolveDirectPaths(
+        intent: ResolveDocsIntent,
+        accumulator: inout Accumulator
+    ) async -> ResolveDocsResult? {
         for path in directPaths(for: intent) {
             do {
                 let output = try await fetch(path)
                 let evidence = evidenceFromFetch(output, path: path, sourceFamily: intent.sourceFamily)
-                let allFetchDiagnostics = fetchDiagnostics + output.sourceAttempts
+                let allFetchDiagnostics = accumulator.fetchDiagnostics + output.sourceAttempts
                 guard memberKindMatches(evidence: evidence, path: path, intent: intent) else {
-                    fetchDiagnostics = allFetchDiagnostics
-                    candidates.append(
+                    accumulator.fetchDiagnostics = allFetchDiagnostics
+                    accumulator.candidates.append(
                         ResolveDocsCandidate(
                             path: path,
                             title: evidence.title,
@@ -232,7 +272,7 @@ public struct ResolveDocsTool {
                             confidence: .low
                         )
                     )
-                    resolveDiagnostics.append(
+                    accumulator.resolveDiagnostics.append(
                         ResolveDocsDiagnostic(
                             stage: "direct_path",
                             status: "miss",
@@ -243,16 +283,17 @@ public struct ResolveDocsTool {
                     )
                     continue
                 }
-                let candidate = ResolveDocsCandidate(
-                    path: path,
-                    title: evidence.title,
-                    source: .direct,
-                    matchQuality: .exact,
-                    verifiedByFetch: true,
-                    confidence: .high
+                accumulator.candidates.append(
+                    ResolveDocsCandidate(
+                        path: path,
+                        title: evidence.title,
+                        source: .direct,
+                        matchQuality: .exact,
+                        verifiedByFetch: true,
+                        confidence: .high
+                    )
                 )
-                candidates.append(candidate)
-                resolveDiagnostics.append(
+                accumulator.resolveDiagnostics.append(
                     ResolveDocsDiagnostic(
                         stage: "direct_path",
                         status: "hit",
@@ -260,21 +301,19 @@ public struct ResolveDocsTool {
                         pathAttempt: path
                     )
                 )
-                return ResolveDocsResult(
-                    canonicalPath: path,
+                return makeResolvedResult(
+                    path: path,
                     confidence: .high,
-                    verifiedByFetch: true,
                     evidence: evidence,
-                    candidates: candidates,
-                    resolveDiagnostics: resolveDiagnostics,
+                    accumulator: accumulator,
                     fetchDiagnostics: allFetchDiagnostics
                 )
             } catch {
                 let attempts = fetchAttempts(from: error)
                 if !attempts.isEmpty {
-                    fetchDiagnostics.append(contentsOf: attempts)
+                    accumulator.fetchDiagnostics.append(contentsOf: attempts)
                 }
-                candidates.append(
+                accumulator.candidates.append(
                     ResolveDocsCandidate(
                         path: path,
                         title: nil,
@@ -284,7 +323,7 @@ public struct ResolveDocsTool {
                         confidence: .low
                     )
                 )
-                resolveDiagnostics.append(
+                accumulator.resolveDiagnostics.append(
                     ResolveDocsDiagnostic(
                         stage: "direct_path",
                         status: "miss",
@@ -294,11 +333,20 @@ public struct ResolveDocsTool {
                 )
             }
         }
+        return nil
+    }
 
+    /// Runs the search fallback, fetch-verifying recovered candidates. Returns the
+    /// first verified candidate that satisfies the intent's exactness requirement;
+    /// otherwise records candidates/diagnostics and returns nil.
+    private func resolveSearchFallback(
+        intent: ResolveDocsIntent,
+        accumulator: inout Accumulator
+    ) async -> ResolveDocsResult? {
         let fallbackQuery = searchQuery(for: intent)
         do {
             let results = try await search(fallbackQuery)
-            resolveDiagnostics.append(
+            accumulator.resolveDiagnostics.append(
                 ResolveDocsDiagnostic(
                     stage: "search_fallback",
                     status: results.isEmpty ? "miss" : "hit",
@@ -314,9 +362,9 @@ public struct ResolveDocsTool {
                 do {
                     let output = try await fetch(result.path)
                     let evidence = evidenceFromFetch(output, path: result.path, sourceFamily: intent.sourceFamily)
-                    let allFetchDiagnostics = fetchDiagnostics + output.sourceAttempts
+                    let allFetchDiagnostics = accumulator.fetchDiagnostics + output.sourceAttempts
                     let confidence: ResolveDocsConfidence = quality == .exact ? .medium : .low
-                    candidates.append(
+                    accumulator.candidates.append(
                         ResolveDocsCandidate(
                             path: result.path,
                             title: result.title,
@@ -327,24 +375,22 @@ public struct ResolveDocsTool {
                         )
                     )
                     if requiresExactFallback(for: intent) && quality != .exact {
-                        fetchDiagnostics = allFetchDiagnostics
+                        accumulator.fetchDiagnostics = allFetchDiagnostics
                         continue
                     }
-                    return ResolveDocsResult(
-                        canonicalPath: result.path,
+                    return makeResolvedResult(
+                        path: result.path,
                         confidence: confidence,
-                        verifiedByFetch: true,
                         evidence: evidence,
-                        candidates: candidates,
-                        resolveDiagnostics: resolveDiagnostics,
+                        accumulator: accumulator,
                         fetchDiagnostics: allFetchDiagnostics
                     )
                 } catch {
                     let attempts = fetchAttempts(from: error)
                     if !attempts.isEmpty {
-                        fetchDiagnostics.append(contentsOf: attempts)
+                        accumulator.fetchDiagnostics.append(contentsOf: attempts)
                     }
-                    candidates.append(
+                    accumulator.candidates.append(
                         ResolveDocsCandidate(
                             path: result.path,
                             title: result.title,
@@ -357,7 +403,7 @@ public struct ResolveDocsTool {
                 }
             }
         } catch {
-            resolveDiagnostics.append(
+            accumulator.resolveDiagnostics.append(
                 ResolveDocsDiagnostic(
                     stage: "search_fallback",
                     status: "error",
@@ -366,22 +412,25 @@ public struct ResolveDocsTool {
                 )
             )
         }
+        return nil
+    }
 
-        resolveDiagnostics.append(
-            ResolveDocsDiagnostic(
-                stage: "resolve",
-                status: "unresolved",
-                reason: "no_fetch_verified_candidate"
-            )
-        )
-        return ResolveDocsResult(
-            canonicalPath: nil,
-            confidence: .unresolved,
-            verifiedByFetch: false,
-            evidence: nil,
-            candidates: candidates,
-            resolveDiagnostics: resolveDiagnostics,
-            fetchDiagnostics: fetchDiagnostics.isEmpty ? nil : fetchDiagnostics
+    /// Builds a fetch-verified resolved result from the accumulated evidence.
+    private func makeResolvedResult(
+        path: String,
+        confidence: ResolveDocsConfidence,
+        evidence: ResolveDocsEvidence,
+        accumulator: Accumulator,
+        fetchDiagnostics: [FetchSourceAttempt]
+    ) -> ResolveDocsResult {
+        ResolveDocsResult(
+            canonicalPath: path,
+            confidence: confidence,
+            verifiedByFetch: true,
+            evidence: evidence,
+            candidates: accumulator.candidates,
+            resolveDiagnostics: accumulator.resolveDiagnostics,
+            fetchDiagnostics: fetchDiagnostics
         )
     }
 
@@ -390,29 +439,24 @@ public struct ResolveDocsTool {
         let frameworkSlug = slug(framework)
 
         if let symbol = intent.symbol {
-            return ["/documentation/\(frameworkSlug)/\(slug(symbol))"]
+            return [DocumentationPath.make(frameworkSlug, slug(symbol))]
         }
 
         guard let type = intent.type else { return [] }
         if let member = intent.member {
-            let base = "/documentation/\(frameworkSlug)/\(slug(type))"
+            let base = DocumentationPath.make(frameworkSlug, slug(type))
             let memberSlug = slug(member)
             let direct = "\(base)/\(memberSlug)"
             let knownAliases = knownMemberAliases(framework: framework, type: type, member: member)
             let signatureGuesses = signatureCandidates(memberSlug: memberSlug, memberKind: intent.memberKind)
             return uniquePaths([direct] + (knownAliases + signatureGuesses).map { "\(base)/\($0)" })
         }
-        return ["/documentation/\(frameworkSlug)/\(slug(type))"]
+        return [DocumentationPath.make(frameworkSlug, slug(type))]
     }
 
     private func knownMemberAliases(framework: String, type: String, member: String) -> [String] {
         let key = [framework, type, member].map(compact).joined(separator: "/")
-        switch key {
-        case "uikit/uiviewcontroller/present":
-            return ["present(_:animated:completion:)"]
-        default:
-            return []
-        }
+        return ResolveDocsMemberAliases.slugs(forKey: key)
     }
 
     /// Apple renders callable members with their signature in the path slug
