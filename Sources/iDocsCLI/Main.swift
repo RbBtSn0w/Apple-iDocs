@@ -5,7 +5,7 @@ import iDocsTelemetry
 @main
 struct Main {
     @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
-    static func main() async {
+    nonisolated static func main() async {
         let arguments = CommandLine.arguments
         let parsedArguments = Array(arguments.dropFirst())
         let version = CLIVersion.current()
