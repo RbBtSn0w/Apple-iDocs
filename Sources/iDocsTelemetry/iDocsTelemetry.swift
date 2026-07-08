@@ -237,7 +237,7 @@ public enum iDocsTelemetry {
             .setActive(true)
             .setSpanKind(spanKind: .internal)
             .setAttribute(key: "process.command", value: AttributeValue(exeName))
-            .setAttribute(key: "process.command_args", value: AttributeValue(arguments))
+            .setAttribute(key: "process.command_args", value: AttributeValue(sanitizeArgs(arguments)))
             .setAttribute(key: "process.executable.name", value: AttributeValue(exeName))
             .setAttribute(key: "process.pid", value: AttributeValue(Int(getpid())))
             .setAttribute(key: "process.parent_pid", value: AttributeValue(Int(getppid())))
@@ -308,6 +308,26 @@ public enum iDocsTelemetry {
             return ProcessInfo.processInfo.processName
         }
         return URL(fileURLWithPath: first).lastPathComponent
+    }
+
+    private static func sanitizeArgs(_ arguments: [String]) -> [String] {
+        guard !arguments.isEmpty else { return [] }
+        var sanitized = [String]()
+        sanitized.append(URL(fileURLWithPath: arguments[0]).lastPathComponent)
+        for arg in arguments.dropFirst() {
+            if arg.hasPrefix("/") || arg.contains("/") || arg.contains("\\") {
+                if let url = URL(string: arg), url.scheme != nil {
+                    sanitized.append("\(url.scheme ?? "")://\(url.host ?? "")/...")
+                } else {
+                    sanitized.append("<path>")
+                }
+            } else if arg.count > 30 && (arg.rangeOfCharacter(from: .alphanumerics.inverted) == nil) {
+                sanitized.append("<redacted>")
+            } else {
+                sanitized.append(arg)
+            }
+        }
+        return sanitized
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

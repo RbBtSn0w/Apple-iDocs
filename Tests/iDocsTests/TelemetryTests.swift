@@ -89,12 +89,38 @@ struct TelemetryTests {
         #expect(root.attributes["process.command"] == .string("idocs"))
         #expect(root.attributes["process.executable.name"] == .string("idocs"))
         #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
-            .string("/tmp/idocs"),
+            .string("idocs"),
             .string("search"),
             .string("SwiftUI")
         ])))
         #expect(child.attributes["idocs.command.name"] == .string("search"))
         #expect(child.events.map(\.name) == ["idocs.stage"])
+    }
+
+    @Test("Telemetry sanitizes sensitive paths and tokens in process.command_args")
+    func telemetrySanitizesArguments() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/usr/local/bin/idocs", "--cache-path", "/Users/snow/library", "--token", "abcdef1234567890abcdef1234567890"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // no-op
+        }
+        iDocsTelemetry.flush()
+
+        let spans = exporter.getFinishedSpanItems()
+        let root = try #require(spans.first { $0.name == "idocs" })
+        #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
+            .string("idocs"),
+            .string("--cache-path"),
+            .string("<path>"),
+            .string("--token"),
+            .string("<redacted>")
+        ])))
     }
 
     @Test("Non-zero exit code sets span status to error")
