@@ -148,7 +148,11 @@ public enum iDocsTelemetry {
         if let base = nonEmpty(environment["OTEL_EXPORTER_OTLP_ENDPOINT"]),
            var components = URLComponents(string: base) {
             let existingPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            components.path = existingPath.isEmpty ? "/v1/traces" : "/\(existingPath)/v1/traces"
+            if existingPath.hasSuffix("v1/traces") {
+                components.path = "/\(existingPath)"
+            } else {
+                components.path = existingPath.isEmpty ? "/v1/traces" : "/\(existingPath)/v1/traces"
+            }
             if let url = components.url {
                 return url
             }
@@ -194,6 +198,11 @@ public enum iDocsTelemetry {
 
     public static func setExitCode(_ exitCode: Int32) {
         setAttributes(["process.exit.code": .int(Int(exitCode))])
+        if exitCode != 0 {
+            if let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording {
+                span.status = .error(description: "Process exited with non-zero code: \(exitCode)")
+            }
+        }
     }
 
     public static func recordError(_ error: Error, type override: String? = nil) {
@@ -227,11 +236,13 @@ public enum iDocsTelemetry {
             return try await operation()
         }
 
-        let builder = tracer.spanBuilder(spanName: "idocs.cli")
+        let exeName = executableName(arguments: arguments)
+        let builder = tracer.spanBuilder(spanName: exeName)
             .setActive(true)
             .setSpanKind(spanKind: .internal)
-            .setAttribute(key: "process.command_args", value: AttributeValue(arguments))
-            .setAttribute(key: "process.executable.name", value: AttributeValue(executableName(arguments: arguments)))
+            .setAttribute(key: "process.command", value: AttributeValue(exeName))
+            .setAttribute(key: "process.command_args", value: AttributeValue(sanitizeArgs(arguments)))
+            .setAttribute(key: "process.executable.name", value: AttributeValue(exeName))
             .setAttribute(key: "process.pid", value: AttributeValue(Int(getpid())))
             .setAttribute(key: "process.parent_pid", value: AttributeValue(Int(getppid())))
 
@@ -272,7 +283,7 @@ public enum iDocsTelemetry {
     public static func extractParentSpanContext(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SpanContext? {
-        guard let traceparent = nonEmpty(environment["TRACEPARENT"] ?? environment["traceparent"]) else {
+        guard let traceparent = nonEmpty(environment["TRACEPARENT"]) ?? nonEmpty(environment["traceparent"]) else {
             return nil
         }
         let carrier = ["traceparent": traceparent]
@@ -301,6 +312,26 @@ public enum iDocsTelemetry {
             return ProcessInfo.processInfo.processName
         }
         return URL(fileURLWithPath: first).lastPathComponent
+    }
+
+    private static func sanitizeArgs(_ arguments: [String]) -> [String] {
+        guard !arguments.isEmpty else { return [] }
+        var sanitized = [String]()
+        sanitized.append(URL(fileURLWithPath: arguments[0]).lastPathComponent)
+        for arg in arguments.dropFirst() {
+            if arg.hasPrefix("/") || arg.contains("/") || arg.contains("\\") {
+                if let url = URL(string: arg), url.scheme != nil {
+                    sanitized.append("\(url.scheme ?? "")://\(url.host ?? "")/...")
+                } else {
+                    sanitized.append("<path>")
+                }
+            } else if arg.count > 30 && (arg.rangeOfCharacter(from: .alphanumerics.inverted) == nil) {
+                sanitized.append("<redacted>")
+            } else {
+                sanitized.append(arg)
+            }
+        }
+        return sanitized
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

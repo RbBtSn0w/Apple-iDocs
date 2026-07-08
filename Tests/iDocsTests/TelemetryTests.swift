@@ -25,6 +25,13 @@ struct TelemetryTests {
         )
         #expect(base.absoluteString == "https://base.example/custom-root/v1/traces")
 
+        let baseWithSuffix = iDocsTelemetry.resolveTracesEndpoint(
+            environment: [
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://base.example/v1/traces"
+            ]
+        )
+        #expect(baseWithSuffix.absoluteString == "https://base.example/v1/traces")
+
         let fallback = iDocsTelemetry.resolveTracesEndpoint(environment: [:])
         #expect(fallback == iDocsTelemetry.defaultTracesEndpoint)
     }
@@ -47,6 +54,15 @@ struct TelemetryTests {
         #expect(context?.traceId.hexString == "4bf92f3577b34da6a3ce929d0e0e4736")
         #expect(context?.spanId.hexString == "00f067aa0ba902b7")
         #expect(context?.traceFlags.sampled == true)
+
+        let contextFallback = iDocsTelemetry.extractParentSpanContext(
+            environment: [
+                "TRACEPARENT": "",
+                "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+            ]
+        )
+        #expect(contextFallback?.traceId.hexString == "4bf92f3577b34da6a3ce929d0e0e4736")
+        #expect(contextFallback?.spanId.hexString == "00f067aa0ba902b7")
     }
 
     @Test("Root and child spans preserve parentage and record events")
@@ -81,19 +97,73 @@ struct TelemetryTests {
         let spans = exporter.getFinishedSpanItems()
         #expect(spans.count == 2)
 
-        let root = try #require(spans.first { $0.name == "idocs.cli" })
+        let root = try #require(spans.first { $0.name == "idocs" })
         let child = try #require(spans.first { $0.name == "idocs.command.search" })
 
         #expect(child.parentSpanId == root.spanId)
         #expect(root.parentSpanId == nil)
+        #expect(root.attributes["process.command"] == .string("idocs"))
         #expect(root.attributes["process.executable.name"] == .string("idocs"))
         #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
-            .string("/tmp/idocs"),
+            .string("idocs"),
             .string("search"),
             .string("SwiftUI")
         ])))
         #expect(child.attributes["idocs.command.name"] == .string("search"))
         #expect(child.events.map(\.name) == ["idocs.stage"])
+    }
+
+    @Test("Telemetry sanitizes sensitive paths and tokens in process.command_args")
+    func telemetrySanitizesArguments() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/usr/local/bin/idocs", "--cache-path", "/Users/snow/library", "--token", "abcdef1234567890abcdef1234567890"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // no-op
+        }
+        iDocsTelemetry.flush()
+
+        let spans = exporter.getFinishedSpanItems()
+        let root = try #require(spans.first { $0.name == "idocs" })
+        #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
+            .string("idocs"),
+            .string("--cache-path"),
+            .string("<path>"),
+            .string("--token"),
+            .string("<redacted>")
+        ])))
+    }
+
+    @Test("Non-zero exit code sets span status to error")
+    func nonZeroExitCodeSetsErrorStatus() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            iDocsTelemetry.setExitCode(1)
+        }
+        iDocsTelemetry.flush()
+
+        let spans = exporter.getFinishedSpanItems()
+        let root = try #require(spans.first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] == .int(1))
+        
+        switch root.status {
+        case .error(let description):
+            #expect(description.contains("Process exited with non-zero code"))
+        default:
+            Issue.record("Expected span status to be error, but got: \(root.status)")
+        }
     }
 
     @Test("CLI search emits command span without changing existing output")
@@ -137,7 +207,11 @@ struct TelemetryTests {
         CLIEnvironment.writeStdout = { capture.stdout.append($0) }
         CLIEnvironment.writeStderr = { capture.stderr.append($0) }
 
-        await iDocsTelemetry.withSpan("idocs.cli") {
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/tmp/idocs", "search", "SwiftUI"],
+            serviceVersion: "1.2.3",
+            environment: [:]
+        ) {
             let code = await CLIExecutor.runSearch(
                 query: "SwiftUI",
                 outputFormat: .json,
