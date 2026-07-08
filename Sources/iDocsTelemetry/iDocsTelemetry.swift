@@ -194,6 +194,11 @@ public enum iDocsTelemetry {
 
     public static func setExitCode(_ exitCode: Int32) {
         setAttributes(["process.exit.code": .int(Int(exitCode))])
+        if exitCode != 0 {
+            if let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording {
+                span.status = .error(description: "Process exited with non-zero code: \(exitCode)")
+            }
+        }
     }
 
     public static func recordError(_ error: Error, type override: String? = nil) {
@@ -227,11 +232,13 @@ public enum iDocsTelemetry {
             return try await operation()
         }
 
-        let builder = tracer.spanBuilder(spanName: "idocs.cli")
+        let exeName = executableName(arguments: arguments)
+        let builder = tracer.spanBuilder(spanName: exeName)
             .setActive(true)
             .setSpanKind(spanKind: .internal)
+            .setAttribute(key: "process.command", value: AttributeValue(exeName))
             .setAttribute(key: "process.command_args", value: AttributeValue(arguments))
-            .setAttribute(key: "process.executable.name", value: AttributeValue(executableName(arguments: arguments)))
+            .setAttribute(key: "process.executable.name", value: AttributeValue(exeName))
             .setAttribute(key: "process.pid", value: AttributeValue(Int(getpid())))
             .setAttribute(key: "process.parent_pid", value: AttributeValue(Int(getppid())))
 

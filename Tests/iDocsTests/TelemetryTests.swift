@@ -81,11 +81,12 @@ struct TelemetryTests {
         let spans = exporter.getFinishedSpanItems()
         #expect(spans.count == 2)
 
-        let root = try #require(spans.first { $0.name == "idocs.cli" })
+        let root = try #require(spans.first { $0.name == "idocs" })
         let child = try #require(spans.first { $0.name == "idocs.command.search" })
 
         #expect(child.parentSpanId == root.spanId)
         #expect(root.parentSpanId == nil)
+        #expect(root.attributes["process.command"] == .string("idocs"))
         #expect(root.attributes["process.executable.name"] == .string("idocs"))
         #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
             .string("/tmp/idocs"),
@@ -94,6 +95,33 @@ struct TelemetryTests {
         ])))
         #expect(child.attributes["idocs.command.name"] == .string("search"))
         #expect(child.events.map(\.name) == ["idocs.stage"])
+    }
+
+    @Test("Non-zero exit code sets span status to error")
+    func nonZeroExitCodeSetsErrorStatus() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            iDocsTelemetry.setExitCode(1)
+        }
+        iDocsTelemetry.flush()
+
+        let spans = exporter.getFinishedSpanItems()
+        let root = try #require(spans.first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] == .int(1))
+        
+        switch root.status {
+        case .error(let description):
+            #expect(description.contains("Process exited with non-zero code"))
+        default:
+            Issue.record("Expected span status to be error, but got: \(root.status)")
+        }
     }
 
     @Test("CLI search emits command span without changing existing output")
@@ -137,7 +165,11 @@ struct TelemetryTests {
         CLIEnvironment.writeStdout = { capture.stdout.append($0) }
         CLIEnvironment.writeStderr = { capture.stderr.append($0) }
 
-        await iDocsTelemetry.withSpan("idocs.cli") {
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/tmp/idocs", "search", "SwiftUI"],
+            serviceVersion: "1.2.3",
+            environment: [:]
+        ) {
             let code = await CLIExecutor.runSearch(
                 query: "SwiftUI",
                 outputFormat: .json,
