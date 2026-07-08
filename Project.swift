@@ -52,7 +52,8 @@ let project = Project(
             deploymentTargets: .macOS("13.0"),
             sources: ["Sources/iDocsAdapter/**"],
             dependencies: [
-                .target(name: "iDocsKit")
+                .target(name: "iDocsKit"),
+                .target(name: "iDocsTelemetry")
             ]
         ),
         .target(
@@ -78,7 +79,8 @@ let project = Project(
             deploymentTargets: .macOS("13.0"),
             sources: ["Sources/iDocsCLI/**"],
             dependencies: [
-                .target(name: "iDocsApp")
+                .target(name: "iDocsApp"),
+                .target(name: "iDocsTelemetry")
             ],
             settings: .settings(
                 base: [

@@ -77,6 +77,7 @@ public enum CLIExecutor {
                     "idocs.result.count": .int(results.count),
                     "idocs.source": .string(source ?? "none")
                 ])
+                recordJSONEmissionFailureIfNeeded(exitCode, command: "search")
                 iDocsTelemetry.setExitCode(exitCode)
                 return exitCode
             } catch {
@@ -169,6 +170,7 @@ public enum CLIExecutor {
                     "idocs.result.count": .int(1),
                     "idocs.source": .string(source ?? "none")
                 ])
+                recordJSONEmissionFailureIfNeeded(exitCode, command: "fetch")
                 iDocsTelemetry.setExitCode(exitCode)
                 return exitCode
             } catch {
@@ -249,6 +251,7 @@ public enum CLIExecutor {
                     "idocs.result.count": .int(result.canonicalPath == nil ? 0 : 1),
                     "idocs.source": .string(result.evidence?.source ?? "none")
                 ])
+                recordJSONEmissionFailureIfNeeded(exitCode, command: "resolve")
                 iDocsTelemetry.setExitCode(exitCode)
                 return exitCode
             } catch {
@@ -333,6 +336,7 @@ public enum CLIExecutor {
                     "idocs.result.count": .int(technologies.count),
                     "idocs.source": .string(technologies.isEmpty ? "none" : "apple")
                 ])
+                recordJSONEmissionFailureIfNeeded(exitCode, command: "list")
                 iDocsTelemetry.setExitCode(exitCode)
                 return exitCode
             } catch {
@@ -525,6 +529,16 @@ public enum CLIExecutor {
         return lines.joined(separator: "\n")
     }
 
+    private static func recordJSONEmissionFailureIfNeeded(_ exitCode: Int32, command: String) {
+        guard exitCode != 0 else {
+            return
+        }
+        iDocsTelemetry.recordError(
+            JSONPayloadWriteError(command: command),
+            type: "json_output_encoding_failed"
+        )
+    }
+
     @discardableResult
     private static func writeJSONPayload(_ payload: CLICommandPayload) -> Int32 {
         let encoder = JSONEncoder()
@@ -542,5 +556,13 @@ public enum CLIExecutor {
             CLIEnvironment.writeStderr("Error [INTERNAL]: Failed to encode JSON output.")
             return 1
         }
+    }
+}
+
+private struct JSONPayloadWriteError: LocalizedError {
+    let command: String
+
+    var errorDescription: String? {
+        "Failed to emit JSON payload for \(command)"
     }
 }
