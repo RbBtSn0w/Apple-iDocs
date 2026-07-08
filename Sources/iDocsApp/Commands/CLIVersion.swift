@@ -1,11 +1,20 @@
 import Foundation
 
-enum CLIVersion {
+public enum CLIVersion {
     private static let sidecarFilename = "idocs.version"
     private static let fallbackVersion = "0.0.0-dev"
 
     private struct PackageManifest: Decodable {
         let version: String
+    }
+
+    public static func current() -> String {
+        current(
+            executableURL: defaultExecutableURL(),
+            currentDirectoryURL: URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
+            environment: ProcessInfo.processInfo.environment,
+            fileManager: .default
+        )
     }
 
     static func current(

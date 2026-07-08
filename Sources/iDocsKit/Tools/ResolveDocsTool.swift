@@ -1,4 +1,5 @@
 import Foundation
+import iDocsTelemetry
 
 public enum ResolveDocsConfidence: String, Sendable, Codable, Equatable {
     case high
@@ -216,36 +217,56 @@ public struct ResolveDocsTool {
     }
 
     public func run(intent: ResolveDocsIntent) async throws -> ResolveDocsResult {
-        if let validationError = intent.validationErrorMessage {
-            throw ResolveDocsError.invalidIntent(validationError)
-        }
+        try await iDocsTelemetry.withSpan(
+            "idocs.resolve.pipeline",
+            attributes: ["idocs.query": .string(searchQuery(for: intent))]
+        ) {
+            if let validationError = intent.validationErrorMessage {
+                throw ResolveDocsError.invalidIntent(validationError)
+            }
 
-        var accumulator = Accumulator()
+            var accumulator = Accumulator()
 
-        if let resolved = await resolveDirectPaths(intent: intent, accumulator: &accumulator) {
-            return resolved
-        }
+            if let resolved = await resolveDirectPaths(intent: intent, accumulator: &accumulator) {
+                recordResolveDiagnostics(resolved.resolveDiagnostics)
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(1),
+                    "idocs.source": .string(resolved.evidence?.source.rawValue ?? "none")
+                ])
+                return resolved
+            }
 
-        if let resolved = await resolveSearchFallback(intent: intent, accumulator: &accumulator) {
-            return resolved
-        }
+            if let resolved = await resolveSearchFallback(intent: intent, accumulator: &accumulator) {
+                recordResolveDiagnostics(resolved.resolveDiagnostics)
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(1),
+                    "idocs.source": .string(resolved.evidence?.source.rawValue ?? "none")
+                ])
+                return resolved
+            }
 
-        accumulator.resolveDiagnostics.append(
-            ResolveDocsDiagnostic(
-                stage: "resolve",
-                status: "unresolved",
-                reason: "no_fetch_verified_candidate"
+            accumulator.resolveDiagnostics.append(
+                ResolveDocsDiagnostic(
+                    stage: "resolve",
+                    status: "unresolved",
+                    reason: "no_fetch_verified_candidate"
+                )
             )
-        )
-        return ResolveDocsResult(
-            canonicalPath: nil,
-            confidence: .unresolved,
-            verifiedByFetch: false,
-            evidence: nil,
-            candidates: accumulator.candidates,
-            resolveDiagnostics: accumulator.resolveDiagnostics,
-            fetchDiagnostics: accumulator.fetchDiagnostics.isEmpty ? nil : accumulator.fetchDiagnostics
-        )
+            recordResolveDiagnostics(accumulator.resolveDiagnostics)
+            iDocsTelemetry.setAttributes([
+                "idocs.result.count": .int(0),
+                "idocs.source": .string("none")
+            ])
+            return ResolveDocsResult(
+                canonicalPath: nil,
+                confidence: .unresolved,
+                verifiedByFetch: false,
+                evidence: nil,
+                candidates: accumulator.candidates,
+                resolveDiagnostics: accumulator.resolveDiagnostics,
+                fetchDiagnostics: accumulator.fetchDiagnostics.isEmpty ? nil : accumulator.fetchDiagnostics
+            )
+        }
     }
 
     /// Tries each derived direct path in order, returning a high-confidence result
@@ -558,6 +579,25 @@ public struct ResolveDocsTool {
             }
         }
         return fallback
+    }
+
+    private func recordResolveDiagnostics(_ diagnostics: [ResolveDocsDiagnostic]) {
+        for diagnostic in diagnostics {
+            var attributes: [String: TelemetryAttributeValue] = [
+                "idocs.stage.name": .string(diagnostic.stage),
+                "idocs.stage.status": .string(diagnostic.status)
+            ]
+            if let reason = diagnostic.reason {
+                attributes["idocs.stage.reason"] = .string(reason)
+            }
+            if let pathAttempt = diagnostic.pathAttempt {
+                attributes["idocs.path"] = .string(pathAttempt)
+            }
+            if let queryAttempt = diagnostic.queryAttempt {
+                attributes["idocs.query_attempt"] = .string(queryAttempt)
+            }
+            iDocsTelemetry.addEvent("idocs.resolve.stage", attributes: attributes)
+        }
     }
 
     private func summary(from markdown: String) -> String? {

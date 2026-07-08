@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import iDocsTelemetry
 
 public struct FetchDocTool {
     private let logger = Logger(label: "com.snow.idocs-fetch-tool")
@@ -27,95 +28,114 @@ public struct FetchDocTool {
     }
 
     public func runDetailed(path: String) async throws -> FetchDocResult {
-        logger.info("Fetching Apple documentation for path: \(path)")
-        var attempts: [FetchSourceAttempt] = []
-        
-        // 1. Try Disk Cache
-        if let cachedData = try? await diskCache.get(path) {
-            if let content = try? JSONDecoder().decode(DocCContent.self, from: cachedData) {
-                logger.info("Disk cache hit for: \(path)")
-                attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
-                return FetchDocResult(markdown: try renderer.render(content), source: .cache, sourceAttempts: attempts)
-            }
-            if let markdown = String(data: cachedData, encoding: .utf8), !markdown.isEmpty {
-                logger.info("Disk cache markdown hit for: \(path)")
-                attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
-                return FetchDocResult(markdown: markdown, source: .cache, sourceAttempts: attempts)
-            }
-            try? await diskCache.remove(path)
-            attempts.append(FetchSourceAttempt(source: .cache, status: .error, reason: "corrupt_cache_entry"))
-        } else {
-            attempts.append(FetchSourceAttempt(source: .cache, status: .miss, reason: "cache_miss"))
-        }
-        
-        // 2. Try Local Xcode
-        do {
-            if let localContent = try await xcodeDocs.fetchDoc(path: path) {
-                logger.info("Local Xcode documentation hit for: \(path)")
-                if let data = try? JSONEncoder().encode(localContent) {
-                    try? await diskCache.set(path, value: data, ttl: 3600 * 24)
-                }
-                attempts.append(FetchSourceAttempt(source: .local, status: .hit))
-                return FetchDocResult(markdown: try renderer.render(localContent), source: .local, sourceAttempts: attempts)
-            }
-            attempts.append(FetchSourceAttempt(source: .local, status: .miss, reason: "local_no_results"))
-        } catch {
-            attempts.append(FetchSourceAttempt(source: .local, status: .error, reason: localFetchFailureReason(for: error)))
-        }
+        try await iDocsTelemetry.withSpan(
+            "idocs.fetch.pipeline",
+            attributes: ["idocs.path": .string(path)]
+        ) {
+            logger.info("Fetching Apple documentation for path: \(path)")
+            var attempts: [FetchSourceAttempt] = []
 
-        let sourceKind = AppleSourceKind(path: path)
-        if sourceKind == .help {
+            // 1. Try Disk Cache
+            if let cachedData = try? await diskCache.get(path) {
+                if let content = try? JSONDecoder().decode(DocCContent.self, from: cachedData) {
+                    logger.info("Disk cache hit for: \(path)")
+                    attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
+                    recordAttemptEvents(attempts, path: path)
+                    iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
+                    return FetchDocResult(markdown: try renderer.render(content), source: .cache, sourceAttempts: attempts)
+                }
+                if let markdown = String(data: cachedData, encoding: .utf8), !markdown.isEmpty {
+                    logger.info("Disk cache markdown hit for: \(path)")
+                    attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
+                    recordAttemptEvents(attempts, path: path)
+                    iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
+                    return FetchDocResult(markdown: markdown, source: .cache, sourceAttempts: attempts)
+                }
+                try? await diskCache.remove(path)
+                attempts.append(FetchSourceAttempt(source: .cache, status: .error, reason: "corrupt_cache_entry"))
+            } else {
+                attempts.append(FetchSourceAttempt(source: .cache, status: .miss, reason: "cache_miss"))
+            }
+
+            // 2. Try Local Xcode
             do {
-                let markdown = try await helpAPI.fetchMarkdown(path: path)
+                if let localContent = try await xcodeDocs.fetchDoc(path: path) {
+                    logger.info("Local Xcode documentation hit for: \(path)")
+                    if let data = try? JSONEncoder().encode(localContent) {
+                        try? await diskCache.set(path, value: data, ttl: 3600 * 24)
+                    }
+                    attempts.append(FetchSourceAttempt(source: .local, status: .hit))
+                    recordAttemptEvents(attempts, path: path)
+                    iDocsTelemetry.setAttributes(["idocs.source": .string("local")])
+                    return FetchDocResult(markdown: try renderer.render(localContent), source: .local, sourceAttempts: attempts)
+                }
+                attempts.append(FetchSourceAttempt(source: .local, status: .miss, reason: "local_no_results"))
+            } catch {
+                attempts.append(FetchSourceAttempt(source: .local, status: .error, reason: localFetchFailureReason(for: error)))
+            }
+
+            let sourceKind = AppleSourceKind(path: path)
+            if sourceKind == .help {
+                do {
+                    let markdown = try await helpAPI.fetchMarkdown(path: path)
+                    if let data = markdown.data(using: .utf8) {
+                        try? await diskCache.set(path, value: data, ttl: 3600 * 12)
+                    }
+                    attempts.append(FetchSourceAttempt(source: .help, status: .hit))
+                    recordAttemptEvents(attempts, path: path)
+                    iDocsTelemetry.setAttributes(["idocs.source": .string("help")])
+                    return FetchDocResult(markdown: markdown, source: .help, sourceAttempts: attempts)
+                } catch {
+                    attempts.append(FetchSourceAttempt(source: .help, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
+                }
+            }
+
+            if !sourceKind.fetchSupportedByIDocs {
+                attempts.append(
+                    FetchSourceAttempt(
+                        source: .unsupported,
+                        status: .unsupported,
+                        reason: "unsupported_source_type",
+                        hint: "This Apple page family is real but not supported by idocs fetch; use deliberate web fallback if evidence is required."
+                    )
+                )
+                recordAttemptEvents(attempts, path: path)
+                throw iDocsError.unsupportedSourceType(path: path, sourceKind: sourceKind, attempts: attempts)
+            }
+
+            // 3. Try Apple Remote API
+            if sourceKind != .help {
+                do {
+                    let result = try await appleAPI.fetchDocDetailed(path: path)
+                    let content = result.content
+                    if let data = try? JSONEncoder().encode(content) {
+                        try? await diskCache.set(path, value: data, ttl: 3600 * 24)
+                    }
+                    attempts.append(appleHitAttempt(for: result.diagnostics))
+                    recordAttemptEvents(attempts, path: path)
+                    iDocsTelemetry.setAttributes(["idocs.source": .string("apple")])
+                    return FetchDocResult(markdown: try renderer.render(content), source: .apple, sourceAttempts: attempts)
+                } catch {
+                    attempts.append(FetchSourceAttempt(source: .apple, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
+                    logger.warning("Apple remote fetch failed: \(error.localizedDescription). Trying sosumi fallback.")
+                }
+            }
+
+            // 4. Try sosumi remote fallback (already rendered markdown)
+            do {
+                let markdown = try await sosumiAPI.fetchMarkdown(path: path)
                 if let data = markdown.data(using: .utf8) {
                     try? await diskCache.set(path, value: data, ttl: 3600 * 12)
                 }
-                attempts.append(FetchSourceAttempt(source: .help, status: .hit))
-                return FetchDocResult(markdown: markdown, source: .help, sourceAttempts: attempts)
+                attempts.append(FetchSourceAttempt(source: .sosumi, status: .hit))
+                recordAttemptEvents(attempts, path: path)
+                iDocsTelemetry.setAttributes(["idocs.source": .string("sosumi")])
+                return FetchDocResult(markdown: markdown, source: .sosumi, sourceAttempts: attempts)
             } catch {
-                attempts.append(FetchSourceAttempt(source: .help, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
+                attempts.append(FetchSourceAttempt(source: .sosumi, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
+                recordAttemptEvents(attempts, path: path)
+                throw iDocsError.aggregateFetchFailure(path: path, attempts: attempts)
             }
-        }
-
-        if !sourceKind.fetchSupportedByIDocs {
-            attempts.append(
-                FetchSourceAttempt(
-                    source: .unsupported,
-                    status: .unsupported,
-                    reason: "unsupported_source_type",
-                    hint: "This Apple page family is real but not supported by idocs fetch; use deliberate web fallback if evidence is required."
-                )
-            )
-            throw iDocsError.unsupportedSourceType(path: path, sourceKind: sourceKind, attempts: attempts)
-        }
-        
-        // 3. Try Apple Remote API
-        if sourceKind != .help {
-            do {
-                let result = try await appleAPI.fetchDocDetailed(path: path)
-                let content = result.content
-                if let data = try? JSONEncoder().encode(content) {
-                    try? await diskCache.set(path, value: data, ttl: 3600 * 24)
-                }
-                attempts.append(appleHitAttempt(for: result.diagnostics))
-                return FetchDocResult(markdown: try renderer.render(content), source: .apple, sourceAttempts: attempts)
-            } catch {
-                attempts.append(FetchSourceAttempt(source: .apple, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
-                logger.warning("Apple remote fetch failed: \(error.localizedDescription). Trying sosumi fallback.")
-            }
-        }
-
-        // 4. Try sosumi remote fallback (already rendered markdown)
-        do {
-            let markdown = try await sosumiAPI.fetchMarkdown(path: path)
-            if let data = markdown.data(using: .utf8) {
-                try? await diskCache.set(path, value: data, ttl: 3600 * 12)
-            }
-            attempts.append(FetchSourceAttempt(source: .sosumi, status: .hit))
-            return FetchDocResult(markdown: markdown, source: .sosumi, sourceAttempts: attempts)
-        } catch {
-            attempts.append(FetchSourceAttempt(source: .sosumi, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
-            throw iDocsError.aggregateFetchFailure(path: path, attempts: attempts)
         }
     }
 
@@ -165,6 +185,20 @@ public struct FetchDocTool {
             return statusCode
         }
         return nil
+    }
+
+    private func recordAttemptEvents(_ attempts: [FetchSourceAttempt], path: String) {
+        for attempt in attempts {
+            var attributes: [String: TelemetryAttributeValue] = [
+                "idocs.source": .string(attempt.source.rawValue),
+                "idocs.stage.status": .string(attempt.status.rawValue),
+                "idocs.path": .string(path)
+            ]
+            if let reason = attempt.reason {
+                attributes["idocs.stage.reason"] = .string(reason)
+            }
+            iDocsTelemetry.addEvent("idocs.fetch.attempt", attributes: attributes)
+        }
     }
 }
 

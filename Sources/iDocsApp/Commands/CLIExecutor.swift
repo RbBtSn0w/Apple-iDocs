@@ -1,5 +1,6 @@
 import Foundation
 import iDocsAdapter
+import iDocsTelemetry
 
 public enum CLIExecutor {
     @discardableResult
@@ -8,94 +9,105 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let start = ContinuousClock.now
-        do {
-            let adapter = try CLIEnvironment.serviceFactory()
-            let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
-            let response = try await adapter.searchDetailed(query: query, config: config)
-            let results = response.results
-            let durationMs = start.millisecondsElapsed()
-            let source = primarySource(from: results.map(\.source))
-            let diagnostics = response.diagnostics?.stages.map(Self.mapDiagnosticPayload)
+        let attributes = commandAttributes(name: "search", outputFormat: outputFormat, callerID: callerID)
+        return await iDocsTelemetry.withSpan("idocs.command.search", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let adapter = try CLIEnvironment.serviceFactory()
+                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+                let response = try await adapter.searchDetailed(query: query, config: config)
+                let results = response.results
+                let durationMs = start.millisecondsElapsed()
+                let source = primarySource(from: results.map(\.source))
+                let diagnostics = response.diagnostics?.stages.map(Self.mapDiagnosticPayload)
 
-            if outputFormat == .json {
-                return writeJSONPayload(
-                    CLICommandPayload(
-                        command: "search",
-                        caller: callerID,
-                        query: query,
-                        id: nil,
-                        category: nil,
-                        source: source,
-                        durationMs: durationMs,
-                        resultCount: results.count,
-                        selectedPaths: results.map(\.id),
-                        exitCategory: .ok,
-                        body: nil,
-                        results: results.map {
-                            CLISearchResultPayload(
-                                id: $0.id,
-                                title: $0.title,
-                                snippet: $0.snippet,
-                                technology: $0.technology,
-                                source: $0.source?.rawValue,
-                                sourceKind: $0.sourceKind,
-                                fetchSupported: $0.fetchSupported,
-                                fetchSupportReason: $0.fetchSupportReason,
-                                matchScope: $0.matchScope,
-                                queryAttempt: $0.queryAttempt ?? query
-                            )
-                        },
-                        technologies: nil,
-                        searchDiagnostics: diagnostics,
-                        errorMessage: nil
+                let exitCode: Int32
+                if outputFormat == .json {
+                    exitCode = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "search",
+                            caller: callerID,
+                            query: query,
+                            id: nil,
+                            category: nil,
+                            source: source,
+                            durationMs: durationMs,
+                            resultCount: results.count,
+                            selectedPaths: results.map(\.id),
+                            exitCategory: .ok,
+                            body: nil,
+                            results: results.map {
+                                CLISearchResultPayload(
+                                    id: $0.id,
+                                    title: $0.title,
+                                    snippet: $0.snippet,
+                                    technology: $0.technology,
+                                    source: $0.source?.rawValue,
+                                    sourceKind: $0.sourceKind,
+                                    fetchSupported: $0.fetchSupported,
+                                    fetchSupportReason: $0.fetchSupportReason,
+                                    matchScope: $0.matchScope,
+                                    queryAttempt: $0.queryAttempt ?? query
+                                )
+                            },
+                            technologies: nil,
+                            searchDiagnostics: diagnostics,
+                            errorMessage: nil
+                        )
                     )
-                )
-            }
-
-            if results.isEmpty {
-                CLIEnvironment.writeStdout(emptySearchMessage(diagnostics: diagnostics))
-                return 0
-            }
-
-            var lines: [String] = ["### Apple Documentation Search Results", ""]
-            for item in results {
-                let source = item.source?.rawValue ?? "unknown"
-                let fetch = item.fetchSupported ? "supported" : "unsupported"
-                lines.append("- \(item.title) [\(item.technology)] {source: \(source), kind: \(item.sourceKind), fetch: \(fetch), scope: \(item.matchScope)}")
-                lines.append("  - ID: \(item.id)")
-                if let snippet = item.snippet {
-                    lines.append("  - Snippet: \(snippet)")
+                } else if results.isEmpty {
+                    CLIEnvironment.writeStdout(emptySearchMessage(diagnostics: diagnostics))
+                    exitCode = 0
+                } else {
+                    var lines: [String] = ["### Apple Documentation Search Results", ""]
+                    for item in results {
+                        let source = item.source?.rawValue ?? "unknown"
+                        let fetch = item.fetchSupported ? "supported" : "unsupported"
+                        lines.append("- \(item.title) [\(item.technology)] {source: \(source), kind: \(item.sourceKind), fetch: \(fetch), scope: \(item.matchScope)}")
+                        lines.append("  - ID: \(item.id)")
+                        if let snippet = item.snippet {
+                            lines.append("  - Snippet: \(snippet)")
+                        }
+                    }
+                    CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
+                    exitCode = 0
                 }
-            }
-            CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
-            return 0
-        } catch {
-            let message = CLIErrorPresenter.message(for: error)
-            let durationMs = start.millisecondsElapsed()
-            if outputFormat == .json {
-                _ = writeJSONPayload(
-                    CLICommandPayload(
-                        command: "search",
-                        caller: callerID,
-                        query: query,
-                        id: nil,
-                        category: nil,
-                        source: nil,
-                        durationMs: durationMs,
-                        resultCount: 0,
-                        selectedPaths: [],
-                        exitCategory: CLIErrorPresenter.category(for: error),
-                        body: nil,
-                        results: [],
-                        technologies: nil,
-                        searchDiagnostics: nil,
-                        errorMessage: message
+
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(results.count),
+                    "idocs.source": .string(source ?? "none")
+                ])
+                iDocsTelemetry.setExitCode(exitCode)
+                return exitCode
+            } catch {
+                let message = CLIErrorPresenter.message(for: error)
+                let durationMs = start.millisecondsElapsed()
+                if outputFormat == .json {
+                    _ = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "search",
+                            caller: callerID,
+                            query: query,
+                            id: nil,
+                            category: nil,
+                            source: nil,
+                            durationMs: durationMs,
+                            resultCount: 0,
+                            selectedPaths: [],
+                            exitCategory: CLIErrorPresenter.category(for: error),
+                            body: nil,
+                            results: [],
+                            technologies: nil,
+                            searchDiagnostics: nil,
+                            errorMessage: message
+                        )
                     )
-                )
+                }
+                CLIEnvironment.writeStderr(message)
+                iDocsTelemetry.recordError(error)
+                iDocsTelemetry.setExitCode(1)
+                return 1
             }
-            CLIEnvironment.writeStderr(message)
-            return 1
         }
     }
 
@@ -105,77 +117,90 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let start = ContinuousClock.now
-        do {
-            let adapter = try CLIEnvironment.serviceFactory()
-            let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
-            let content = try await adapter.fetch(id: id, config: config)
-            let source = content.metadata["source"]
-            let durationMs = start.millisecondsElapsed()
+        let attributes = commandAttributes(name: "fetch", outputFormat: outputFormat, callerID: callerID)
+        return await iDocsTelemetry.withSpan("idocs.command.fetch", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let adapter = try CLIEnvironment.serviceFactory()
+                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+                let content = try await adapter.fetch(id: id, config: config)
+                let source = content.metadata["source"]
+                let durationMs = start.millisecondsElapsed()
 
-            if outputFormat == .json {
-                return writeJSONPayload(
-                    CLICommandPayload(
-                        command: "fetch",
-                        caller: callerID,
-                        query: nil,
-                        id: id,
-                        category: nil,
-                        source: source,
-                        durationMs: durationMs,
-                        resultCount: 1,
-                        selectedPaths: [id],
-                        exitCategory: .ok,
-                        body: content.body,
-                        results: nil,
-                        technologies: nil,
-                        searchDiagnostics: nil,
-                        fetchDiagnostics: content.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
-                        errorMessage: nil
+                let exitCode: Int32
+                if outputFormat == .json {
+                    exitCode = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "fetch",
+                            caller: callerID,
+                            query: nil,
+                            id: id,
+                            category: nil,
+                            source: source,
+                            durationMs: durationMs,
+                            resultCount: 1,
+                            selectedPaths: [id],
+                            exitCategory: .ok,
+                            body: content.body,
+                            results: nil,
+                            technologies: nil,
+                            searchDiagnostics: nil,
+                            fetchDiagnostics: content.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
+                            errorMessage: nil
+                        )
                     )
-                )
-            }
-
-            if let source {
-                var prefix = "[source: \(source)]"
-                if let fetchDiagnostics = content.fetchDiagnostics, fetchDiagnostics.count > 1 {
-                    let attempts = fetchDiagnostics
-                        .map { "\($0.source)=\($0.reason ?? $0.status)" }
-                        .joined(separator: ", ")
-                    prefix += "\n[attempts: \(attempts)]"
+                } else {
+                    if let source {
+                        var prefix = "[source: \(source)]"
+                        if let fetchDiagnostics = content.fetchDiagnostics, fetchDiagnostics.count > 1 {
+                            let attempts = fetchDiagnostics
+                                .map { "\($0.source)=\($0.reason ?? $0.status)" }
+                                .joined(separator: ", ")
+                            prefix += "\n[attempts: \(attempts)]"
+                        }
+                        CLIEnvironment.writeStdout("\(prefix)\n\(content.body)")
+                    } else {
+                        CLIEnvironment.writeStdout(content.body)
+                    }
+                    exitCode = 0
                 }
-                CLIEnvironment.writeStdout("\(prefix)\n\(content.body)")
-            } else {
-                CLIEnvironment.writeStdout(content.body)
-            }
-            return 0
-        } catch {
-            let message = CLIErrorPresenter.message(for: error)
-            let durationMs = start.millisecondsElapsed()
-            if outputFormat == .json {
-                _ = writeJSONPayload(
-                    CLICommandPayload(
-                        command: "fetch",
-                        caller: callerID,
-                        query: nil,
-                        id: id,
-                        category: nil,
-                        source: nil,
-                        durationMs: durationMs,
-                        resultCount: 0,
-                        selectedPaths: [],
-                        exitCategory: CLIErrorPresenter.category(for: error),
-                        body: nil,
-                        results: nil,
-                        technologies: nil,
-                        searchDiagnostics: nil,
-                        fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
-                        errorMessage: message
+
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(1),
+                    "idocs.source": .string(source ?? "none")
+                ])
+                iDocsTelemetry.setExitCode(exitCode)
+                return exitCode
+            } catch {
+                let message = CLIErrorPresenter.message(for: error)
+                let durationMs = start.millisecondsElapsed()
+                if outputFormat == .json {
+                    _ = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "fetch",
+                            caller: callerID,
+                            query: nil,
+                            id: id,
+                            category: nil,
+                            source: nil,
+                            durationMs: durationMs,
+                            resultCount: 0,
+                            selectedPaths: [],
+                            exitCategory: CLIErrorPresenter.category(for: error),
+                            body: nil,
+                            results: nil,
+                            technologies: nil,
+                            searchDiagnostics: nil,
+                            fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
+                            errorMessage: message
+                        )
                     )
-                )
+                }
+                CLIEnvironment.writeStderr(message)
+                iDocsTelemetry.recordError(error)
+                iDocsTelemetry.setExitCode(1)
+                return 1
             }
-            CLIEnvironment.writeStderr(message)
-            return 1
         }
     }
 
@@ -185,56 +210,67 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let start = ContinuousClock.now
-        do {
-            let adapter = try CLIEnvironment.serviceFactory()
-            let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
-            let result = try await adapter.resolve(intent: intent, config: config)
-            let durationMs = start.millisecondsElapsed()
+        let attributes = commandAttributes(name: "resolve", outputFormat: outputFormat, callerID: callerID)
+        return await iDocsTelemetry.withSpan("idocs.command.resolve", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let adapter = try CLIEnvironment.serviceFactory()
+                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+                let result = try await adapter.resolve(intent: intent, config: config)
+                let durationMs = start.millisecondsElapsed()
 
-            if outputFormat == .json {
-                return writeJSONPayload(
-                    resolvePayload(
-                        intent: intent,
-                        result: result,
-                        callerID: callerID,
-                        durationMs: durationMs,
-                        exitCategory: .ok,
-                        errorMessage: nil
+                let exitCode: Int32
+                if outputFormat == .json {
+                    exitCode = writeJSONPayload(
+                        resolvePayload(
+                            intent: intent,
+                            result: result,
+                            callerID: callerID,
+                            durationMs: durationMs,
+                            exitCategory: .ok,
+                            errorMessage: nil
+                        )
                     )
-                )
-            }
-
-            if let canonicalPath = result.canonicalPath {
-                CLIEnvironment.writeStdout(
-                    [
-                        "Resolved: \(canonicalPath)",
-                        "Confidence: \(result.confidence.rawValue)",
-                        "Verified by fetch: \(result.verifiedByFetch ? "yes" : "no")"
-                    ].joined(separator: "\n")
-                )
-                return 0
-            }
-
-            CLIEnvironment.writeStdout("Unable to resolve structured documentation intent.")
-            return 1
-        } catch {
-            let message = CLIErrorPresenter.message(for: error)
-            let durationMs = start.millisecondsElapsed()
-            if outputFormat == .json {
-                _ = writeJSONPayload(
-                    resolvePayload(
-                        intent: intent,
-                        result: unresolvedResolveResult(for: error),
-                        callerID: callerID,
-                        durationMs: durationMs,
-                        exitCategory: CLIErrorPresenter.category(for: error),
-                        errorMessage: message
+                } else if let canonicalPath = result.canonicalPath {
+                    CLIEnvironment.writeStdout(
+                        [
+                            "Resolved: \(canonicalPath)",
+                            "Confidence: \(result.confidence.rawValue)",
+                            "Verified by fetch: \(result.verifiedByFetch ? "yes" : "no")"
+                        ].joined(separator: "\n")
                     )
-                )
+                    exitCode = 0
+                } else {
+                    CLIEnvironment.writeStdout("Unable to resolve structured documentation intent.")
+                    exitCode = 1
+                }
+
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(result.canonicalPath == nil ? 0 : 1),
+                    "idocs.source": .string(result.evidence?.source ?? "none")
+                ])
+                iDocsTelemetry.setExitCode(exitCode)
+                return exitCode
+            } catch {
+                let message = CLIErrorPresenter.message(for: error)
+                let durationMs = start.millisecondsElapsed()
+                if outputFormat == .json {
+                    _ = writeJSONPayload(
+                        resolvePayload(
+                            intent: intent,
+                            result: unresolvedResolveResult(for: error),
+                            callerID: callerID,
+                            durationMs: durationMs,
+                            exitCategory: CLIErrorPresenter.category(for: error),
+                            errorMessage: message
+                        )
+                    )
+                }
+                CLIEnvironment.writeStderr(message)
+                iDocsTelemetry.recordError(error)
+                iDocsTelemetry.setExitCode(1)
+                return 1
             }
-            CLIEnvironment.writeStderr(message)
-            return 1
         }
     }
 
@@ -244,80 +280,106 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let start = ContinuousClock.now
-        do {
-            let adapter = try CLIEnvironment.serviceFactory()
-            let config = CLIEnvironment.configFactory().withInvocationContext(
-                callerID: callerID,
-                technologyCategoryFilter: category
-            )
-            let technologies = try await adapter.listTechnologies(config: config)
-            let durationMs = start.millisecondsElapsed()
-
-            if outputFormat == .json {
-                return writeJSONPayload(
-                    CLICommandPayload(
-                        command: "list",
-                        caller: callerID,
-                        query: nil,
-                        id: nil,
-                        category: category,
-                        source: technologies.isEmpty ? nil : "apple",
-                        durationMs: durationMs,
-                        resultCount: technologies.count,
-                        selectedPaths: technologies.map(\.id),
-                        exitCategory: .ok,
-                        body: nil,
-                        results: nil,
-                        technologies: technologies.map {
-                            CLITechnologyPayload(id: $0.id, name: $0.name, category: $0.category)
-                        },
-                        searchDiagnostics: nil,
-                        errorMessage: nil
-                    )
+        let attributes = commandAttributes(name: "list", outputFormat: outputFormat, callerID: callerID)
+        return await iDocsTelemetry.withSpan("idocs.command.list", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let adapter = try CLIEnvironment.serviceFactory()
+                let config = CLIEnvironment.configFactory().withInvocationContext(
+                    callerID: callerID,
+                    technologyCategoryFilter: category
                 )
-            }
+                let technologies = try await adapter.listTechnologies(config: config)
+                let durationMs = start.millisecondsElapsed()
 
-            if technologies.isEmpty {
-                CLIEnvironment.writeStdout("No technologies found in the catalog.")
-                return 0
-            }
-
-            let lines = technologies.map { tech in
-                if let category = tech.category {
-                    return "- \(tech.name) (\(category)) [\(tech.id)]"
+                let exitCode: Int32
+                if outputFormat == .json {
+                    exitCode = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "list",
+                            caller: callerID,
+                            query: nil,
+                            id: nil,
+                            category: category,
+                            source: technologies.isEmpty ? nil : "apple",
+                            durationMs: durationMs,
+                            resultCount: technologies.count,
+                            selectedPaths: technologies.map(\.id),
+                            exitCategory: .ok,
+                            body: nil,
+                            results: nil,
+                            technologies: technologies.map {
+                                CLITechnologyPayload(id: $0.id, name: $0.name, category: $0.category)
+                            },
+                            searchDiagnostics: nil,
+                            errorMessage: nil
+                        )
+                    )
+                } else if technologies.isEmpty {
+                    CLIEnvironment.writeStdout("No technologies found in the catalog.")
+                    exitCode = 0
+                } else {
+                    let lines = technologies.map { tech in
+                        if let category = tech.category {
+                            return "- \(tech.name) (\(category)) [\(tech.id)]"
+                        }
+                        return "- \(tech.name) [\(tech.id)]"
+                    }
+                    CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
+                    exitCode = 0
                 }
-                return "- \(tech.name) [\(tech.id)]"
-            }
-            CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
-            return 0
-        } catch {
-            let message = CLIErrorPresenter.message(for: error)
-            let durationMs = start.millisecondsElapsed()
-            if outputFormat == .json {
-                _ = writeJSONPayload(
-                    CLICommandPayload(
-                        command: "list",
-                        caller: callerID,
-                        query: nil,
-                        id: nil,
-                        category: category,
-                        source: nil,
-                        durationMs: durationMs,
-                        resultCount: 0,
-                        selectedPaths: [],
-                        exitCategory: CLIErrorPresenter.category(for: error),
-                        body: nil,
-                        results: nil,
-                        technologies: [],
-                        searchDiagnostics: nil,
-                        errorMessage: message
+
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(technologies.count),
+                    "idocs.source": .string(technologies.isEmpty ? "none" : "apple")
+                ])
+                iDocsTelemetry.setExitCode(exitCode)
+                return exitCode
+            } catch {
+                let message = CLIErrorPresenter.message(for: error)
+                let durationMs = start.millisecondsElapsed()
+                if outputFormat == .json {
+                    _ = writeJSONPayload(
+                        CLICommandPayload(
+                            command: "list",
+                            caller: callerID,
+                            query: nil,
+                            id: nil,
+                            category: category,
+                            source: nil,
+                            durationMs: durationMs,
+                            resultCount: 0,
+                            selectedPaths: [],
+                            exitCategory: CLIErrorPresenter.category(for: error),
+                            body: nil,
+                            results: nil,
+                            technologies: [],
+                            searchDiagnostics: nil,
+                            errorMessage: message
+                        )
                     )
-                )
+                }
+                CLIEnvironment.writeStderr(message)
+                iDocsTelemetry.recordError(error)
+                iDocsTelemetry.setExitCode(1)
+                return 1
             }
-            CLIEnvironment.writeStderr(message)
-            return 1
         }
+    }
+
+    private static func commandAttributes(
+        name: String,
+        outputFormat: CLIOutputFormat,
+        callerID: String?
+    ) -> [String: TelemetryAttributeValue] {
+        var attributes: [String: TelemetryAttributeValue] = [
+            "idocs.command.name": .string(name),
+            "idocs.output.format": .string(outputFormat.rawValue)
+        ]
+        if let callerID {
+            attributes["idocs.caller"] = .string(callerID)
+        }
+        return attributes
     }
 
     private static func primarySource(from sources: [RetrievalSource?]) -> String? {

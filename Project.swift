@@ -16,6 +16,21 @@ let project = Project(
     settings: settings,
     targets: [
         .target(
+            name: "iDocsTelemetry",
+            destinations: .macOS,
+            product: .framework,
+            bundleId: "com.snow.idocs.telemetry",
+            deploymentTargets: .macOS("13.0"),
+            sources: [
+                "Sources/iDocsTelemetry/**"
+            ],
+            dependencies: [
+                .external(name: "OpenTelemetryApi"),
+                .external(name: "OpenTelemetrySdk"),
+                .external(name: "OpenTelemetryProtocolExporterHTTP")
+            ]
+        ),
+        .target(
             name: "iDocsKit",
             destinations: .macOS,
             product: .framework,
@@ -25,7 +40,8 @@ let project = Project(
                 "Sources/iDocsKit/**"
             ],
             dependencies: [
-                .external(name: "Logging")
+                .external(name: "Logging"),
+                .target(name: "iDocsTelemetry")
             ]
         ),
         .target(
@@ -50,6 +66,7 @@ let project = Project(
             ],
             dependencies: [
                 .target(name: "iDocsAdapter"),
+                .target(name: "iDocsTelemetry"),
                 .external(name: "ArgumentParser")
             ]
         ),
@@ -94,7 +111,9 @@ let project = Project(
             dependencies: [
                 .target(name: "iDocsKit"),
                 .target(name: "iDocsApp"),
-                .target(name: "iDocsAdapter")
+                .target(name: "iDocsAdapter"),
+                .target(name: "iDocsTelemetry"),
+                .external(name: "InMemoryExporter")
             ]
         ),
         .target(
@@ -105,7 +124,8 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             sources: ["Tests/iDocsAdapterTests/**"],
             dependencies: [
-                .target(name: "iDocsAdapter")
+                .target(name: "iDocsAdapter"),
+                .target(name: "iDocsTelemetry")
             ]
         )
     ],

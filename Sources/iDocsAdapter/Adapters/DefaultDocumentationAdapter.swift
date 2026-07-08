@@ -1,5 +1,6 @@
 import Foundation
 import iDocsKit
+import iDocsTelemetry
 
 public struct DefaultDocumentationAdapter: DocumentationService {
     private let adapterVersion: String
@@ -91,216 +92,248 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     }
 
     public func searchDetailed(query: String, config: DocumentationConfig) async throws -> DocumentationSearchResponse {
-        let start = ContinuousClock.now
-        do {
-            let output = try await searchPerformer(query, config)
-            let results = output.results.map {
-                SearchResult(
-                    id: $0.path,
-                    title: $0.title,
-                    snippet: $0.abstract,
-                    technology: technologyName(from: $0.path),
-                    source: mapSource($0.source),
-                    sourceKind: $0.sourceKind.rawValue,
-                    fetchSupported: $0.fetchSupported,
-                    fetchSupportReason: $0.fetchSupportReason,
-                    matchScope: $0.matchScope.rawValue,
-                    queryAttempt: $0.queryAttempt
+        let attributes = adapterAttributes(operation: "search", config: config)
+        return try await iDocsTelemetry.withSpan("idocs.adapter", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let output = try await searchPerformer(query, config)
+                let results = output.results.map {
+                    SearchResult(
+                        id: $0.path,
+                        title: $0.title,
+                        snippet: $0.abstract,
+                        technology: technologyName(from: $0.path),
+                        source: mapSource($0.source),
+                        sourceKind: $0.sourceKind.rawValue,
+                        fetchSupported: $0.fetchSupported,
+                        fetchSupportReason: $0.fetchSupportReason,
+                        matchScope: $0.matchScope.rawValue,
+                        queryAttempt: $0.queryAttempt
+                    )
+                }
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "search",
+                        caller: config.callerID,
+                        status: .success,
+                        query: query,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: output.instrumentation.totalDurationMs,
+                        resultCount: results.count,
+                        source: output.instrumentation.finalSource,
+                        searchStages: output.instrumentation.stages
+                    ),
+                    config: config
                 )
-            }
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "search",
-                    caller: config.callerID,
-                    status: .success,
-                    query: query,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: output.instrumentation.totalDurationMs,
-                    resultCount: results.count,
-                    source: output.instrumentation.finalSource,
-                    searchStages: output.instrumentation.stages
-                ),
-                config: config
-            )
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(results.count),
+                    "idocs.source": .string(output.instrumentation.finalSource ?? "none")
+                ])
 
-            return DocumentationSearchResponse(
-                results: results,
-                diagnostics: SearchDiagnostics(
-                    stages: output.instrumentation.stages.map(Self.mapStageDiagnostic)
+                return DocumentationSearchResponse(
+                    results: results,
+                    diagnostics: SearchDiagnostics(
+                        stages: output.instrumentation.stages.map(Self.mapStageDiagnostic)
+                    )
                 )
-            )
-        } catch {
-            logger.log(level: .error, message: "Adapter search failed", context: ["query": query, "error": error.localizedDescription])
-            let mappedError = mapError(error, fallbackID: query)
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "search",
-                    caller: config.callerID,
-                    status: .failure,
-                    query: query,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: 0,
-                    source: nil,
-                    errorCategory: errorCategory(for: mappedError),
-                    errorMessage: mappedError.localizedDescription,
-                    searchStages: nil
-                ),
-                config: config
-            )
-            throw mappedError
+            } catch {
+                logger.log(level: .error, message: "Adapter search failed", context: ["query": query, "error": error.localizedDescription])
+                let mappedError = mapError(error, fallbackID: query)
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "search",
+                        caller: config.callerID,
+                        status: .failure,
+                        query: query,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: 0,
+                        source: nil,
+                        errorCategory: errorCategory(for: mappedError),
+                        errorMessage: mappedError.localizedDescription,
+                        searchStages: nil
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.recordError(mappedError)
+                throw mappedError
+            }
         }
     }
 
     public func resolve(intent: ResolveIntent, config: DocumentationConfig) async throws -> ResolveResult {
-        let start = ContinuousClock.now
-        do {
-            let output = try await resolvePerformer(intent, config)
-            let result = Self.mapResolveResult(output)
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "resolve",
-                    caller: config.callerID,
-                    status: .success,
-                    query: resolveUsageQuery(from: intent),
-                    id: result.canonicalPath,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: result.canonicalPath == nil ? 0 : 1,
-                    source: result.evidence?.source
-                ),
-                config: config
-            )
-            return result
-        } catch {
-            let mappedError = mapResolveError(error)
-            logger.log(level: .error, message: "Adapter resolve failed", context: ["intent": resolveUsageQuery(from: intent), "error": mappedError.localizedDescription])
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "resolve",
-                    caller: config.callerID,
-                    status: .failure,
-                    query: resolveUsageQuery(from: intent),
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: 0,
-                    source: nil,
-                    errorCategory: errorCategory(for: mappedError),
-                    errorMessage: mappedError.localizedDescription
-                ),
-                config: config
-            )
-            throw mappedError
+        let attributes = adapterAttributes(operation: "resolve", config: config)
+        return try await iDocsTelemetry.withSpan("idocs.adapter", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let output = try await resolvePerformer(intent, config)
+                let result = Self.mapResolveResult(output)
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "resolve",
+                        caller: config.callerID,
+                        status: .success,
+                        query: resolveUsageQuery(from: intent),
+                        id: result.canonicalPath,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: result.canonicalPath == nil ? 0 : 1,
+                        source: result.evidence?.source
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(result.canonicalPath == nil ? 0 : 1),
+                    "idocs.source": .string(result.evidence?.source ?? "none")
+                ])
+                return result
+            } catch {
+                let mappedError = mapResolveError(error)
+                logger.log(level: .error, message: "Adapter resolve failed", context: ["intent": resolveUsageQuery(from: intent), "error": mappedError.localizedDescription])
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "resolve",
+                        caller: config.callerID,
+                        status: .failure,
+                        query: resolveUsageQuery(from: intent),
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: 0,
+                        source: nil,
+                        errorCategory: errorCategory(for: mappedError),
+                        errorMessage: mappedError.localizedDescription
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.recordError(mappedError)
+                throw mappedError
+            }
         }
     }
 
     public func fetch(id: String, config: DocumentationConfig) async throws -> DocumentationContent {
-        let start = ContinuousClock.now
-        do {
-            let cacheURL = URL(fileURLWithPath: config.cachePath, isDirectory: true)
-            let diskCache = DiskCache(
-                directory: cacheURL,
-                fileManager: FileManager.default,
-                enableFileLocking: config.enableFileLocking
-            )
-            let xcodeCacheDirectory = config.xcodeDocumentationCachePath.map {
-                URL(fileURLWithPath: $0, isDirectory: true)
-            }
-            let output = try await FetchDocTool(
-                api: appleAPI,
-                sosumiAPI: sosumiAPI,
-                xcodeDocs: XcodeLocalDocs(
+        let attributes = adapterAttributes(operation: "fetch", config: config)
+        return try await iDocsTelemetry.withSpan("idocs.adapter", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let cacheURL = URL(fileURLWithPath: config.cachePath, isDirectory: true)
+                let diskCache = DiskCache(
+                    directory: cacheURL,
                     fileManager: FileManager.default,
-                    searchProvider: SpotlightSearchProvider(),
-                    cacheDirectory: xcodeCacheDirectory
-                ),
-                diskCache: diskCache
-            ).runDetailed(path: id)
+                    enableFileLocking: config.enableFileLocking
+                )
+                let xcodeCacheDirectory = config.xcodeDocumentationCachePath.map {
+                    URL(fileURLWithPath: $0, isDirectory: true)
+                }
+                let output = try await FetchDocTool(
+                    api: appleAPI,
+                    sosumiAPI: sosumiAPI,
+                    xcodeDocs: XcodeLocalDocs(
+                        fileManager: FileManager.default,
+                        searchProvider: SpotlightSearchProvider(),
+                        cacheDirectory: xcodeCacheDirectory
+                    ),
+                    diskCache: diskCache
+                ).runDetailed(path: id)
 
-            let result = DocumentationContent(
-                title: titleFromBody(output, fallback: id),
-                body: output.markdown,
-                metadata: [
-                    "locale": config.locale.identifier,
-                    "source": output.source.rawValue
-                ],
-                url: URLHelpers.webURL(for: id) ?? URL(string: "https://developer.apple.com\(id)")!,
-                fetchDiagnostics: output.sourceAttempts.map(Self.mapFetchAttemptDiagnostic)
-            )
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "fetch",
-                    caller: config.callerID,
-                    status: .success,
-                    id: id,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: 1,
-                    source: output.source.rawValue
-                ),
-                config: config
-            )
-            return result
-        } catch {
-            logger.log(level: .error, message: "Adapter fetch failed", context: ["id": id, "error": error.localizedDescription])
-            let mappedError = mapError(error, fallbackID: id)
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "fetch",
-                    caller: config.callerID,
-                    status: .failure,
-                    id: id,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: 0,
-                    source: nil,
-                    errorCategory: errorCategory(for: mappedError),
-                    errorMessage: mappedError.localizedDescription
-                ),
-                config: config
-            )
-            throw mappedError
+                let result = DocumentationContent(
+                    title: titleFromBody(output, fallback: id),
+                    body: output.markdown,
+                    metadata: [
+                        "locale": config.locale.identifier,
+                        "source": output.source.rawValue
+                    ],
+                    url: URLHelpers.webURL(for: id) ?? URL(string: "https://developer.apple.com\(id)")!,
+                    fetchDiagnostics: output.sourceAttempts.map(Self.mapFetchAttemptDiagnostic)
+                )
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "fetch",
+                        caller: config.callerID,
+                        status: .success,
+                        id: id,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: 1,
+                        source: output.source.rawValue
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(1),
+                    "idocs.source": .string(output.source.rawValue)
+                ])
+                return result
+            } catch {
+                logger.log(level: .error, message: "Adapter fetch failed", context: ["id": id, "error": error.localizedDescription])
+                let mappedError = mapError(error, fallbackID: id)
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "fetch",
+                        caller: config.callerID,
+                        status: .failure,
+                        id: id,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: 0,
+                        source: nil,
+                        errorCategory: errorCategory(for: mappedError),
+                        errorMessage: mappedError.localizedDescription
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.recordError(mappedError)
+                throw mappedError
+            }
         }
     }
 
     public func listTechnologies(config: DocumentationConfig) async throws -> [Technology] {
-        let start = ContinuousClock.now
-        do {
-            let technologies = try await technologiesPerformer()
-            let filtered = filterTechnologies(technologies, category: config.technologyCategoryFilter)
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "list",
-                    caller: config.callerID,
-                    status: .success,
-                    category: config.technologyCategoryFilter,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: filtered.count,
-                    source: filtered.isEmpty ? nil : "apple"
-                ),
-                config: config
-            )
-            return filtered
-        } catch {
-            logger.log(level: .error, message: "Adapter listTechnologies failed", context: ["error": error.localizedDescription])
-            let mappedError = mapError(error, fallbackID: "technologies")
-            await recordUsageIfConfigured(
-                DocumentationUsageLogEntry(
-                    operation: "list",
-                    caller: config.callerID,
-                    status: .failure,
-                    category: config.technologyCategoryFilter,
-                    localeIdentifier: config.locale.identifier,
-                    durationMs: start.millisecondsElapsed(),
-                    resultCount: 0,
-                    source: nil,
-                    errorCategory: errorCategory(for: mappedError),
-                    errorMessage: mappedError.localizedDescription
-                ),
-                config: config
-            )
-            throw mappedError
+        let attributes = adapterAttributes(operation: "list", config: config)
+        return try await iDocsTelemetry.withSpan("idocs.adapter", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let technologies = try await technologiesPerformer()
+                let filtered = filterTechnologies(technologies, category: config.technologyCategoryFilter)
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "list",
+                        caller: config.callerID,
+                        status: .success,
+                        category: config.technologyCategoryFilter,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: filtered.count,
+                        source: filtered.isEmpty ? nil : "apple"
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(filtered.count),
+                    "idocs.source": .string(filtered.isEmpty ? "none" : "apple")
+                ])
+                return filtered
+            } catch {
+                logger.log(level: .error, message: "Adapter listTechnologies failed", context: ["error": error.localizedDescription])
+                let mappedError = mapError(error, fallbackID: "technologies")
+                await recordUsageIfConfigured(
+                    DocumentationUsageLogEntry(
+                        operation: "list",
+                        caller: config.callerID,
+                        status: .failure,
+                        category: config.technologyCategoryFilter,
+                        localeIdentifier: config.locale.identifier,
+                        durationMs: start.millisecondsElapsed(),
+                        resultCount: 0,
+                        source: nil,
+                        errorCategory: errorCategory(for: mappedError),
+                        errorMessage: mappedError.localizedDescription
+                    ),
+                    config: config
+                )
+                iDocsTelemetry.recordError(mappedError)
+                throw mappedError
+            }
         }
     }
 
@@ -574,5 +607,22 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         case .aggregateFetchFailure:
             return "NETWORK"
         }
+    }
+
+    private func adapterAttributes(
+        operation: String,
+        config: DocumentationConfig
+    ) -> [String: TelemetryAttributeValue] {
+        var attributes: [String: TelemetryAttributeValue] = [
+            "idocs.operation.name": .string(operation),
+            "idocs.locale": .string(config.locale.identifier)
+        ]
+        if let callerID = config.callerID {
+            attributes["idocs.caller"] = .string(callerID)
+        }
+        if let category = config.technologyCategoryFilter {
+            attributes["idocs.category_filter"] = .string(category)
+        }
+        return attributes
     }
 }
