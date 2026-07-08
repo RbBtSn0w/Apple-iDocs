@@ -148,7 +148,11 @@ public enum iDocsTelemetry {
         if let base = nonEmpty(environment["OTEL_EXPORTER_OTLP_ENDPOINT"]),
            var components = URLComponents(string: base) {
             let existingPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            components.path = existingPath.isEmpty ? "/v1/traces" : "/\(existingPath)/v1/traces"
+            if existingPath.hasSuffix("v1/traces") {
+                components.path = "/\(existingPath)"
+            } else {
+                components.path = existingPath.isEmpty ? "/v1/traces" : "/\(existingPath)/v1/traces"
+            }
             if let url = components.url {
                 return url
             }
@@ -279,7 +283,7 @@ public enum iDocsTelemetry {
     public static func extractParentSpanContext(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SpanContext? {
-        guard let traceparent = nonEmpty(environment["TRACEPARENT"] ?? environment["traceparent"]) else {
+        guard let traceparent = nonEmpty(environment["TRACEPARENT"]) ?? nonEmpty(environment["traceparent"]) else {
             return nil
         }
         let carrier = ["traceparent": traceparent]

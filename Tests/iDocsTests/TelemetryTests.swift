@@ -25,6 +25,13 @@ struct TelemetryTests {
         )
         #expect(base.absoluteString == "https://base.example/custom-root/v1/traces")
 
+        let baseWithSuffix = iDocsTelemetry.resolveTracesEndpoint(
+            environment: [
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://base.example/v1/traces"
+            ]
+        )
+        #expect(baseWithSuffix.absoluteString == "https://base.example/v1/traces")
+
         let fallback = iDocsTelemetry.resolveTracesEndpoint(environment: [:])
         #expect(fallback == iDocsTelemetry.defaultTracesEndpoint)
     }
@@ -47,6 +54,15 @@ struct TelemetryTests {
         #expect(context?.traceId.hexString == "4bf92f3577b34da6a3ce929d0e0e4736")
         #expect(context?.spanId.hexString == "00f067aa0ba902b7")
         #expect(context?.traceFlags.sampled == true)
+
+        let contextFallback = iDocsTelemetry.extractParentSpanContext(
+            environment: [
+                "TRACEPARENT": "",
+                "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+            ]
+        )
+        #expect(contextFallback?.traceId.hexString == "4bf92f3577b34da6a3ce929d0e0e4736")
+        #expect(contextFallback?.spanId.hexString == "00f067aa0ba902b7")
     }
 
     @Test("Root and child spans preserve parentage and record events")

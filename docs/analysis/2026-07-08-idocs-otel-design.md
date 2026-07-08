@@ -43,7 +43,7 @@ The Worker remains responsible for any backend credential injection. The CLI sen
 
 ### Root span
 
-- name: `idocs.cli`
+- name: `{process.executable.name}` (e.g. `idocs`)
 - kind: `internal`
 
 Root attributes:
@@ -52,6 +52,7 @@ Root attributes:
 - `service.version = <current CLI version>`
 - `service.namespace = com.snow`
 - `deployment.environment = test` only when explicitly configured for tests
+- `process.command`
 - `process.command_args`
 - `process.executable.name`
 - `process.pid`
