@@ -16,7 +16,7 @@ env:
 jobs:
   build-and-test:
     timeout-minutes: 30
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +54,7 @@ jobs:
 
   e2e-cli-offline:
     timeout-minutes: 30
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       IDOCS_LOCAL_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
     steps:
@@ -83,7 +83,7 @@ jobs:
     name: Build and Release
     needs: [build-and-test, e2e-cli-offline]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: macos-15
+    runs-on: macos-26
     outputs:
       package_version: ${{ steps.release-result.outputs.version }}
       released: ${{ steps.release-result.outputs.released }}
@@ -168,7 +168,7 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
       needs.release.outputs.released == 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: read
     timeout-minutes: 15

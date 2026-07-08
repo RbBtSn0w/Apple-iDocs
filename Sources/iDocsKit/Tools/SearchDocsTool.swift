@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import iDocsTelemetry
 
 public struct SearchDocsTool {
     private let logger = Logger(label: "com.snow.idocs-search-tool")
@@ -31,47 +32,52 @@ public struct SearchDocsTool {
     }
 
     public func runDetailed(query: String) async throws -> SearchDocsRunOutput {
-        logger.info("Searching Apple documentation for: \(query)")
-        let totalStart = ContinuousClock.now
-        var stages: [DocumentationSearchStageTiming] = []
+        try await iDocsTelemetry.withSpan(
+            "idocs.search.pipeline",
+            attributes: ["idocs.query": .string(query)]
+        ) {
+            logger.info("Searching Apple documentation for: \(query)")
+            let totalStart = ContinuousClock.now
+            var stages: [DocumentationSearchStageTiming] = []
 
-        let cacheStage = await searchCache(query: query)
-        stages.append(cacheStage.stage)
-        if let cached = cacheStage.results {
+            let cacheStage = await searchCache(query: query)
+            stages.append(cacheStage.stage)
+            if let cached = cacheStage.results {
+                return buildOutput(
+                    results: cached,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
+            let localStage = await searchLocal(query: query)
+            stages.append(localStage.stage)
+            if let local = localStage.results {
+                return buildOutput(
+                    results: local,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
+            let appleStage = await searchApple(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
+            stages.append(contentsOf: appleStage.stages)
+            if let apple = appleStage.results {
+                return buildOutput(
+                    results: apple,
+                    stages: stages,
+                    totalStart: totalStart
+                )
+            }
+
+            let sosumiStage = await searchSosumi(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
+            stages.append(contentsOf: sosumiStage.stages)
             return buildOutput(
-                results: cached,
+                results: sosumiStage.results,
                 stages: stages,
                 totalStart: totalStart
             )
         }
-
-        let localStage = await searchLocal(query: query)
-        stages.append(localStage.stage)
-        if let local = localStage.results {
-            return buildOutput(
-                results: local,
-                stages: stages,
-                totalStart: totalStart
-            )
-        }
-
-        let appleStage = await searchApple(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
-        stages.append(contentsOf: appleStage.stages)
-        if let apple = appleStage.results {
-            return buildOutput(
-                results: apple,
-                stages: stages,
-                totalStart: totalStart
-            )
-        }
-
-        let sosumiStage = await searchSosumi(query: query, localModuleFallbackResults: localStage.moduleFallbackResults)
-        stages.append(contentsOf: sosumiStage.stages)
-        return buildOutput(
-            results: sosumiStage.results,
-            stages: stages,
-            totalStart: totalStart
-        )
     }
 
     private func searchCache(query: String) async -> (results: [SearchResult]?, stage: DocumentationSearchStageTiming) {
@@ -355,7 +361,12 @@ public struct SearchDocsTool {
         stages: [DocumentationSearchStageTiming],
         totalStart: ContinuousClock.Instant
     ) -> SearchDocsRunOutput {
-        SearchDocsRunOutput(
+        recordStageEvents(stages)
+        iDocsTelemetry.setAttributes([
+            "idocs.result.count": .int(results.count),
+            "idocs.source": .string(primarySource(from: results) ?? "none")
+        ])
+        return SearchDocsRunOutput(
             results: results,
             instrumentation: DocumentationSearchInstrumentation(
                 totalDurationMs: totalStart.millisecondsElapsed(),
@@ -501,6 +512,23 @@ public struct SearchDocsTool {
             let result = try await group.next()!
             group.cancelAll()
             return result
+        }
+    }
+
+    private func recordStageEvents(_ stages: [DocumentationSearchStageTiming]) {
+        for stage in stages {
+            var attributes: [String: TelemetryAttributeValue] = [
+                "idocs.stage.name": .string(stage.name),
+                "idocs.stage.status": .string(stage.status.rawValue),
+                "idocs.result.count": .int(stage.resultCount),
+            ]
+            if let reason = stage.reason {
+                attributes["idocs.stage.reason"] = .string(reason)
+            }
+            if let queryAttempt = stage.queryAttempt {
+                attributes["idocs.query_attempt"] = .string(queryAttempt)
+            }
+            iDocsTelemetry.addEvent("idocs.search.stage", attributes: attributes)
         }
     }
 }
