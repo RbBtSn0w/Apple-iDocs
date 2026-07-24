@@ -618,10 +618,9 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             "idocs.locale": .string(config.locale.identifier)
         ]
         if let callerID = config.callerID {
-            attributes["idocs.caller"] = .string(callerID)
-        }
-        if let category = config.technologyCategoryFilter {
-            attributes["idocs.category_filter"] = .string(category)
+            attributes["idocs.caller.category"] = .string(
+                iDocsTelemetry.callerCategory(callerID)
+            )
         }
         return attributes
     }

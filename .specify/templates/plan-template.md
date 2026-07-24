@@ -37,7 +37,7 @@ The plan MUST explicitly answer each iDocs constitution gate:
 - **Stateless CLI/Adapter boundary**: Do CLI commands and `DocumentationService` APIs carry complete inputs and avoid session state or MCP runtime coupling?
 - **Agent Evidence Entry**: If Apple API evidence is involved, does the design route structured agent intents through `idocs resolve`, use `idocs fetch` as the canonical evidence authority, and keep `idocs search` as exploration/candidate discovery?
 - **TDD evidence**: Are RED tests planned before implementation for changed CLI, adapter, iDocsKit, diagnostics, and benchmark behavior?
-- **Observability**: Are source markers and distinct `resolve_diagnostics`, `fetch_diagnostics`, or `search_diagnostics` preserved where relevant?
+- **Observability**: Are source markers and distinct diagnostics preserved, and does the design cover the CLI root exit lifecycle, final exception ownership, external dependency spans, bounded fail-open export, and privacy-safe attributes?
 - **Simplicity**: Is any new command, data source, service, or benchmark complexity justified against the current `resolve` / `fetch` / `search` / `list` command surface?
 - **Native Swift first**: Does production runtime stay Swift/macOS native without introducing Node, Python, web servers, or MCP SDKs into the shipped CLI path?
 - **Type safety**: Are public payloads and errors modeled with explicit Swift types and constrained state values instead of untyped dictionaries or erased values?

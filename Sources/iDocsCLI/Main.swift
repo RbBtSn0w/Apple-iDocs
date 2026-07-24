@@ -2,6 +2,10 @@ import Foundation
 import iDocsApp
 import iDocsTelemetry
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
 @main
 struct Main {
     @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
@@ -26,12 +30,16 @@ struct Main {
         version: String,
         environment: [String: String]
     ) async {
-        await iDocsTelemetry.withRootSpan(
+        let exitCode = await iDocsTelemetry.withRootSpan(
             arguments: arguments,
             serviceVersion: version,
             environment: environment
         ) {
-            await iDocsCLI.main(parsedArguments)
+            await iDocsCLI.execute(arguments: parsedArguments)
+        }
+
+        if exitCode != 0 {
+            exit(exitCode)
         }
     }
 }

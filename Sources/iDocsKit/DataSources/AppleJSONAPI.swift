@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import iDocsTelemetry
 
 public actor AppleJSONAPI {
     private let logger = Logger(label: "com.snow.idocs-apple-api")
@@ -97,8 +98,19 @@ public actor AppleJSONAPI {
             do {
                 var request = URLRequest(url: url)
                 request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
+                let finalizedRequest = request
                 
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await iDocsTelemetry.withHTTPClientSpan(
+                    method: "GET",
+                    url: url,
+                    resendCount: attempt - 1
+                ) {
+                    let result = try await session.data(for: finalizedRequest)
+                    if let http = result.1 as? HTTPURLResponse {
+                        iDocsTelemetry.recordHTTPResponse(statusCode: http.statusCode)
+                    }
+                    return result
+                }
                 
                 if let httpResponse = response as? HTTPURLResponse {
                     if httpResponse.statusCode == 200 {

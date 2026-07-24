@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import iDocsTelemetry
 
 public actor AppleHelpAPI {
     private let logger = Logger(label: "com.snow.idocs-apple-help-api")
@@ -20,8 +21,18 @@ public actor AppleHelpAPI {
         var request = URLRequest(url: url)
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
         request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
+        let finalizedRequest = request
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await iDocsTelemetry.withHTTPClientSpan(
+            method: "GET",
+            url: url
+        ) {
+            let result = try await session.data(for: finalizedRequest)
+            if let http = result.1 as? HTTPURLResponse {
+                iDocsTelemetry.recordHTTPResponse(statusCode: http.statusCode)
+            }
+            return result
+        }
         guard let http = response as? HTTPURLResponse else {
             throw iDocsError.invalidResponse
         }

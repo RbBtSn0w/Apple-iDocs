@@ -32,10 +32,7 @@ public struct SearchDocsTool {
     }
 
     public func runDetailed(query: String) async throws -> SearchDocsRunOutput {
-        try await iDocsTelemetry.withSpan(
-            "idocs.search.pipeline",
-            attributes: ["idocs.query": .string(query)]
-        ) {
+        try await iDocsTelemetry.withSpan("idocs.search.pipeline") {
             logger.info("Searching Apple documentation for: \(query)")
             let totalStart = ContinuousClock.now
             var stages: [DocumentationSearchStageTiming] = []
@@ -523,10 +520,9 @@ public struct SearchDocsTool {
                 "idocs.result.count": .int(stage.resultCount),
             ]
             if let reason = stage.reason {
-                attributes["idocs.stage.reason"] = .string(reason)
-            }
-            if let queryAttempt = stage.queryAttempt {
-                attributes["idocs.query_attempt"] = .string(queryAttempt)
+                attributes["idocs.stage.reason_code"] = .string(
+                    iDocsTelemetry.reasonCode(reason)
+                )
             }
             iDocsTelemetry.addEvent("idocs.search.stage", attributes: attributes)
         }
