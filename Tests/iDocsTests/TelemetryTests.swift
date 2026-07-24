@@ -160,6 +160,31 @@ struct TelemetryTests {
         ])))
     }
 
+    @Test("Telemetry redacts an unknown command positional argument")
+    func telemetryRedactsUnknownCommand() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs", "/Users/snow/private-command", "secret-value"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // no-op
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(
+            exporter.getFinishedSpanItems().first { $0.name == "idocs" }
+        )
+        #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
+            .string("idocs"),
+            .string("<argument>"),
+            .string("<argument>")
+        ])))
+    }
+
     @Test("Final exceptions emit one privacy-safe trace-correlated log")
     func finalExceptionLogIsSafeAndCorrelated() async throws {
         let spanExporter = InMemoryExporter()

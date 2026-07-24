@@ -599,7 +599,9 @@ public enum iDocsTelemetry {
                     sanitized.append(placeholder(for: option))
                 }
             } else if !retainedCommand {
-                sanitized.append(argument)
+                sanitized.append(
+                    knownCommands.contains(argument) ? argument : "<argument>"
+                )
                 retainedCommand = true
             } else {
                 sanitized.append("<argument>")
@@ -608,6 +610,13 @@ public enum iDocsTelemetry {
         }
         return sanitized
     }
+
+    private static let knownCommands: Set<String> = [
+        "search",
+        "resolve",
+        "fetch",
+        "list"
+    ]
 
     private static func optionRequiresValue(_ option: String) -> Bool {
         !["--json", "--version", "--help", "-h"].contains(option)
