@@ -728,7 +728,7 @@ private final class BoundedSynchronousHTTPClient: HTTPClient, @unchecked Sendabl
     }
 }
 
-private final class HTTPResponseBox: @unchecked Sendable {
+final class HTTPResponseBox: @unchecked Sendable {
     private let lock = NSLock()
     private var response: URLResponse?
     private var error: Error?
@@ -748,9 +748,6 @@ private final class HTTPResponseBox: @unchecked Sendable {
             guard let response = response as? HTTPURLResponse else {
                 return .failure(BoundedHTTPClientError.invalidResponse)
             }
-            guard (200..<300).contains(response.statusCode) else {
-                return .failure(BoundedHTTPClientError.httpStatus(response.statusCode))
-            }
             return .success(response)
         }
     }
@@ -759,7 +756,6 @@ private final class HTTPResponseBox: @unchecked Sendable {
 private enum BoundedHTTPClientError: Error {
     case timedOut
     case invalidResponse
-    case httpStatus(Int)
 }
 
 private struct DictionaryGetter: Getter {

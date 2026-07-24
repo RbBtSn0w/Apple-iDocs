@@ -6,7 +6,7 @@ import Testing
 @testable import iDocsApp
 @testable import iDocsKit
 import iDocsAdapter
-import iDocsTelemetry
+@testable import iDocsTelemetry
 
 @Suite("Telemetry Tests", .serialized)
 struct TelemetryTests {
@@ -55,6 +55,29 @@ struct TelemetryTests {
 
         let fallback = iDocsTelemetry.resolveLogsEndpoint(environment: [:])
         #expect(fallback == iDocsTelemetry.defaultLogsEndpoint)
+    }
+
+    @Test("OTLP HTTP transport preserves non-2xx responses for exporter handling")
+    func otlpHTTPTransportPreservesNonSuccessResponse() throws {
+        let responseBox = HTTPResponseBox()
+        let response = try #require(
+            HTTPURLResponse(
+                url: URL(string: "https://otel.example.com/v1/logs")!,
+                statusCode: 429,
+                httpVersion: nil,
+                headerFields: ["Retry-After": "1"]
+            )
+        )
+
+        responseBox.store(response: response, error: nil)
+
+        switch responseBox.result() {
+        case .success(let preservedResponse):
+            #expect(preservedResponse.statusCode == 429)
+            #expect(preservedResponse.value(forHTTPHeaderField: "Retry-After") == "1")
+        case .failure(let error):
+            Issue.record("Expected the HTTP response to reach the exporter, got \(error)")
+        }
     }
 
     @Test("Telemetry opt-out detects both disable environment variables")
