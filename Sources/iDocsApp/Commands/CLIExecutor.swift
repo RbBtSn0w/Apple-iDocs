@@ -105,8 +105,8 @@ public enum CLIExecutor {
                     )
                 }
                 CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.recordError(error)
                 iDocsTelemetry.setExitCode(1)
+                recordCommandFailure(error, command: "search")
                 return 1
             }
         }
@@ -199,8 +199,8 @@ public enum CLIExecutor {
                     )
                 }
                 CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.recordError(error)
                 iDocsTelemetry.setExitCode(1)
+                recordCommandFailure(error, command: "fetch")
                 return 1
             }
         }
@@ -270,8 +270,8 @@ public enum CLIExecutor {
                     )
                 }
                 CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.recordError(error)
                 iDocsTelemetry.setExitCode(1)
+                recordCommandFailure(error, command: "resolve")
                 return 1
             }
         }
@@ -364,8 +364,8 @@ public enum CLIExecutor {
                     )
                 }
                 CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.recordError(error)
                 iDocsTelemetry.setExitCode(1)
+                recordCommandFailure(error, command: "list")
                 return 1
             }
         }
@@ -381,9 +381,106 @@ public enum CLIExecutor {
             "idocs.output.format": .string(outputFormat.rawValue)
         ]
         if let callerID {
-            attributes["idocs.caller"] = .string(callerID)
+            attributes["idocs.caller.category"] = .string(
+                iDocsTelemetry.callerCategory(callerID)
+            )
         }
         return attributes
+    }
+
+    private static func recordCommandFailure(_ error: Error, command: String) {
+        let descriptor = failureDescriptor(for: error, command: command)
+        if descriptor.expected {
+            iDocsTelemetry.markFailure(descriptor)
+        } else {
+            iDocsTelemetry.captureException(descriptor)
+        }
+    }
+
+    private static func failureDescriptor(
+        for error: Error,
+        command: String
+    ) -> TelemetryFailureDescriptor {
+        let safeMessage = "Documentation \(command) failed."
+        let slug = "idocs.command.\(command).failed"
+        let exceptionType = String(describing: Swift.type(of: error))
+
+        guard let documentationError = error as? DocumentationError else {
+            return TelemetryFailureDescriptor(
+                errorType: "internal",
+                category: "internal",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        }
+
+        switch documentationError {
+        case .notFound:
+            return TelemetryFailureDescriptor(
+                errorType: "not_found",
+                category: "user",
+                slug: slug,
+                expected: true,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .invalidConfiguration, .invalidResolveIntent:
+            return TelemetryFailureDescriptor(
+                errorType: "invalid_argument",
+                category: "user",
+                slug: slug,
+                expected: true,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .networkError:
+            return TelemetryFailureDescriptor(
+                errorType: "network_unavailable",
+                category: "dependency",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .unauthorized:
+            return TelemetryFailureDescriptor(
+                errorType: "permission_denied",
+                category: "dependency",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .parsingError, .unsupportedSourceType:
+            return TelemetryFailureDescriptor(
+                errorType: "decode_failed",
+                category: "data",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .aggregateFetchFailure:
+            return TelemetryFailureDescriptor(
+                errorType: "upstream_rejected",
+                category: "dependency",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        case .incompatibleVersion, .internalError:
+            return TelemetryFailureDescriptor(
+                errorType: "internal",
+                category: "internal",
+                slug: slug,
+                expected: false,
+                exceptionType: exceptionType,
+                safeMessage: safeMessage
+            )
+        }
     }
 
     private static func primarySource(from sources: [RetrievalSource?]) -> String? {
@@ -533,9 +630,15 @@ public enum CLIExecutor {
         guard exitCode != 0 else {
             return
         }
-        iDocsTelemetry.recordError(
-            JSONPayloadWriteError(command: command),
-            type: "json_output_encoding_failed"
+        iDocsTelemetry.captureException(
+            TelemetryFailureDescriptor(
+                errorType: "internal",
+                category: "internal",
+                slug: "idocs.command.\(command).json_output_failed",
+                expected: false,
+                exceptionType: "JSONPayloadWriteError",
+                safeMessage: "JSON output encoding failed."
+            )
         )
     }
 

@@ -97,6 +97,7 @@
 - If the feature changes CLI output, require backward compatibility for existing optional JSON fields and explicit diagnostics for the affected capability.
 - If the feature changes benchmark or issue automation, require capability-layered reporting and limit P0 issue automation to resolve/fetch golden-truth failures.
 - If the feature adds runtime dependencies, state why Swift/macOS native implementation is insufficient and how the shipped CLI remains free of Node/Python/MCP runtime coupling.
+- If the feature adds or changes runtime behavior, specify its OTel root/command/dependency spans or events, final error ownership, and the privacy classification of every new attribute.
 
 *Example of marking unclear requirements:*
 

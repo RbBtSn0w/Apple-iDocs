@@ -28,10 +28,7 @@ public struct FetchDocTool {
     }
 
     public func runDetailed(path: String) async throws -> FetchDocResult {
-        try await iDocsTelemetry.withSpan(
-            "idocs.fetch.pipeline",
-            attributes: ["idocs.path": .string(path)]
-        ) {
+        try await iDocsTelemetry.withSpan("idocs.fetch.pipeline") {
             logger.info("Fetching Apple documentation for path: \(path)")
             var attempts: [FetchSourceAttempt] = []
 
@@ -40,14 +37,14 @@ public struct FetchDocTool {
                 if let content = try? JSONDecoder().decode(DocCContent.self, from: cachedData) {
                     logger.info("Disk cache hit for: \(path)")
                     attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
-                    recordAttemptEvents(attempts, path: path)
+                    recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
                     return FetchDocResult(markdown: try renderer.render(content), source: .cache, sourceAttempts: attempts)
                 }
                 if let markdown = String(data: cachedData, encoding: .utf8), !markdown.isEmpty {
                     logger.info("Disk cache markdown hit for: \(path)")
                     attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
-                    recordAttemptEvents(attempts, path: path)
+                    recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
                     return FetchDocResult(markdown: markdown, source: .cache, sourceAttempts: attempts)
                 }
@@ -65,7 +62,7 @@ public struct FetchDocTool {
                         try? await diskCache.set(path, value: data, ttl: 3600 * 24)
                     }
                     attempts.append(FetchSourceAttempt(source: .local, status: .hit))
-                    recordAttemptEvents(attempts, path: path)
+                    recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("local")])
                     return FetchDocResult(markdown: try renderer.render(localContent), source: .local, sourceAttempts: attempts)
                 }
@@ -82,7 +79,7 @@ public struct FetchDocTool {
                         try? await diskCache.set(path, value: data, ttl: 3600 * 12)
                     }
                     attempts.append(FetchSourceAttempt(source: .help, status: .hit))
-                    recordAttemptEvents(attempts, path: path)
+                    recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("help")])
                     return FetchDocResult(markdown: markdown, source: .help, sourceAttempts: attempts)
                 } catch {
@@ -99,7 +96,7 @@ public struct FetchDocTool {
                         hint: "This Apple page family is real but not supported by idocs fetch; use deliberate web fallback if evidence is required."
                     )
                 )
-                recordAttemptEvents(attempts, path: path)
+                recordAttemptEvents(attempts)
                 throw iDocsError.unsupportedSourceType(path: path, sourceKind: sourceKind, attempts: attempts)
             }
 
@@ -112,7 +109,7 @@ public struct FetchDocTool {
                         try? await diskCache.set(path, value: data, ttl: 3600 * 24)
                     }
                     attempts.append(appleHitAttempt(for: result.diagnostics))
-                    recordAttemptEvents(attempts, path: path)
+                    recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("apple")])
                     return FetchDocResult(markdown: try renderer.render(content), source: .apple, sourceAttempts: attempts)
                 } catch {
@@ -128,12 +125,12 @@ public struct FetchDocTool {
                     try? await diskCache.set(path, value: data, ttl: 3600 * 12)
                 }
                 attempts.append(FetchSourceAttempt(source: .sosumi, status: .hit))
-                recordAttemptEvents(attempts, path: path)
+                recordAttemptEvents(attempts)
                 iDocsTelemetry.setAttributes(["idocs.source": .string("sosumi")])
                 return FetchDocResult(markdown: markdown, source: .sosumi, sourceAttempts: attempts)
             } catch {
                 attempts.append(FetchSourceAttempt(source: .sosumi, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
-                recordAttemptEvents(attempts, path: path)
+                recordAttemptEvents(attempts)
                 throw iDocsError.aggregateFetchFailure(path: path, attempts: attempts)
             }
         }
@@ -187,15 +184,16 @@ public struct FetchDocTool {
         return nil
     }
 
-    private func recordAttemptEvents(_ attempts: [FetchSourceAttempt], path: String) {
+    private func recordAttemptEvents(_ attempts: [FetchSourceAttempt]) {
         for attempt in attempts {
             var attributes: [String: TelemetryAttributeValue] = [
                 "idocs.source": .string(attempt.source.rawValue),
-                "idocs.stage.status": .string(attempt.status.rawValue),
-                "idocs.path": .string(path)
+                "idocs.stage.status": .string(attempt.status.rawValue)
             ]
             if let reason = attempt.reason {
-                attributes["idocs.stage.reason"] = .string(reason)
+                attributes["idocs.stage.reason_code"] = .string(
+                    iDocsTelemetry.reasonCode(reason)
+                )
             }
             iDocsTelemetry.addEvent("idocs.fetch.attempt", attributes: attributes)
         }

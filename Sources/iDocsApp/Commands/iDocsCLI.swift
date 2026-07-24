@@ -1,6 +1,7 @@
 import Foundation
 import ArgumentParser
 import iDocsAdapter
+import iDocsTelemetry
 
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 public struct iDocsCLI: AsyncParsableCommand {
@@ -25,6 +26,47 @@ public struct iDocsCLI: AsyncParsableCommand {
 
     func emitVersion(_ resolvedVersion: String = CLIVersion.current()) {
         CLIEnvironment.writeStdout(resolvedVersion)
+    }
+}
+
+@available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
+public extension iDocsCLI {
+    static func execute(arguments: [String]) async -> Int32 {
+        do {
+            var command = try parseAsRoot(arguments)
+            if var asyncCommand = command as? any AsyncParsableCommand {
+                try await asyncCommand.run()
+            } else {
+                try command.run()
+            }
+            let exitCode = ExitCode.success.rawValue
+            iDocsTelemetry.setExitCode(exitCode)
+            return exitCode
+        } catch {
+            let exitCode = exitCode(for: error)
+            let message = fullMessage(for: error)
+            if !message.isEmpty {
+                if exitCode.isSuccess {
+                    CLIEnvironment.writeStdout(message)
+                } else {
+                    CLIEnvironment.writeStderr(message)
+                }
+            }
+            iDocsTelemetry.setExitCode(exitCode.rawValue)
+            if !exitCode.isSuccess, !(error is ExitCode) {
+                iDocsTelemetry.markFailure(
+                    TelemetryFailureDescriptor(
+                        errorType: "invalid_argument",
+                        category: "user",
+                        slug: "idocs.cli.invalid_argument",
+                        expected: true,
+                        exceptionType: "ArgumentParserError",
+                        safeMessage: "CLI arguments are invalid."
+                    )
+                )
+            }
+            return exitCode.rawValue
+        }
     }
 }
 

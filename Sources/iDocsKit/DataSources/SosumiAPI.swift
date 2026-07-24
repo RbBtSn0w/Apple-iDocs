@@ -1,5 +1,6 @@
 import Foundation
 import Logging
+import iDocsTelemetry
 
 public actor SosumiAPI {
     private let logger = Logger(label: "com.snow.idocs-sosumi-api")
@@ -17,8 +18,18 @@ public actor SosumiAPI {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
+        let finalizedRequest = request
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await iDocsTelemetry.withHTTPClientSpan(
+            method: "GET",
+            url: url
+        ) {
+            let result = try await session.data(for: finalizedRequest)
+            if let http = result.1 as? HTTPURLResponse {
+                iDocsTelemetry.recordHTTPResponse(statusCode: http.statusCode)
+            }
+            return result
+        }
         guard let http = response as? HTTPURLResponse else {
             throw iDocsError.maxRetriesReached
         }
@@ -46,8 +57,18 @@ public actor SosumiAPI {
         var request = URLRequest(url: url)
         request.setValue("text/markdown, text/plain;q=0.9", forHTTPHeaderField: "Accept")
         request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
+        let finalizedRequest = request
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await iDocsTelemetry.withHTTPClientSpan(
+            method: "GET",
+            url: url
+        ) {
+            let result = try await session.data(for: finalizedRequest)
+            if let http = result.1 as? HTTPURLResponse {
+                iDocsTelemetry.recordHTTPResponse(statusCode: http.statusCode)
+            }
+            return result
+        }
         guard let http = response as? HTTPURLResponse else {
             throw iDocsError.maxRetriesReached
         }

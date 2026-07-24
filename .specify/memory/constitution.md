@@ -1,26 +1,20 @@
 <!--
 ## 同步影响报告 (Sync Impact Report)
 
-- **版本变更**: 2.0.1 → 2.1.0 (新增 agent-facing evidence 入口原则)
-- **新增原则**:
-  - III. Agent Evidence Entry
+- **版本变更**: 2.1.0 → 2.2.0（实质扩展 OTel 生命周期、异常、依赖和隐私契约）
 - **修改原则**:
-  - I. 离线优先: 纳入 `resolve` 的直接路径合成与 fetch 验证链路
-  - II. 无状态命令与适配层设计: 明确 `resolve` 必须走 CLI/Adapter 公共边界
-  - V. 可观测性: 扩展 resolver/fetch/search diagnostics 要求
-  - VI. 极简主义: 主产品命令面更新为 `resolve` / `fetch` / `search` / `list`
-  - VIII. 类型安全: 纳入 `ResolveIntent` / `ResolveResult` / confidence 状态建模
+  - V. 可观测性: 从本地结构化日志和 diagnostics 扩展为完整 CLI OTel 契约
 - **修改章节**:
-  - 技术约束: 明确 `idocs resolve` 是 P0 agent-facing 能力，`fetch` 是证据权威，`search` 是探索入口；benchmark 按 `resolve` / `fetch` / `search` capability 分层。
-  - 开发工作流: 审查清单加入 resolve/fetch/search 责任边界与 capability-layered audit 检查。
+  - 技术约束: 补充当前 OpenTelemetry Swift 依赖
+  - 开发工作流: 审查清单加入 OTel 生命周期、错误所有权与隐私门禁
 - **模板同步状态**:
-  - `.specify/templates/plan-template.md` — ✅ Constitution Check 章节已与原则对齐
-  - `.specify/templates/spec-template.md` — ✅ 需求/场景模板已提示 agent-facing、evidence、compatibility 与 diagnostics 边界
-  - `.specify/templates/tasks-template.md` — ✅ 任务分类已要求 TDD、Adapter/CLI/diagnostics/audit 任务
+  - `.specify/templates/plan-template.md` — ✅ Constitution Check 已加入 OTel 设计门禁
+  - `.specify/templates/spec-template.md` — ✅ Constitution Alignment 已加入 telemetry 需求提示
+  - `.specify/templates/tasks-template.md` — ✅ 测试和任务模板已加入 telemetry 覆盖
   - `.specify/templates/commands/*.md` — ✅ 不适用；当前仓库没有 commands 模板目录
-  - `README.md` — ✅ CLI usage 与 feature 描述已同步 `resolve`
-  - `AGENTS.md` — ✅ 已包含 P0 agent-facing resolve 指导
-- **待办事项**: 无
+  - `docs/analysis/2026-07-08-idocs-otel-design.md` — ✅ 已更新为 OTel v2 契约
+  - `AGENTS.md` — ✅ 已包含 CLI semantic conventions 与隐私要求
+- **待办事项**: 共享 Worker 源码不在本仓库；按独立基础设施交付和部署门禁处理
 -->
 
 # iDocs Constitution
@@ -78,15 +72,25 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
 
 ### V. 可观测性 (Observability)
 
-所有运行时行为 **必须 (MUST)** 通过结构化日志可追踪：
+所有运行时行为 **必须 (MUST)** 同时具备本地诊断和隐私安全的 OpenTelemetry 可追踪性：
 
 - 基于 `swift-log` 或 Adapter 注入的 `DocumentationLogger` 输出分级日志（debug / info / warning / error）
 - CLI 成功输出 **必须 (MUST)** 暴露来源标记（如 `cache` / `local` / `apple` / `sosumi`），便于问题定位
 - **必须 (MUST)** 记录的事件：Xcode 本地文档发现、缓存命中/未中、远端回落、错误降级
 - `resolve` JSON **必须 (MUST)** 区分 `resolve_diagnostics` 与 `fetch_diagnostics`，不得把 resolver scoring、path attempt、fetch source attempt 混入同一个诊断桶
 - `search` JSON **必须 (MUST)** 保留 `search_diagnostics`，用于解释探索候选质量，而不是证明 resolver correctness
+- 每次 CLI invocation **必须 (MUST)** 产生符合 OTel CLI semantic conventions 的根 span，并在任何进程退出前记录
+  `process.executable.name`、`process.pid`、`process.exit.code` 和有条件的低基数 `error.type`，完成 bounded flush
+- Apple、Sosumi 等 HTTP 调用和 `mdfind` 等外部进程 **必须 (MUST)** 使用 `CLIENT` span 建模；重试必须可按 attempt 区分
+- 最终未恢复异常 **必须 (MUST)** 由 command 边界通过 OTel Logs API 捕捉一次；下层仅标记失败，
+  禁止多层重复 exception event
+- 遥测 **禁止 (MUST NOT)** 包含原始 query、path、caller、token、自由文本诊断、localized error、
+  response body 或 stacktrace；`process.command_args` 只能使用 flag-aware 固定占位符脱敏
+- 遥测初始化、导出、flush 和共享网关故障 **禁止 (MUST NOT)** 改变 CLI 输出、stderr 或退出码；
+  客户端禁止保存或发送 Honeycomb 凭据
 
-**理由**: CLI 是当前唯一主产品入口。缺乏可观测性会直接放大多源回落链路中的定位成本。
+**理由**: CLI 是当前唯一主产品入口。完整且隐私安全的 invocation、dependency 与 exception
+链路能降低多源回落定位成本，同时避免为了诊断泄露用户输入或本机信息。
 
 ### VI. 极简主义 (Simplicity)
 
@@ -143,6 +147,8 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
   |------|------|------|
   | `apple/swift-log` | latest | 结构化日志 |
   | `apple/swift-argument-parser` | latest | CLI 命令面 |
+  | `open-telemetry/opentelemetry-swift-core` | 2.5.1 | OTel API、SDK、trace/log providers |
+  | `open-telemetry/opentelemetry-swift` | 2.4.1 | OTLP/HTTP protobuf exporters |
 - **远端源**: Apple 官方文档端点为主，`sosumi.ai` 作为固定回落源
 - **目标平台**: macOS（利用 Xcode 本地文档和 Spotlight 等系统级能力）
 - **编译产物**: `idocs` CLI 二进制 + npm wrapper；项目级 MCP 配置仅用于 benchmark 资产，不属于主产品运行时
@@ -164,6 +170,9 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
   - audit/issue routing 是否按 `resolve` / `fetch` / `search` capability 分层？
   - 是否存在不必要的 `any` 类型？
   - 关键事件是否有结构化日志？
+  - CLI 根 span 是否覆盖最终退出码并在进程退出前完成 bounded flush？
+  - HTTP/外部进程是否使用正确 `SpanKind`，最终异常是否只有一个 Logs API owner？
+  - 遥测是否通过 denylist、typed helpers 和测试证明不含原始 query/path/caller/error text？
   - 错误处理是否优雅降级而非直接失败？
 - **版本管理**: 遵循语义化版本 (SemVer)
 - **提交规范**: 使用 Conventional Commits 格式
@@ -180,4 +189,4 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
   - PATCH: 措辞澄清、错别字修正、非语义性优化
 - **合规检查**: 每个 Plan 阶段 **必须 (MUST)** 执行 Constitution Check 以验证设计决策符合原则
 
-**Version**: 2.1.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-05-17
+**Version**: 2.2.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-07-24

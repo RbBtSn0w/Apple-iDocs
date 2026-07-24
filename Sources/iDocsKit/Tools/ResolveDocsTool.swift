@@ -217,10 +217,7 @@ public struct ResolveDocsTool {
     }
 
     public func run(intent: ResolveDocsIntent) async throws -> ResolveDocsResult {
-        try await iDocsTelemetry.withSpan(
-            "idocs.resolve.pipeline",
-            attributes: ["idocs.query": .string(searchQuery(for: intent))]
-        ) {
+        try await iDocsTelemetry.withSpan("idocs.resolve.pipeline") {
             if let validationError = intent.validationErrorMessage {
                 throw ResolveDocsError.invalidIntent(validationError)
             }
@@ -588,13 +585,9 @@ public struct ResolveDocsTool {
                 "idocs.stage.status": .string(diagnostic.status)
             ]
             if let reason = diagnostic.reason {
-                attributes["idocs.stage.reason"] = .string(reason)
-            }
-            if let pathAttempt = diagnostic.pathAttempt {
-                attributes["idocs.path"] = .string(pathAttempt)
-            }
-            if let queryAttempt = diagnostic.queryAttempt {
-                attributes["idocs.query_attempt"] = .string(queryAttempt)
+                attributes["idocs.stage.reason_code"] = .string(
+                    iDocsTelemetry.reasonCode(reason)
+                )
             }
             iDocsTelemetry.addEvent("idocs.resolve.stage", attributes: attributes)
         }

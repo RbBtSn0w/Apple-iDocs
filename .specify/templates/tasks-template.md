@@ -71,6 +71,7 @@ Examples of foundational tasks (adjust based on your feature):
 - [ ] T007 Wire shared CLI payload or diagnostics models
 - [ ] T008 Configure source/fetch/search diagnostics without merging capability-specific evidence
 - [ ] T009 Update benchmark capability fixtures if audit behavior changes
+- [ ] T010 Add RED telemetry tests for lifecycle, dependency spans, error ownership, and privacy fields
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -86,17 +87,16 @@ Examples of foundational tasks (adjust based on your feature):
 
 > **NOTE: Write these tests FIRST and record the failing RED result before implementation**
 
-- [ ] T010 [P] [US1] Adapter/CLI contract test for [capability] in `Tests/`
-- [ ] T011 [P] [US1] iDocsKit behavior test for [tool/path/diagnostic] in `Tests/iDocsTests/`
+- [ ] T011 [P] [US1] Adapter/CLI contract test for [capability] in `Tests/`
+- [ ] T012 [P] [US1] iDocsKit behavior test for [tool/path/diagnostic] in `Tests/iDocsTests/`
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Add or update explicit Swift models in `Sources/iDocsAdapter/` or `Sources/iDocsKit/`
-- [ ] T013 [US1] Implement core behavior in `Sources/iDocsKit/`
-- [ ] T014 [US1] Wire adapter behavior through `Sources/iDocsAdapter/`
-- [ ] T015 [US1] Wire CLI command/executor/output in `Sources/iDocsApp/` or `Sources/iDocsCLI/`
-- [ ] T016 [US1] Add validation, structured errors, and diagnostics
-- [ ] T017 [US1] Add source markers/logging for user story operations
+- [ ] T013 [P] [US1] Add or update explicit Swift models in `Sources/iDocsAdapter/` or `Sources/iDocsKit/`
+- [ ] T014 [US1] Implement core behavior in `Sources/iDocsKit/`
+- [ ] T015 [US1] Wire adapter behavior through `Sources/iDocsAdapter/`
+- [ ] T016 [US1] Wire CLI command/executor/output in `Sources/iDocsApp/` or `Sources/iDocsCLI/`
+- [ ] T017 [US1] Add validation, structured errors, diagnostics, and OTel instrumentation
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
