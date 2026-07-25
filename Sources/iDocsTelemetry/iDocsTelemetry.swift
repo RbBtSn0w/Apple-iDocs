@@ -58,7 +58,12 @@ public struct TelemetryFailureDescriptor: Sendable, Equatable {
 
 public enum iDocsTelemetry {
     public static let defaultTracesEndpoint = URL(string: "https://telemetry-gateway.hamiltonsnow.workers.dev/v1/traces")!
-    public static let defaultLogsEndpoint = URL(string: "https://telemetry-gateway.hamiltonsnow.workers.dev/v1/logs")!
+    static let gatewayOrigins = Set([
+        "https://telemetry-gateway-development.hamiltonsnow.workers.dev",
+        "https://telemetry-gateway-staging.hamiltonsnow.workers.dev",
+        "https://telemetry-gateway.hamiltonsnow.workers.dev",
+    ])
+    static let gatewayProfile = ("otel-gateway-profile", "anonymous-client-v1")
     public static let serviceName = "idocs"
     public static let testServiceName = "idocs-test"
     public static let telemetryEnvironmentVariable = "IDOCS_TELEMETRY_ENVIRONMENT"
@@ -66,16 +71,12 @@ public enum iDocsTelemetry {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var runtime = RuntimeState(
         tracerProvider: nil,
-        logRecordProcessor: nil,
-        tracer: nil,
-        logger: nil
+        tracer: nil
     )
 
     private struct RuntimeState: @unchecked Sendable {
         let tracerProvider: TracerProviderSdk?
-        let logRecordProcessor: LogRecordProcessor?
         let tracer: Tracer?
-        let logger: OpenTelemetryApi.Logger?
     }
 
     public static func bootstrap(
@@ -86,21 +87,20 @@ public enum iDocsTelemetry {
             lock.withLock {
                 runtime = RuntimeState(
                     tracerProvider: nil,
-                    logRecordProcessor: nil,
-                    tracer: nil,
-                    logger: nil
+                    tracer: nil
                 )
             }
             return
         }
 
         let resource = buildResource(serviceVersion: serviceVersion, environment: environment)
+        let tracesEndpoint = resolveTracesEndpoint(environment: environment)
         let traceExporter = OtlpHttpTraceExporter(
-            endpoint: resolveTracesEndpoint(environment: environment),
+            endpoint: tracesEndpoint,
             config: OtlpConfiguration(
                 timeout: 0.15,
                 compression: .gzip,
-                headers: nil,
+                headers: gatewayHeaders(for: tracesEndpoint),
                 exportAsJson: false
             ),
             envVarHeaders: []
@@ -117,25 +117,7 @@ public enum iDocsTelemetry {
             .add(spanProcessor: traceProcessor)
             .build()
 
-        let logExporter = OtlpHttpLogExporter(
-            endpoint: resolveLogsEndpoint(environment: environment),
-            config: OtlpConfiguration(
-                timeout: 0.1,
-                compression: .gzip,
-                headers: nil,
-                exportAsJson: false
-            ),
-            httpClient: BoundedSynchronousHTTPClient(timeout: 0.1),
-            envVarHeaders: []
-        )
-        let logProcessor = SimpleLogRecordProcessor(logRecordExporter: logExporter)
-        let loggerProvider = LoggerProviderBuilder()
-            .with(resource: resource)
-            .with(processors: [logProcessor])
-            .build()
-
         OpenTelemetry.registerTracerProvider(tracerProvider: provider)
-        OpenTelemetry.registerLoggerProvider(loggerProvider: loggerProvider)
         OpenTelemetry.registerFeedbackHandler { _ in
             // Exporter diagnostics stay off the CLI surface.
         }
@@ -144,31 +126,23 @@ public enum iDocsTelemetry {
             instrumentationName: "com.snow.idocs.telemetry",
             instrumentationVersion: serviceVersion
         )
-        let logger = loggerProvider.loggerBuilder(
-            instrumentationScopeName: "com.snow.idocs.telemetry"
-        )
-        .setInstrumentationVersion(serviceVersion)
-        .build()
         lock.withLock {
             runtime = RuntimeState(
                 tracerProvider: provider,
-                logRecordProcessor: logProcessor,
-                tracer: tracer,
-                logger: logger
+                tracer: tracer
             )
         }
     }
 
     public static func installForTesting(
         spanExporter: SpanExporter,
-        logRecordExporter: LogRecordExporter? = nil,
+        logRecordExporter _: LogRecordExporter? = nil,
         serviceVersion: String = "test"
     ) {
         let resource = Resource(attributes: [
             "service.name": AttributeValue(testServiceName),
             "service.version": AttributeValue(serviceVersion),
-            "service.namespace": AttributeValue("com.snow"),
-            "deployment.environment": AttributeValue("test")
+            "service.namespace": AttributeValue("com.snow")
         ])
         let provider = TracerProviderBuilder()
             .with(resource: resource)
@@ -181,31 +155,10 @@ public enum iDocsTelemetry {
             instrumentationVersion: serviceVersion
         )
 
-        let logProcessor = logRecordExporter.map {
-            SimpleLogRecordProcessor(logRecordExporter: $0)
-        }
-        let logger: OpenTelemetryApi.Logger?
-        if let logProcessor {
-            let loggerProvider = LoggerProviderBuilder()
-                .with(resource: resource)
-                .with(processors: [logProcessor])
-                .build()
-            OpenTelemetry.registerLoggerProvider(loggerProvider: loggerProvider)
-            logger = loggerProvider.loggerBuilder(
-                instrumentationScopeName: "com.snow.idocs.telemetry"
-            )
-            .setInstrumentationVersion(serviceVersion)
-            .build()
-        } else {
-            logger = nil
-        }
-
         lock.withLock {
             runtime = RuntimeState(
                 tracerProvider: provider,
-                logRecordProcessor: logProcessor,
-                tracer: tracer,
-                logger: logger
+                tracer: tracer
             )
         }
     }
@@ -214,9 +167,7 @@ public enum iDocsTelemetry {
         lock.withLock {
             runtime = RuntimeState(
                 tracerProvider: nil,
-                logRecordProcessor: nil,
-                tracer: nil,
-                logger: nil
+                tracer: nil
             )
         }
     }
@@ -224,15 +175,11 @@ public enum iDocsTelemetry {
     public static func shutdown() {
         let currentRuntime = lock.withLock { runtime }
         currentRuntime.tracerProvider?.forceFlush(timeout: 0.2)
-        _ = currentRuntime.logRecordProcessor?.forceFlush(explicitTimeout: 0.1)
         currentRuntime.tracerProvider?.shutdown()
-        _ = currentRuntime.logRecordProcessor?.shutdown(explicitTimeout: 0.1)
         lock.withLock {
             runtime = RuntimeState(
                 tracerProvider: nil,
-                logRecordProcessor: nil,
-                tracer: nil,
-                logger: nil
+                tracer: nil
             )
         }
     }
@@ -240,7 +187,6 @@ public enum iDocsTelemetry {
     public static func flush(timeout: TimeInterval = 0.2) {
         let currentRuntime = lock.withLock { runtime }
         currentRuntime.tracerProvider?.forceFlush(timeout: timeout)
-        _ = currentRuntime.logRecordProcessor?.forceFlush(explicitTimeout: min(timeout, 0.1))
     }
 
     public static func resolveTracesEndpoint(
@@ -254,15 +200,14 @@ public enum iDocsTelemetry {
         )
     }
 
-    public static func resolveLogsEndpoint(
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> URL {
-        resolveEndpoint(
-            signalEnvironmentKey: "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
-            signalPath: "v1/logs",
-            fallback: defaultLogsEndpoint,
-            environment: environment
-        )
+    static func gatewayHeaders(for endpoint: URL) -> [(String, String)]? {
+        guard endpoint.scheme?.lowercased() == "https",
+              (endpoint.port ?? 443) == 443,
+              gatewayOrigins.contains("https://\(endpoint.host?.lowercased() ?? "")")
+        else {
+            return nil
+        }
+        return [gatewayProfile]
     }
 
     public static func telemetryDisabled(
@@ -289,14 +234,18 @@ public enum iDocsTelemetry {
     }
 
     public static func reasonCode(_ value: String) -> String {
-        guard !value.isEmpty, value.count <= 64 else {
-            return "other"
+        if value.hasPrefix("remote_decode_failed.") {
+            return "remote_decode_failed"
         }
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789_.-")
-        guard value.unicodeScalars.allSatisfy(allowed.contains) else {
-            return "other"
+        if value.hasPrefix("remote_decode_partial.") {
+            return "remote_decode_partial"
         }
-        return value
+        if value.hasPrefix("http_"),
+           value.dropFirst(5).count == 3,
+           value.dropFirst(5).allSatisfy(\.isNumber) {
+            return "http_error"
+        }
+        return allowedReasonCodes.contains(value) ? value : "other"
     }
 
     public static func currentSpanName() -> String? {
@@ -361,7 +310,10 @@ public enum iDocsTelemetry {
         }
         span.setAttribute(key: "error", value: AttributeValue(true))
         span.setAttribute(key: "error.type", value: AttributeValue(descriptor.errorType))
-        span.setAttribute(key: "error.category", value: AttributeValue(descriptor.category))
+        span.setAttribute(
+            key: "error.category",
+            value: AttributeValue(normalizedErrorCategory(descriptor.category))
+        )
         span.setAttribute(key: "error.expected", value: AttributeValue(descriptor.expected))
         span.setAttribute(key: "exception.slug", value: AttributeValue(descriptor.slug))
         span.status = .error(description: descriptor.errorType)
@@ -369,22 +321,6 @@ public enum iDocsTelemetry {
 
     public static func captureException(_ descriptor: TelemetryFailureDescriptor) {
         markFailure(descriptor)
-        guard let logger = lock.withLock({ runtime.logger }) else {
-            return
-        }
-        logger.logRecordBuilder()
-            .setEventName("exception")
-            .setSeverity(.error)
-            .setBody(AttributeValue(descriptor.safeMessage))
-            .setAttributes([
-                "exception.type": AttributeValue(descriptor.exceptionType),
-                "exception.message": AttributeValue(descriptor.safeMessage),
-                "exception.slug": AttributeValue(descriptor.slug),
-                "error.type": AttributeValue(descriptor.errorType),
-                "error.category": AttributeValue(descriptor.category),
-                "error.expected": AttributeValue(descriptor.expected)
-            ])
-            .emit()
     }
 
     @discardableResult
@@ -554,22 +490,18 @@ public enum iDocsTelemetry {
         return W3CTraceContextPropagator().extract(carrier: carrier, getter: DictionaryGetter())
     }
 
-    private static func buildResource(
+    static func buildResource(
         serviceVersion: String,
         environment: [String: String]
     ) -> Resource {
-        var attributes: [String: AttributeValue] = [
-            "service.name": AttributeValue(
-                environment[telemetryEnvironmentVariable] == "test" ? testServiceName : serviceName
-            ),
+        let attributes: [String: AttributeValue] = [
+            "service.name": AttributeValue(serviceName),
             "service.version": AttributeValue(serviceVersion),
             "service.namespace": AttributeValue("com.snow"),
             "idocs.telemetry.schema.version": AttributeValue("2")
         ]
-        if environment[telemetryEnvironmentVariable] == "test" {
-            attributes["deployment.environment"] = AttributeValue("test")
-        }
-        return EnvVarResource.get(environment: environment).merging(other: Resource(attributes: attributes))
+        _ = environment
+        return Resource(attributes: attributes)
     }
 
     private static func executableName(arguments: [String]) -> String {
@@ -590,7 +522,7 @@ public enum iDocsTelemetry {
             if argument.hasPrefix("-") {
                 let components = argument.split(separator: "=", maxSplits: 1)
                 let option = String(components[0])
-                sanitized.append(option)
+                sanitized.append("<option>")
 
                 if components.count == 2 {
                     sanitized.append(placeholder(for: option))
@@ -641,7 +573,7 @@ public enum iDocsTelemetry {
         }
         return [URL(fileURLWithPath: executable).lastPathComponent]
             + arguments.dropFirst().map { argument in
-                argument.hasPrefix("-") ? argument.split(separator: "=", maxSplits: 1).first.map(String.init) ?? "<argument>" : "<argument>"
+                argument.hasPrefix("-") ? "<option>" : "<argument>"
             }
     }
 
@@ -685,77 +617,57 @@ public enum iDocsTelemetry {
         "idocs.category_filter"
     ]
 
+    private static let allowedReasonCodes: Set<String> = [
+        "cache_miss",
+        "candidate_recovery",
+        "corrupt_cache_entry",
+        "empty_body",
+        "fetch_failed",
+        "fetch_verified",
+        "invalid_response",
+        "invalid_url",
+        "local_decode_failed",
+        "local_docs_unavailable",
+        "local_error",
+        "local_fetch_failed",
+        "local_module_fallback",
+        "local_no_results",
+        "low_confidence_remote_results",
+        "max_retries_reached",
+        "member_kind_mismatch",
+        "no_candidates",
+        "no_fetch_verified_candidate",
+        "not_found",
+        "opaque_miss_query",
+        "remote_decode_failed",
+        "remote_decode_partial",
+        "remote_empty_body",
+        "remote_error",
+        "remote_http_error",
+        "remote_invalid_response",
+        "remote_invalid_url",
+        "remote_network_failure",
+        "remote_no_results",
+        "remote_permission_denied",
+        "remote_timeout",
+        "unsupported_source_type"
+    ]
+
+    private static func normalizedErrorCategory(_ value: String) -> String {
+        switch value {
+        case "user", "dependency", "timeout", "rate_limit", "internal":
+            return value
+        default:
+            return "internal"
+        }
+    }
+
     private static func nonEmpty(_ value: String?) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil
         }
         return value
     }
-}
-
-private final class BoundedSynchronousHTTPClient: HTTPClient, @unchecked Sendable {
-    private let session: URLSession
-    private let timeout: TimeInterval
-
-    init(timeout: TimeInterval) {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = timeout
-        configuration.timeoutIntervalForResource = timeout
-        session = URLSession(configuration: configuration)
-        self.timeout = timeout
-    }
-
-    func send(
-        request: URLRequest,
-        completion: @escaping (Result<HTTPURLResponse, Error>) -> Void
-    ) {
-        let responseBox = HTTPResponseBox()
-        let semaphore = DispatchSemaphore(value: 0)
-        let task = session.dataTask(with: request) { _, response, error in
-            responseBox.store(response: response, error: error)
-            semaphore.signal()
-        }
-        task.resume()
-
-        guard semaphore.wait(timeout: .now() + timeout) == .success else {
-            task.cancel()
-            completion(.failure(BoundedHTTPClientError.timedOut))
-            return
-        }
-
-        completion(responseBox.result())
-    }
-}
-
-final class HTTPResponseBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var response: URLResponse?
-    private var error: Error?
-
-    func store(response: URLResponse?, error: Error?) {
-        lock.withLock {
-            self.response = response
-            self.error = error
-        }
-    }
-
-    func result() -> Result<HTTPURLResponse, Error> {
-        lock.withLock {
-            if let error {
-                return .failure(error)
-            }
-            guard let response = response as? HTTPURLResponse else {
-                return .failure(BoundedHTTPClientError.invalidResponse)
-            }
-            return .success(response)
-        }
-    }
-}
-
-private enum BoundedHTTPClientError: Error {
-    case timedOut
-    case invalidResponse
 }
 
 private struct DictionaryGetter: Getter {
