@@ -214,6 +214,31 @@ struct TelemetryTests {
         ])))
     }
 
+    @Test("Telemetry preserves a version flag without consuming the command")
+    func telemetryPreservesShortVersionFlag() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/usr/local/bin/idocs", "-v", "search"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // no-op
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(
+            exporter.getFinishedSpanItems().first { $0.name == "idocs" }
+        )
+        #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
+            .string("idocs"),
+            .string("<option>"),
+            .string("search")
+        ])))
+    }
+
     @Test("Telemetry redacts an unknown command positional argument")
     func telemetryRedactsUnknownCommand() async throws {
         let exporter = InMemoryExporter()
@@ -419,6 +444,25 @@ struct TelemetryTests {
         #expect(span.attributes["url.full"] == .string("https://developer.apple.com/<redacted>"))
         #expect(span.attributes["http.request.resend_count"] == .int(1))
         #expect(span.attributes["http.response.status_code"] == .int(200))
+    }
+
+    @Test("HTTP dependency spans preserve non-default ports in redacted URLs")
+    func httpDependencySpanPreservesNonDefaultPort() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withHTTPClientSpan(
+            method: "GET",
+            url: URL(string: "https://developer.apple.com:8443/tutorials/data/private.json")!
+        ) {
+            iDocsTelemetry.recordHTTPResponse(statusCode: 200)
+        }
+        iDocsTelemetry.flush()
+
+        let span = try #require(exporter.getFinishedSpanItems().first { $0.name == "GET" })
+        #expect(span.attributes["server.port"] == .int(8443))
+        #expect(span.attributes["url.full"] == .string("https://developer.apple.com:8443/<redacted>"))
     }
 
     @Test("Subprocess dependency spans follow CLI caller semantics")

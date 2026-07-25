@@ -344,7 +344,7 @@ public enum iDocsTelemetry {
             .setAttribute(key: "server.address", value: AttributeValue(host))
             .setAttribute(
                 key: "url.full",
-                value: AttributeValue("\(scheme)://\(host)/<redacted>")
+                value: AttributeValue(redactedURLAuthority(scheme: scheme, host: host, url: url))
             )
             .setAttribute(
                 key: "http.request.resend_count",
@@ -511,6 +511,17 @@ public enum iDocsTelemetry {
         return URL(fileURLWithPath: first).lastPathComponent
     }
 
+    private static func redactedURLAuthority(scheme: String, host: String, url: URL) -> String {
+        let isDefaultPort = (scheme == "https" && url.port == 443)
+            || (scheme == "http" && url.port == 80)
+        guard let port = url.port, !isDefaultPort else {
+            return "\(scheme)://\(host)/<redacted>"
+        }
+
+        let authorityHost = host.contains(":") ? "[\(host)]" : host
+        return "\(scheme)://\(authorityHost):\(port)/<redacted>"
+    }
+
     private static func sanitizeArgs(_ arguments: [String]) -> [String] {
         guard !arguments.isEmpty else { return [] }
         var sanitized = [URL(fileURLWithPath: arguments[0]).lastPathComponent]
@@ -551,7 +562,7 @@ public enum iDocsTelemetry {
     ]
 
     private static func optionRequiresValue(_ option: String) -> Bool {
-        !["--json", "--version", "--help", "-h"].contains(option)
+        !["--json", "--version", "--help", "-h", "-v"].contains(option)
     }
 
     private static func placeholder(for option: String) -> String {
