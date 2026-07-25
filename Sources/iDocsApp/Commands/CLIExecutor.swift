@@ -456,7 +456,7 @@ public enum CLIExecutor {
         case .parsingError, .unsupportedSourceType:
             return TelemetryFailureDescriptor(
                 errorType: "decode_failed",
-                category: "internal",
+                category: "data",
                 slug: slug,
                 expected: false,
                 exceptionType: exceptionType,

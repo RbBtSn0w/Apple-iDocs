@@ -44,7 +44,7 @@ public final class SpotlightSearchProvider: SearchProvider, @unchecked Sendable 
                     iDocsTelemetry.markFailure(
                         TelemetryFailureDescriptor(
                             errorType: "timeout",
-                            category: "timeout",
+                            category: "dependency",
                             slug: "idocs.process.mdfind.timeout",
                             expected: true,
                             exceptionType: "ProcessTimeout",
