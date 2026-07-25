@@ -38,46 +38,47 @@ struct TelemetryTests {
         #expect(fallback == iDocsTelemetry.defaultTracesEndpoint)
     }
 
-    @Test("OTLP logs endpoint resolution honors signal-specific, base, and default precedence")
-    func logsEndpointResolutionPrecedence() {
-        let explicit = iDocsTelemetry.resolveLogsEndpoint(
-            environment: [
-                "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://explicit.example/v1/logs",
-                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://base.example"
-            ]
+    @Test("Approved gateway endpoint receives only the anonymous admission profile")
+    func approvedGatewayHeaders() throws {
+        let headers = try #require(
+            iDocsTelemetry.gatewayHeaders(for: iDocsTelemetry.defaultTracesEndpoint)
         )
-        #expect(explicit.absoluteString == "https://explicit.example/v1/logs")
-
-        let base = iDocsTelemetry.resolveLogsEndpoint(
-            environment: ["OTEL_EXPORTER_OTLP_ENDPOINT": "https://base.example/custom-root"]
+        #expect(headers.count == 1)
+        #expect(headers[0].0 == "otel-gateway-profile")
+        #expect(headers[0].1 == "anonymous-client-v1")
+        for origin in [
+            "https://telemetry-gateway-development.hamiltonsnow.workers.dev/v1/traces",
+            "https://telemetry-gateway-staging.hamiltonsnow.workers.dev/v1/traces",
+        ] {
+            let environmentHeaders = try #require(
+                iDocsTelemetry.gatewayHeaders(for: URL(string: origin)!)
+            )
+            #expect(environmentHeaders[0].0 == iDocsTelemetry.gatewayProfile.0)
+            #expect(environmentHeaders[0].1 == iDocsTelemetry.gatewayProfile.1)
+        }
+        #expect(
+            iDocsTelemetry.gatewayHeaders(
+                for: URL(string: "https://collector.example/v1/traces")!
+            ) == nil
         )
-        #expect(base.absoluteString == "https://base.example/custom-root/v1/logs")
-
-        let fallback = iDocsTelemetry.resolveLogsEndpoint(environment: [:])
-        #expect(fallback == iDocsTelemetry.defaultLogsEndpoint)
-    }
-
-    @Test("OTLP HTTP transport preserves non-2xx responses for exporter handling")
-    func otlpHTTPTransportPreservesNonSuccessResponse() throws {
-        let responseBox = HTTPResponseBox()
-        let response = try #require(
-            HTTPURLResponse(
-                url: URL(string: "https://otel.example.com/v1/logs")!,
-                statusCode: 429,
-                httpVersion: nil,
-                headerFields: ["Retry-After": "1"]
+        #expect(
+            iDocsTelemetry.gatewayHeaders(
+                for: URL(string: "http://telemetry-gateway.hamiltonsnow.workers.dev/v1/traces")!
+            ) == nil
+        )
+        #expect(
+            iDocsTelemetry.gatewayHeaders(
+                for: URL(string: "https://telemetry-gateway.hamiltonsnow.workers.dev:8443/v1/traces")!
+            ) == nil
+        )
+        let explicitDefaultPortHeaders = try #require(
+            iDocsTelemetry.gatewayHeaders(
+                for: URL(string: "https://telemetry-gateway.hamiltonsnow.workers.dev:443/v1/traces")!
             )
         )
-
-        responseBox.store(response: response, error: nil)
-
-        switch responseBox.result() {
-        case .success(let preservedResponse):
-            #expect(preservedResponse.statusCode == 429)
-            #expect(preservedResponse.value(forHTTPHeaderField: "Retry-After") == "1")
-        case .failure(let error):
-            Issue.record("Expected the HTTP response to reach the exporter, got \(error)")
-        }
+        #expect(explicitDefaultPortHeaders.count == 1)
+        #expect(explicitDefaultPortHeaders[0].0 == iDocsTelemetry.gatewayProfile.0)
+        #expect(explicitDefaultPortHeaders[0].1 == iDocsTelemetry.gatewayProfile.1)
     }
 
     @Test("Telemetry opt-out detects both disable environment variables")
@@ -85,6 +86,36 @@ struct TelemetryTests {
         #expect(iDocsTelemetry.telemetryDisabled(environment: ["DISABLE_TELEMETRY": "1"]))
         #expect(iDocsTelemetry.telemetryDisabled(environment: ["DO_NOT_TRACK": "1"]))
         #expect(!iDocsTelemetry.telemetryDisabled(environment: [:]))
+    }
+
+    @Test("Resource ignores ambient attributes outside the client privacy contract")
+    func resourceIgnoresAmbientAttributes() {
+        let resource = iDocsTelemetry.buildResource(
+            serviceVersion: "1.2.3",
+            environment: [
+                "OTEL_RESOURCE_ATTRIBUTES":
+                    "deployment.environment.name=production,user.name=private",
+                iDocsTelemetry.telemetryEnvironmentVariable: "test"
+            ]
+        )
+
+        #expect(resource.attributes["service.name"] == .string(iDocsTelemetry.serviceName))
+        #expect(resource.attributes["service.version"] == .string("1.2.3"))
+        #expect(resource.attributes["service.namespace"] == .string("com.snow"))
+        #expect(resource.attributes["deployment.environment.name"] == nil)
+        #expect(resource.attributes["user.name"] == nil)
+    }
+
+    @Test("Reason codes use an explicit bounded vocabulary")
+    func reasonCodesAreBounded() {
+        #expect(iDocsTelemetry.reasonCode("remote_timeout") == "remote_timeout")
+        #expect(
+            iDocsTelemetry.reasonCode(
+                #"remote_decode_failed.references["private-token"]"#
+            ) == "remote_decode_failed"
+        )
+        #expect(iDocsTelemetry.reasonCode("http_404") == "http_error")
+        #expect(iDocsTelemetry.reasonCode("privateToken123") == "other")
     }
 
     @Test("Traceparent extraction reads W3C parent context")
@@ -176,10 +207,35 @@ struct TelemetryTests {
         let root = try #require(spans.first { $0.name == "idocs" })
         #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
             .string("idocs"),
-            .string("--cache-path"),
+            .string("<option>"),
             .string("<path>"),
-            .string("--token"),
+            .string("<option>"),
             .string("<redacted>")
+        ])))
+    }
+
+    @Test("Telemetry preserves a version flag without consuming the command")
+    func telemetryPreservesShortVersionFlag() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["/usr/local/bin/idocs", "-v", "search"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // no-op
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(
+            exporter.getFinishedSpanItems().first { $0.name == "idocs" }
+        )
+        #expect(root.attributes["process.command_args"] == .array(AttributeArray(values: [
+            .string("idocs"),
+            .string("<option>"),
+            .string("search")
         ])))
     }
 
@@ -208,14 +264,10 @@ struct TelemetryTests {
         ])))
     }
 
-    @Test("Final exceptions emit one privacy-safe trace-correlated log")
-    func finalExceptionLogIsSafeAndCorrelated() async throws {
+    @Test("Final exceptions stay on the owning span without OTel Logs")
+    func finalExceptionIsSpanOnly() async throws {
         let spanExporter = InMemoryExporter()
-        let logExporter = TestLogRecordExporter()
-        iDocsTelemetry.installForTesting(
-            spanExporter: spanExporter,
-            logRecordExporter: logExporter
-        )
+        iDocsTelemetry.installForTesting(spanExporter: spanExporter)
         defer { iDocsTelemetry.shutdown() }
 
         await iDocsTelemetry.withRootSpan(
@@ -236,31 +288,16 @@ struct TelemetryTests {
         iDocsTelemetry.flush()
 
         let root = try #require(spanExporter.getFinishedSpanItems().first { $0.name == "idocs" })
-        let logs = logExporter.getFinishedLogRecords()
-        #expect(logs.count == 1)
-        let log = try #require(logs.first)
-
-        #expect(log.eventName == "exception")
-        #expect(log.severity == .error)
-        #expect(log.body == .string("Documentation fetch failed."))
-        #expect(log.attributes["exception.type"] == .string("iDocsError"))
-        #expect(log.attributes["exception.message"] == .string("Documentation fetch failed."))
-        #expect(log.attributes["exception.slug"] == .string("idocs.command.fetch.failed"))
-        #expect(log.attributes["exception.stacktrace"] == nil)
-        #expect(log.spanContext?.traceId == root.traceId)
         #expect(root.attributes["error.type"] == .string("not_found"))
         #expect(root.attributes["error.category"] == .string("dependency"))
         #expect(root.attributes["error.expected"] == .bool(false))
+        #expect(root.events.allSatisfy { $0.name != "exception" })
     }
 
-    @Test("Unexpected command failures emit one log and no legacy exception span event")
+    @Test("Unexpected command failures use bounded span fields only")
     func commandFailureHasSingleExceptionOwner() async throws {
         let spanExporter = InMemoryExporter()
-        let logExporter = TestLogRecordExporter()
-        iDocsTelemetry.installForTesting(
-            spanExporter: spanExporter,
-            logRecordExporter: logExporter
-        )
+        iDocsTelemetry.installForTesting(spanExporter: spanExporter)
         defer { iDocsTelemetry.shutdown() }
 
         let previousServiceFactory = CLIEnvironment.serviceFactory
@@ -287,9 +324,6 @@ struct TelemetryTests {
         }
         iDocsTelemetry.flush()
 
-        let logs = logExporter.getFinishedLogRecords()
-        #expect(logs.count == 1)
-        #expect(logs.first?.attributes["exception.message"] == .string("Documentation search failed."))
         let command = try #require(
             spanExporter.getFinishedSpanItems().first { $0.name == "idocs.command.search" }
         )
@@ -297,14 +331,10 @@ struct TelemetryTests {
         #expect(command.attributes["error.type"] == .string("network_unavailable"))
     }
 
-    @Test("Expected command failures mark spans without exception logs")
+    @Test("Expected command failures mark spans without exception events")
     func expectedCommandFailureDoesNotEmitException() async throws {
         let spanExporter = InMemoryExporter()
-        let logExporter = TestLogRecordExporter()
-        iDocsTelemetry.installForTesting(
-            spanExporter: spanExporter,
-            logRecordExporter: logExporter
-        )
+        iDocsTelemetry.installForTesting(spanExporter: spanExporter)
         defer { iDocsTelemetry.shutdown() }
 
         let previousServiceFactory = CLIEnvironment.serviceFactory
@@ -329,12 +359,12 @@ struct TelemetryTests {
         }
         iDocsTelemetry.flush()
 
-        #expect(logExporter.getFinishedLogRecords().isEmpty)
         let command = try #require(
             spanExporter.getFinishedSpanItems().first { $0.name == "idocs.command.fetch" }
         )
         #expect(command.attributes["error.type"] == .string("not_found"))
         #expect(command.attributes["error.expected"] == .bool(true))
+        #expect(command.events.allSatisfy { $0.name != "exception" })
     }
 
     @Test("Raw telemetry fields are denied before export")
@@ -414,6 +444,25 @@ struct TelemetryTests {
         #expect(span.attributes["url.full"] == .string("https://developer.apple.com/<redacted>"))
         #expect(span.attributes["http.request.resend_count"] == .int(1))
         #expect(span.attributes["http.response.status_code"] == .int(200))
+    }
+
+    @Test("HTTP dependency spans preserve non-default ports in redacted URLs")
+    func httpDependencySpanPreservesNonDefaultPort() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withHTTPClientSpan(
+            method: "GET",
+            url: URL(string: "https://developer.apple.com:8443/tutorials/data/private.json")!
+        ) {
+            iDocsTelemetry.recordHTTPResponse(statusCode: 200)
+        }
+        iDocsTelemetry.flush()
+
+        let span = try #require(exporter.getFinishedSpanItems().first { $0.name == "GET" })
+        #expect(span.attributes["server.port"] == .int(8443))
+        #expect(span.attributes["url.full"] == .string("https://developer.apple.com:8443/<redacted>"))
     }
 
     @Test("Subprocess dependency spans follow CLI caller semantics")
@@ -648,30 +697,5 @@ struct TelemetryTests {
         #expect(command.attributes["idocs.output.format"] == .string("json"))
         #expect(command.attributes["idocs.caller"] == nil)
         #expect(command.attributes["idocs.caller.category"] == .string("skill"))
-    }
-}
-
-private final class TestLogRecordExporter: LogRecordExporter, @unchecked Sendable {
-    private let lock = NSLock()
-    private var records: [ReadableLogRecord] = []
-
-    func getFinishedLogRecords() -> [ReadableLogRecord] {
-        lock.withLock { records }
-    }
-
-    func export(
-        logRecords: [ReadableLogRecord],
-        explicitTimeout: TimeInterval? = nil
-    ) -> ExportResult {
-        lock.withLock {
-            records.append(contentsOf: logRecords)
-        }
-        return .success
-    }
-
-    func shutdown(explicitTimeout: TimeInterval? = nil) {}
-
-    func forceFlush(explicitTimeout: TimeInterval? = nil) -> ExportResult {
-        .success
     }
 }

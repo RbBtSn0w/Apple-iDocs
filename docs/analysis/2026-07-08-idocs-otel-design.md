@@ -3,15 +3,15 @@
 ## Summary
 
 iDocs uses OpenTelemetry as a fail-open observability layer for its short-lived
-CLI process. The v2 design covers the complete invocation lifecycle, explicit
-exception logs, external HTTP and subprocess dependencies, and a privacy-safe
-attribute contract.
+CLI process. The v2 design covers the complete invocation lifecycle,
+span-owned error fields, external HTTP and subprocess dependencies, and a
+privacy-safe attribute contract.
 
 The shared Cloudflare Worker is an OTLP gateway, not an iDocs application
-component. Its implementation must remain service-neutral and route data by an
-authenticated ingest profile. This repository defines the client and gateway
-contracts; the Worker source and deployment belong in a separately versioned
-infrastructure repository.
+component. Its implementation must remain service-neutral and route data by a
+gateway admission profile. This repository defines the client conformance
+record; the platform contract, Worker source, and deployment belong in a
+separately versioned infrastructure repository.
 
 ## Client Signals
 
@@ -19,12 +19,13 @@ iDocs emits:
 
 - traces for CLI invocations, commands, meaningful pipelines, HTTP attempts,
   and subprocess calls;
-- OTel log records for final unexpected exceptions;
+- no OTel Logs in the traces-only gateway phase;
 - no application metrics in v2 because invocation counts, failure rate, and
   latency are queryable from wide root and command spans.
 
-The gateway must accept all three standard OTLP/HTTP signals so that other
-services can use metrics without changing the gateway protocol.
+The current anonymous gateway profile accepts traces only. Logs and metrics
+require a separately versioned gateway capability rather than implicit
+payload handling in this client.
 
 ## CLI Lifecycle
 
@@ -33,7 +34,7 @@ calling `AsyncParsableCommand.main`.
 
 The lifecycle is:
 
-1. Bootstrap tracing and logging.
+1. Bootstrap tracing.
 2. Start the `idocs` root span.
 3. Parse with `parseAsRoot` and run the selected command.
 4. Preserve ArgumentParser presentation with `fullMessage(for:)` and
@@ -43,26 +44,23 @@ The lifecycle is:
 7. Exit the process only after telemetry shutdown completes.
 
 Telemetry failures never change command output, stderr, or the process exit
-code. Normal trace shutdown is bounded to 200 ms. Exception-log transport is
-bounded to 100 ms, and exporter diagnostics are suppressed from the CLI
-surface.
+code. Normal trace shutdown is bounded to 200 ms, and exporter diagnostics are
+suppressed from the CLI surface.
 
 ## Endpoint Contract
 
-Default endpoints:
+Default trace endpoint:
 
-- traces:
-  `https://telemetry-gateway.hamiltonsnow.workers.dev/v1/traces`
-- logs:
-  `https://telemetry-gateway.hamiltonsnow.workers.dev/v1/logs`
+`https://telemetry-gateway.hamiltonsnow.workers.dev/v1/traces`
 
 Resolution precedence is signal-specific endpoint, then
 `OTEL_EXPORTER_OTLP_ENDPOINT` plus the standard signal path, then the default
-gateway. `DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1` disable all signals.
+gateway. `DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1` disable tracing.
 
 The client sends OTLP/HTTP protobuf with gzip and never sends Honeycomb
 credentials. Environment-derived `x-honeycomb-*` headers are intentionally
-ignored by the exporters.
+ignored by the exporter. The exact approved HTTPS gateway origin receives only
+`otel-gateway-profile: anonymous-client-v1`.
 
 ## Trace Model
 
@@ -72,8 +70,8 @@ ignored by the exporters.
 - `service.namespace = com.snow`
 - `service.version`
 - `idocs.telemetry.schema.version = 2`
-- deployment resource attributes supplied through the standard OTel resource
-  environment
+- no `deployment.environment.name`, because iDocs is distributable software
+  rather than a hosted deployment
 
 ### CLI execution
 
@@ -150,22 +148,12 @@ The Spotlight expression and user query are never emitted.
 Lower adapter, pipeline, HTTP, and subprocess spans use `markFailure`. The
 command boundary owns the final result:
 
-- expected failures such as invalid input and not-found mark the span but do
-  not emit exception logs;
-- a final unexpected failure calls `captureException` exactly once.
+- expected failures such as invalid input and not-found mark the span;
+- final unexpected failures also remain span-only;
+- OTel Logs and exception span events are not emitted.
 
-An exception log contains:
-
-- `event.name = exception`
-- `severity = ERROR`
-- `exception.type`
-- a static `exception.message`
-- `exception.slug`
-- `error.type`, `error.category`, and `error.expected`
-- the active trace and span context
-
-Stack traces, localized descriptions, associated error values, and legacy
-`span.recordException` events are not emitted.
+Stack traces, localized descriptions, associated error values, and response
+bodies are not emitted.
 
 ## Privacy Contract
 
@@ -194,49 +182,40 @@ future clients is
 This section records the architecture decision; the integration standard is
 the operational source of truth.
 
-The gateway supports:
-
-- `POST /v1/traces`
-- `POST /v1/logs`
-- `POST /v1/metrics`
-- `GET /healthz`
+The current gateway contract supports `POST /v1/traces` and `GET /health`.
+Logs and metrics are rejected.
 
 OTLP request and response bodies are streamed without protobuf decoding or
 business-specific rewriting. Only `application/x-protobuf` with identity or
 gzip encoding is accepted.
 
-The gateway resolves an `IngestProfile` from the hostname and authenticated
-principal:
+The gateway resolves a backend-neutral admission profile:
 
 ```text
-IngestProfile
-- profileID
-- audience: public | internal
-- honeycombEnvironment
-- apiKeyBinding
-- allowedSignals
-- authenticationPolicy
-- rateLimitPolicy
-- maxBodyBytes
+anonymous-client-v1
+- trustClass: anonymous
+- allowedSignals: traces
+- destinationRef: untrusted-default
+- ratePolicyRef: anonymous-default
+- maxBodyBytes: 262144
 ```
 
 Gateway rules:
 
 - strip client `authorization`, `cookie`, `cf-access-*`, and
   `x-honeycomb-*` headers;
-- inject only the profile's environment-scoped Honeycomb ingest key;
+- inject only the destination adapter's operator-managed credential;
 - never accept a client-selected upstream key or environment;
-- stream payloads and reject oversized requests;
+- require a bounded declared `Content-Length` and stream payloads;
 - do not retry upstream writes;
 - preserve successful OTLP response bodies;
 - return sanitized errors while preserving status and `Retry-After`;
 - log only profile, signal, status, duration, payload-size bucket, rate-limit
   outcome, and deployment version.
 
-The existing hostname is the unauthenticated `public-idocs` profile and must
-use an isolated Honeycomb environment. Internal services share a separate
-Cloudflare Access-protected hostname. Another public binary requires its own
-hostname, profile, rate limit, and Honeycomb environment.
+The existing hostname accepts the shared `anonymous-client-v1` profile and
+must use an isolated untrusted destination. Trusted staging or production
+uses a separate workload-identity-protected hostname.
 
 ## Verification
 
@@ -245,17 +224,16 @@ Automated client gates cover:
 - endpoint precedence and opt-out;
 - root and command parentage;
 - final exit codes and ArgumentParser presentation;
-- one trace-correlated exception log per unexpected failure;
-- no log for expected failures;
-- absence of legacy exception span events;
+- bounded span-only error fields and no OTel Logs;
+- absence of exception span events;
 - HTTP and subprocess semantic attributes;
 - absence of denied privacy fields;
 - exporter timeout and fail-open behavior.
 
 Gateway staging must be validated with both `idocs` and a non-iDocs canary
-before production deployment. Honeycomb acceptance queries must verify root
-latency distributions, error grouping, exception-to-trace correlation,
-dependency latency, privacy-field absence, and profile isolation.
+before production deployment. Backend acceptance queries must verify root
+latency distributions, error grouping, dependency latency,
+privacy-field absence, and profile isolation.
 
 Production Worker deployment, secret changes, and Access policy changes are
 separate high-risk operations and require explicit deployment approval.

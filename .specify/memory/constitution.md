@@ -82,8 +82,8 @@ CLI 命令与 Adapter API **必须 (MUST)** 独立可用，**禁止 (MUST NOT)**
 - 每次 CLI invocation **必须 (MUST)** 产生符合 OTel CLI semantic conventions 的根 span，并在任何进程退出前记录
   `process.executable.name`、`process.pid`、`process.exit.code` 和有条件的低基数 `error.type`，完成 bounded flush
 - Apple、Sosumi 等 HTTP 调用和 `mdfind` 等外部进程 **必须 (MUST)** 使用 `CLIENT` span 建模；重试必须可按 attempt 区分
-- 最终未恢复异常 **必须 (MUST)** 由 command 边界通过 OTel Logs API 捕捉一次；下层仅标记失败，
-  禁止多层重复 exception event
+- 最终未恢复异常 **必须 (MUST)** 由 command 边界在所属 root span 上捕捉一次；客户端 traces-only
+  契约不使用 OTel Logs API，下层仅标记失败，禁止多层重复 exception event
 - 遥测 **禁止 (MUST NOT)** 包含原始 query、path、caller、token、自由文本诊断、localized error、
   response body 或 stacktrace；`process.command_args` 只能使用 flag-aware 固定占位符脱敏
 - 遥测初始化、导出、flush 和共享网关故障 **禁止 (MUST NOT)** 改变 CLI 输出、stderr 或退出码；
