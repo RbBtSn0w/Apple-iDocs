@@ -18,8 +18,13 @@ struct AppleAPIMockTests {
         mockSession.stubbedResponse = errorResponse
         mockSession.stubbedData = Data()
         
-        await #expect(throws: Error.self) {
-            try await api.search(query: "test")
+        do {
+            _ = try await api.search(query: "test")
+            #expect(Bool(false), "Should have thrown")
+        } catch let iDocsError.httpError(statusCode) {
+            #expect(statusCode == 403)
+        } catch {
+            #expect(Bool(false), "Expected httpError(403), got \(error)")
         }
     }
     
