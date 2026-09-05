@@ -22,6 +22,13 @@ struct MarkdownSummaryTests {
         #expect(title == "Advanced Navigation Split View")
     }
 
+    @Test("title preserves internal hashes within heading text")
+    func titlePreservesInternalHashes() {
+        let markdown = "## Issue #42: C# Programming Guide\nBody content"
+        let title = MarkdownSummary.title(from: markdown, fallback: "Fallback")
+        #expect(title == "Issue #42: C# Programming Guide")
+    }
+
     @Test("title returns fallback when no heading exists")
     func titleReturnsFallbackWhenNoHeading() {
         let markdown = """

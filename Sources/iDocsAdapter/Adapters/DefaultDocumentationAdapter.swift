@@ -33,8 +33,8 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             if let searchPerformer {
                 return try await searchPerformer(query)
             }
-            let tools = Self.makeTools(config: config, appleAPI: defaultAppleAPI, sosumiAPI: defaultSosumiAPI)
-            return try await tools.searchTool.runDetailed(query: query)
+            let searchTool = Self.makeSearchTool(config: config, appleAPI: defaultAppleAPI, sosumiAPI: defaultSosumiAPI)
+            return try await searchTool.runDetailed(query: query)
         }
         self.resolvePerformer = configuredResolvePerformer ?? { intent, config in
             let tools = Self.makeTools(config: config, appleAPI: defaultAppleAPI, sosumiAPI: defaultSosumiAPI)
@@ -487,6 +487,26 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         let diskCache: DiskCache
         let fetchTool: FetchDocTool
         let searchTool: SearchDocsTool
+    }
+
+    private static func makeSearchTool(
+        config: DocumentationConfig,
+        appleAPI: AppleJSONAPI,
+        sosumiAPI: SosumiAPI
+    ) -> SearchDocsTool {
+        let cacheDirectory = config.xcodeDocumentationCachePath.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        let xcodeDocs = XcodeLocalDocs(
+            fileManager: FileManager.default,
+            searchProvider: SpotlightSearchProvider(),
+            cacheDirectory: cacheDirectory
+        )
+        return SearchDocsTool(
+            api: appleAPI,
+            sosumiAPI: sosumiAPI,
+            xcodeDocs: xcodeDocs
+        )
     }
 
     private static func makeTools(

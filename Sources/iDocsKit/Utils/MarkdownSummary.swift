@@ -5,7 +5,8 @@ public struct MarkdownSummary: Sendable {
         for line in markdown.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("#") {
-                return trimmed.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
+                let stripped = trimmed.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
+                return stripped.isEmpty ? fallback : stripped
             }
         }
         return fallback

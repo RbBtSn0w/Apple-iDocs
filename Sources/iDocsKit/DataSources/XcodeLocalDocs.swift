@@ -140,8 +140,7 @@ public struct XcodeLocalDocs {
         logger.info("Searching \(sdks.count) local SDK documentations for: \(trimmed)")
 
         var results: [SearchResult] = []
-
-        let dynamicModules = discoveredModuleNames(sdks: sdks)
+        let dynamicModules: Set<String>? = trimmed.contains(where: \.isUppercase) ? discoveredModuleNames(sdks: sdks) : nil
 
         // Fast path: exact module queries can usually be satisfied from local
         // documentation roots or index stores without paying the cost of a
