@@ -265,4 +265,17 @@ struct DocumentationServiceContractTests {
         #expect(ResolveMatchQuality(rawValue: "mismatch") == .mismatch)
         #expect(ResolveMatchQuality(rawValue: "unknown") == .unknown)
     }
+
+    @Test("safeAppleURL ensures URL host is developer.apple.com even for inputs with external schemes")
+    func safeAppleURLPreventsNonAppleHost() {
+        let externalInput = "https://evil.example/has space"
+        let url = DefaultDocumentationAdapter.safeAppleURL(for: externalInput)
+        #expect(url.host == "developer.apple.com")
+        #expect(url.path == "/has%20space" || url.path == "/has space")
+
+        let normalPath = "documentation/swiftui/view"
+        let normalURL = DefaultDocumentationAdapter.safeAppleURL(for: normalPath)
+        #expect(normalURL.host == "developer.apple.com")
+        #expect(normalURL.path == "/documentation/swiftui/view")
+    }
 }

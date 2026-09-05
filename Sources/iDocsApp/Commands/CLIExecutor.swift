@@ -29,14 +29,13 @@ public enum CLIExecutor {
                     "idocs.result.count": .int(result.resultCount),
                     "idocs.source": .string(result.source ?? "none")
                 ])
-                recordJSONEmissionFailureIfNeeded(result.exitCode, command: name)
                 iDocsTelemetry.setExitCode(result.exitCode)
                 return result.exitCode
             } catch {
                 let message = CLIErrorPresenter.message(for: error)
                 let durationMs = start.millisecondsElapsed()
                 if outputFormat == .json {
-                    _ = writeJSONPayload(errorPayload(error, message, durationMs))
+                    _ = writeJSONPayload(errorPayload(error, message, durationMs), command: name)
                 }
                 CLIEnvironment.writeStderr(message)
                 iDocsTelemetry.setExitCode(1)
@@ -95,7 +94,8 @@ public enum CLIExecutor {
                             technologies: nil,
                             searchDiagnostics: diagnostics,
                             errorMessage: nil
-                        )
+                        ),
+                        command: "search"
                     )
                 } else if results.isEmpty {
                     CLIEnvironment.writeStdout(emptySearchMessage(diagnostics: diagnostics))
@@ -173,7 +173,8 @@ public enum CLIExecutor {
                             searchDiagnostics: nil,
                             fetchDiagnostics: content.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
                             errorMessage: nil
-                        )
+                        ),
+                        command: "fetch"
                     )
                 } else {
                     if let source {
@@ -239,7 +240,8 @@ public enum CLIExecutor {
                             durationMs: durationMs,
                             exitCategory: .ok,
                             errorMessage: nil
-                        )
+                        ),
+                        command: "resolve"
                     )
                 } else if let canonicalPath = result.canonicalPath {
                     CLIEnvironment.writeStdout(
@@ -309,7 +311,8 @@ public enum CLIExecutor {
                             },
                             searchDiagnostics: nil,
                             errorMessage: nil
-                        )
+                        ),
+                        command: "list"
                     )
                 } else if technologies.isEmpty {
                     CLIEnvironment.writeStdout("No technologies found in the catalog.")
@@ -607,10 +610,7 @@ public enum CLIExecutor {
         return lines.joined(separator: "\n")
     }
 
-    private static func recordJSONEmissionFailureIfNeeded(_ exitCode: Int32, command: String) {
-        guard exitCode != 0 else {
-            return
-        }
+    private static func recordJSONEmissionFailure(command: String) {
         let error = JSONPayloadWriteError(command: command)
         iDocsTelemetry.captureException(
             TelemetryFailureDescriptor(
@@ -625,7 +625,7 @@ public enum CLIExecutor {
     }
 
     @discardableResult
-    private static func writeJSONPayload(_ payload: CLICommandPayload) -> Int32 {
+    private static func writeJSONPayload(_ payload: CLICommandPayload, command: String = "unknown") -> Int32 {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
 
@@ -633,12 +633,14 @@ public enum CLIExecutor {
             let data = try encoder.encode(payload)
             guard let text = String(data: data, encoding: .utf8) else {
                 CLIEnvironment.writeStderr("Error [INTERNAL]: Failed to encode JSON output as UTF-8.")
+                recordJSONEmissionFailure(command: command)
                 return 1
             }
             CLIEnvironment.writeStdout(text)
             return payload.exitCategory == .ok ? 0 : 1
         } catch {
             CLIEnvironment.writeStderr("Error [INTERNAL]: Failed to encode JSON output.")
+            recordJSONEmissionFailure(command: command)
             return 1
         }
     }

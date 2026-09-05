@@ -243,7 +243,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                         "locale": config.locale.identifier,
                         "source": output.source.rawValue
                     ],
-                    url: URLHelpers.webURL(for: id) ?? URL(string: id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "", relativeTo: URLHelpers.appleDocBaseURL)?.absoluteURL ?? URLHelpers.appleDocBaseURL,
+                    url: Self.safeAppleURL(for: id),
                     fetchDiagnostics: output.sourceAttempts.map(Self.mapFetchAttemptDiagnostic)
                 )
                 await recordUsageIfConfigured(
@@ -600,5 +600,23 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             )
         }
         return attributes
+    }
+
+    static func safeAppleURL(for id: String) -> URL {
+        var pathCandidate = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let schemeRange = pathCandidate.range(of: "://") {
+            let afterScheme = pathCandidate[schemeRange.upperBound...]
+            if let firstSlash = afterScheme.firstIndex(of: "/") {
+                pathCandidate = String(afterScheme[firstSlash...])
+            } else {
+                pathCandidate = "/"
+            }
+        }
+        if let direct = URLHelpers.webURL(for: pathCandidate) {
+            return direct
+        }
+        let clean = URLHelpers.normalizePath(pathCandidate).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let encoded = clean.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        return URL(string: "https://developer.apple.com/\(encoded)") ?? URLHelpers.appleDocBaseURL
     }
 }
