@@ -47,23 +47,33 @@ public struct XcodeLocalDocs {
     private let fileManager: any FileSystem
     private let searchProvider: any SearchProvider
     private let indexStoreQueryCache: IndexStoreQueryCache
+    private let indexReader: IndexStoreReader
     
     public let cacheDirectory: URL
     private static let sharedIndexStoreQueryCache = IndexStoreQueryCache()
 
     public init(fileManager: any FileSystem = FileManager.default, 
                 searchProvider: any SearchProvider = SpotlightSearchProvider(),
-                cacheDirectory: URL? = nil) {
-        self.init(fileManager: fileManager, searchProvider: searchProvider, cacheDirectory: cacheDirectory, indexStoreQueryCache: XcodeLocalDocs.sharedIndexStoreQueryCache)
+                cacheDirectory: URL? = nil,
+                indexReader: IndexStoreReader = IndexStoreReader()) {
+        self.init(
+            fileManager: fileManager,
+            searchProvider: searchProvider,
+            cacheDirectory: cacheDirectory,
+            indexStoreQueryCache: XcodeLocalDocs.sharedIndexStoreQueryCache,
+            indexReader: indexReader
+        )
     }
 
     init(fileManager: any FileSystem, 
          searchProvider: any SearchProvider,
          cacheDirectory: URL?,
-         indexStoreQueryCache: IndexStoreQueryCache) {
+         indexStoreQueryCache: IndexStoreQueryCache,
+         indexReader: IndexStoreReader = IndexStoreReader()) {
         self.fileManager = fileManager
         self.searchProvider = searchProvider
         self.indexStoreQueryCache = indexStoreQueryCache
+        self.indexReader = indexReader
         if let cacheDirectory {
             self.cacheDirectory = cacheDirectory
         } else {
@@ -265,7 +275,7 @@ public struct XcodeLocalDocs {
                     continue
                 }
 
-                guard containsToken(query, in: data) else { continue }
+                guard indexReader.containsToken(query, in: data) else { continue }
 
                 let normalizedTitle = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalizedTitle.isEmpty else { continue }
@@ -335,30 +345,7 @@ public struct XcodeLocalDocs {
         return []
     }
 
-    private func containsToken(_ token: String, in data: Data) -> Bool {
-        guard let needle = token.data(using: .utf8), !needle.isEmpty else { return false }
-        let moduleCharacterSet = CharacterSet.alphanumerics
 
-        var searchRange = 0..<data.count
-        while let matchRange = data.range(of: needle, options: [], in: searchRange) {
-            let lowerBound = matchRange.lowerBound
-            let upperBound = matchRange.upperBound
-            let hasLeadingBoundary = lowerBound == data.startIndex || !isModuleByte(data[lowerBound - 1], moduleCharacterSet: moduleCharacterSet)
-            let hasTrailingBoundary = upperBound == data.endIndex || !isModuleByte(data[upperBound], moduleCharacterSet: moduleCharacterSet)
-            if hasLeadingBoundary && hasTrailingBoundary {
-                return true
-            }
-
-            searchRange = upperBound..<data.count
-        }
-
-        return false
-    }
-
-    private func isModuleByte(_ byte: UInt8, moduleCharacterSet: CharacterSet) -> Bool {
-        guard let scalar = UnicodeScalar(Int(byte)) else { return false }
-        return moduleCharacterSet.contains(scalar)
-    }
 
     private func isLikelyModuleQuery(_ query: String) -> Bool {
         guard !query.contains(where: \.isWhitespace) else { return false }
@@ -419,7 +406,7 @@ public struct XcodeLocalDocs {
     }
 
     private func searchDeveloperDocumentationIndexes(query: String, sdks: [XcodeLocalDocInfo], limit: Int) async throws -> [SearchResult] {
-        let tokens = tokenize(query: query)
+        let tokens = indexReader.tokenize(query: query)
         guard !tokens.isEmpty else { return [] }
 
         var ranked: [(path: String, score: Double)] = []
@@ -452,7 +439,7 @@ public struct XcodeLocalDocs {
             }
             .prefix(limit)
             .map { item in
-                let title = titleFromPath(item.path)
+                let title = indexReader.title(from: item.path)
                 return SearchResult(
                     title: title,
                     abstract: "Matched in local Xcode documentation index.",
@@ -464,7 +451,7 @@ public struct XcodeLocalDocs {
             }
     }
 
-    private func rankDocumentationPaths(from url: URL, tokens: [String], limit: Int) -> [IndexStoreQueryMatch] {
+    private func rankDocumentationPaths(from url: URL, tokens: [String], limit: Int) -> [IndexStoreMatch] {
         let data: Data
         do {
             data = try fileManager.read(from: url, options: .mappedIfSafe)
@@ -472,81 +459,7 @@ public struct XcodeLocalDocs {
             return []
         }
 
-        let prefix = Data(DocumentationPath.prefix.utf8)
-        var matches = Set<String>()
-        var ranked: [IndexStoreQueryMatch] = []
-        let maxPathLength = 240
-
-        var searchStart = data.startIndex
-        while searchStart < data.endIndex,
-              let matchRange = data.range(of: prefix, options: [], in: searchStart..<data.endIndex) {
-            var end = matchRange.upperBound
-            while end < data.endIndex && end - matchRange.lowerBound < maxPathLength && isPathByte(data[end]) {
-                end += 1
-            }
-
-            let candidate = data[matchRange.lowerBound..<end]
-            if candidate.count > prefix.count + 1,
-               let path = String(data: candidate, encoding: .utf8),
-               matches.insert(path).inserted {
-                let score = scoreForPath(path, tokens: tokens)
-                if score > 0 {
-                    ranked.append(IndexStoreQueryMatch(path: path, score: score))
-                }
-            }
-
-            searchStart = matchRange.upperBound
-        }
-
-        return ranked
-            .sorted { lhs, rhs in
-                if lhs.score == rhs.score { return lhs.path < rhs.path }
-                return lhs.score > rhs.score
-            }
-            .prefix(limit)
-            .map { $0 }
-    }
-
-    private func isPathByte(_ byte: UInt8) -> Bool {
-        switch byte {
-        case 48...57, 65...90, 97...122, 45, 46, 47, 95:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func tokenize(query: String) -> [String] {
-        query
-            .lowercased()
-            .split { !$0.isLetter && !$0.isNumber }
-            .map(String.init)
-            .filter { !$0.isEmpty }
-    }
-
-    private func scoreForPath(_ path: String, tokens: [String]) -> Double {
-        let lower = path.lowercased()
-        var score = 0.0
-        var matchedCount = 0
-        for token in tokens {
-            if lower.hasSuffix("/\(token)") { score += 50 }
-            if lower.contains("/\(token)") { score += 20 }
-            if lower.contains(token) {
-                score += 10
-                matchedCount += 1
-            }
-        }
-        if matchedCount == 0 { return 0 }
-        score += Double(matchedCount) * 15
-        score -= Double(path.count) * 0.01
-        return score
-    }
-
-    private func titleFromPath(_ path: String) -> String {
-        let components = path.split(separator: "/")
-        guard let raw = components.last else { return path }
-        let normalized = raw.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
-        return normalized
+        return indexReader.rankDocumentationPaths(in: data, tokens: tokens, limit: limit)
     }
 
     private func indexStoreQueryCacheKey(for storeURL: URL, tokens: [String]) -> String {
@@ -587,6 +500,7 @@ actor IndexStoreQueryCache {
             entries[key] = results
             if let idx = accessOrder.firstIndex(of: key) {
                 accessOrder.remove(at: idx)
+                accessOrder.append(key)
             }
             accessOrder.append(key)
             return
@@ -600,7 +514,5 @@ actor IndexStoreQueryCache {
     }
 }
 
-struct IndexStoreQueryMatch: Sendable {
-    let path: String
-    let score: Double
-}
+public typealias IndexStoreQueryMatch = IndexStoreMatch
+
