@@ -249,4 +249,20 @@ struct DocumentationServiceContractTests {
         #expect(scenario.error.errorDescription == scenario.expectedDescription)
         #expect(scenario.error.localizedDescription == scenario.expectedDescription)
     }
+
+    @Test("ResolveConfidence, CandidateSource and MatchQuality rawValues round-trip")
+    func resolveEnumsRawValues() {
+        #expect(ResolveConfidence(rawValue: "high") == .high)
+        #expect(ResolveConfidence(rawValue: "medium") == .medium)
+        #expect(ResolveConfidence(rawValue: "low") == .low)
+        #expect(ResolveConfidence(rawValue: "unresolved") == .unresolved)
+
+        #expect(ResolveCandidateSource(rawValue: "direct") == .direct)
+        #expect(ResolveCandidateSource(rawValue: "search_fallback") == .searchFallback)
+
+        #expect(ResolveMatchQuality(rawValue: "exact") == .exact)
+        #expect(ResolveMatchQuality(rawValue: "partial") == .partial)
+        #expect(ResolveMatchQuality(rawValue: "mismatch") == .mismatch)
+        #expect(ResolveMatchQuality(rawValue: "unknown") == .unknown)
+    }
 }

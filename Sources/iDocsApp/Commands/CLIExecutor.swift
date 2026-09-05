@@ -3,18 +3,60 @@ import iDocsAdapter
 import iDocsTelemetry
 
 public enum CLIExecutor {
+    private struct CommandExecutionResult {
+        let exitCode: Int32
+        let resultCount: Int
+        let source: String?
+    }
+
+    private static func runCommand(
+        name: String,
+        outputFormat: CLIOutputFormat,
+        callerID: String?,
+        configure: (DocumentationConfig) -> DocumentationConfig = { $0 },
+        execute: (DocumentationService, DocumentationConfig, ContinuousClock.Instant) async throws -> CommandExecutionResult,
+        errorPayload: (Error, String, Double) -> CLICommandPayload
+    ) async -> Int32 {
+        let attributes = commandAttributes(name: name, outputFormat: outputFormat, callerID: callerID)
+        return await iDocsTelemetry.withSpan("idocs.command.\(name)", attributes: attributes) {
+            let start = ContinuousClock.now
+            do {
+                let adapter = try CLIEnvironment.serviceFactory()
+                let baseConfig = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+                let config = configure(baseConfig)
+                let result = try await execute(adapter, config, start)
+                iDocsTelemetry.setAttributes([
+                    "idocs.result.count": .int(result.resultCount),
+                    "idocs.source": .string(result.source ?? "none")
+                ])
+                recordJSONEmissionFailureIfNeeded(result.exitCode, command: name)
+                iDocsTelemetry.setExitCode(result.exitCode)
+                return result.exitCode
+            } catch {
+                let message = CLIErrorPresenter.message(for: error)
+                let durationMs = start.millisecondsElapsed()
+                if outputFormat == .json {
+                    _ = writeJSONPayload(errorPayload(error, message, durationMs))
+                }
+                CLIEnvironment.writeStderr(message)
+                iDocsTelemetry.setExitCode(1)
+                recordCommandFailure(error, command: name)
+                return 1
+            }
+        }
+    }
+
     @discardableResult
     public static func runSearch(
         query: String,
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let attributes = commandAttributes(name: "search", outputFormat: outputFormat, callerID: callerID)
-        return await iDocsTelemetry.withSpan("idocs.command.search", attributes: attributes) {
-            let start = ContinuousClock.now
-            do {
-                let adapter = try CLIEnvironment.serviceFactory()
-                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+        await runCommand(
+            name: "search",
+            outputFormat: outputFormat,
+            callerID: callerID,
+            execute: { adapter, config, start in
                 let response = try await adapter.searchDetailed(query: query, config: config)
                 let results = response.results
                 let durationMs = start.millisecondsElapsed()
@@ -72,44 +114,28 @@ public enum CLIExecutor {
                     CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
                     exitCode = 0
                 }
-
-                iDocsTelemetry.setAttributes([
-                    "idocs.result.count": .int(results.count),
-                    "idocs.source": .string(source ?? "none")
-                ])
-                recordJSONEmissionFailureIfNeeded(exitCode, command: "search")
-                iDocsTelemetry.setExitCode(exitCode)
-                return exitCode
-            } catch {
-                let message = CLIErrorPresenter.message(for: error)
-                let durationMs = start.millisecondsElapsed()
-                if outputFormat == .json {
-                    _ = writeJSONPayload(
-                        CLICommandPayload(
-                            command: "search",
-                            caller: callerID,
-                            query: query,
-                            id: nil,
-                            category: nil,
-                            source: nil,
-                            durationMs: durationMs,
-                            resultCount: 0,
-                            selectedPaths: [],
-                            exitCategory: CLIErrorPresenter.category(for: error),
-                            body: nil,
-                            results: [],
-                            technologies: nil,
-                            searchDiagnostics: nil,
-                            errorMessage: message
-                        )
-                    )
-                }
-                CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.setExitCode(1)
-                recordCommandFailure(error, command: "search")
-                return 1
+                return CommandExecutionResult(exitCode: exitCode, resultCount: results.count, source: source)
+            },
+            errorPayload: { error, message, durationMs in
+                CLICommandPayload(
+                    command: "search",
+                    caller: callerID,
+                    query: query,
+                    id: nil,
+                    category: nil,
+                    source: nil,
+                    durationMs: durationMs,
+                    resultCount: 0,
+                    selectedPaths: [],
+                    exitCategory: CLIErrorPresenter.category(for: error),
+                    body: nil,
+                    results: [],
+                    technologies: nil,
+                    searchDiagnostics: nil,
+                    errorMessage: message
+                )
             }
-        }
+        )
     }
 
     @discardableResult
@@ -118,12 +144,11 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let attributes = commandAttributes(name: "fetch", outputFormat: outputFormat, callerID: callerID)
-        return await iDocsTelemetry.withSpan("idocs.command.fetch", attributes: attributes) {
-            let start = ContinuousClock.now
-            do {
-                let adapter = try CLIEnvironment.serviceFactory()
-                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+        await runCommand(
+            name: "fetch",
+            outputFormat: outputFormat,
+            callerID: callerID,
+            execute: { adapter, config, start in
                 let content = try await adapter.fetch(id: id, config: config)
                 let source = content.metadata["source"]
                 let durationMs = start.millisecondsElapsed()
@@ -165,45 +190,29 @@ public enum CLIExecutor {
                     }
                     exitCode = 0
                 }
-
-                iDocsTelemetry.setAttributes([
-                    "idocs.result.count": .int(1),
-                    "idocs.source": .string(source ?? "none")
-                ])
-                recordJSONEmissionFailureIfNeeded(exitCode, command: "fetch")
-                iDocsTelemetry.setExitCode(exitCode)
-                return exitCode
-            } catch {
-                let message = CLIErrorPresenter.message(for: error)
-                let durationMs = start.millisecondsElapsed()
-                if outputFormat == .json {
-                    _ = writeJSONPayload(
-                        CLICommandPayload(
-                            command: "fetch",
-                            caller: callerID,
-                            query: nil,
-                            id: id,
-                            category: nil,
-                            source: nil,
-                            durationMs: durationMs,
-                            resultCount: 0,
-                            selectedPaths: [],
-                            exitCategory: CLIErrorPresenter.category(for: error),
-                            body: nil,
-                            results: nil,
-                            technologies: nil,
-                            searchDiagnostics: nil,
-                            fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
-                            errorMessage: message
-                        )
-                    )
-                }
-                CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.setExitCode(1)
-                recordCommandFailure(error, command: "fetch")
-                return 1
+                return CommandExecutionResult(exitCode: exitCode, resultCount: 1, source: source)
+            },
+            errorPayload: { error, message, durationMs in
+                CLICommandPayload(
+                    command: "fetch",
+                    caller: callerID,
+                    query: nil,
+                    id: id,
+                    category: nil,
+                    source: nil,
+                    durationMs: durationMs,
+                    resultCount: 0,
+                    selectedPaths: [],
+                    exitCategory: CLIErrorPresenter.category(for: error),
+                    body: nil,
+                    results: nil,
+                    technologies: nil,
+                    searchDiagnostics: nil,
+                    fetchDiagnostics: (error as? DocumentationError)?.fetchDiagnostics?.map(Self.mapFetchDiagnosticPayload),
+                    errorMessage: message
+                )
             }
-        }
+        )
     }
 
     @discardableResult
@@ -212,12 +221,11 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let attributes = commandAttributes(name: "resolve", outputFormat: outputFormat, callerID: callerID)
-        return await iDocsTelemetry.withSpan("idocs.command.resolve", attributes: attributes) {
-            let start = ContinuousClock.now
-            do {
-                let adapter = try CLIEnvironment.serviceFactory()
-                let config = CLIEnvironment.configFactory().withInvocationContext(callerID: callerID)
+        await runCommand(
+            name: "resolve",
+            outputFormat: outputFormat,
+            callerID: callerID,
+            execute: { adapter, config, start in
                 let result = try await adapter.resolve(intent: intent, config: config)
                 let durationMs = start.millisecondsElapsed()
 
@@ -246,35 +254,23 @@ public enum CLIExecutor {
                     CLIEnvironment.writeStdout("Unable to resolve structured documentation intent.")
                     exitCode = 1
                 }
-
-                iDocsTelemetry.setAttributes([
-                    "idocs.result.count": .int(result.canonicalPath == nil ? 0 : 1),
-                    "idocs.source": .string(result.evidence?.source ?? "none")
-                ])
-                recordJSONEmissionFailureIfNeeded(exitCode, command: "resolve")
-                iDocsTelemetry.setExitCode(exitCode)
-                return exitCode
-            } catch {
-                let message = CLIErrorPresenter.message(for: error)
-                let durationMs = start.millisecondsElapsed()
-                if outputFormat == .json {
-                    _ = writeJSONPayload(
-                        resolvePayload(
-                            intent: intent,
-                            result: unresolvedResolveResult(for: error),
-                            callerID: callerID,
-                            durationMs: durationMs,
-                            exitCategory: CLIErrorPresenter.category(for: error),
-                            errorMessage: message
-                        )
-                    )
-                }
-                CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.setExitCode(1)
-                recordCommandFailure(error, command: "resolve")
-                return 1
+                return CommandExecutionResult(
+                    exitCode: exitCode,
+                    resultCount: result.canonicalPath == nil ? 0 : 1,
+                    source: result.evidence?.source
+                )
+            },
+            errorPayload: { error, message, durationMs in
+                resolvePayload(
+                    intent: intent,
+                    result: unresolvedResolveResult(for: error),
+                    callerID: callerID,
+                    durationMs: durationMs,
+                    exitCategory: CLIErrorPresenter.category(for: error),
+                    errorMessage: message
+                )
             }
-        }
+        )
     }
 
     @discardableResult
@@ -283,15 +279,12 @@ public enum CLIExecutor {
         outputFormat: CLIOutputFormat = .text,
         callerID: String? = nil
     ) async -> Int32 {
-        let attributes = commandAttributes(name: "list", outputFormat: outputFormat, callerID: callerID)
-        return await iDocsTelemetry.withSpan("idocs.command.list", attributes: attributes) {
-            let start = ContinuousClock.now
-            do {
-                let adapter = try CLIEnvironment.serviceFactory()
-                let config = CLIEnvironment.configFactory().withInvocationContext(
-                    callerID: callerID,
-                    technologyCategoryFilter: category
-                )
+        await runCommand(
+            name: "list",
+            outputFormat: outputFormat,
+            callerID: callerID,
+            configure: { $0.withInvocationContext(callerID: callerID, technologyCategoryFilter: category) },
+            execute: { adapter, config, start in
                 let technologies = try await adapter.listTechnologies(config: config)
                 let durationMs = start.millisecondsElapsed()
 
@@ -331,44 +324,32 @@ public enum CLIExecutor {
                     CLIEnvironment.writeStdout(lines.joined(separator: "\n"))
                     exitCode = 0
                 }
-
-                iDocsTelemetry.setAttributes([
-                    "idocs.result.count": .int(technologies.count),
-                    "idocs.source": .string(technologies.isEmpty ? "none" : "apple")
-                ])
-                recordJSONEmissionFailureIfNeeded(exitCode, command: "list")
-                iDocsTelemetry.setExitCode(exitCode)
-                return exitCode
-            } catch {
-                let message = CLIErrorPresenter.message(for: error)
-                let durationMs = start.millisecondsElapsed()
-                if outputFormat == .json {
-                    _ = writeJSONPayload(
-                        CLICommandPayload(
-                            command: "list",
-                            caller: callerID,
-                            query: nil,
-                            id: nil,
-                            category: category,
-                            source: nil,
-                            durationMs: durationMs,
-                            resultCount: 0,
-                            selectedPaths: [],
-                            exitCategory: CLIErrorPresenter.category(for: error),
-                            body: nil,
-                            results: nil,
-                            technologies: [],
-                            searchDiagnostics: nil,
-                            errorMessage: message
-                        )
-                    )
-                }
-                CLIEnvironment.writeStderr(message)
-                iDocsTelemetry.setExitCode(1)
-                recordCommandFailure(error, command: "list")
-                return 1
+                return CommandExecutionResult(
+                    exitCode: exitCode,
+                    resultCount: technologies.count,
+                    source: technologies.isEmpty ? "none" : "apple"
+                )
+            },
+            errorPayload: { error, message, durationMs in
+                CLICommandPayload(
+                    command: "list",
+                    caller: callerID,
+                    query: nil,
+                    id: nil,
+                    category: category,
+                    source: nil,
+                    durationMs: durationMs,
+                    resultCount: 0,
+                    selectedPaths: [],
+                    exitCategory: CLIErrorPresenter.category(for: error),
+                    body: nil,
+                    results: nil,
+                    technologies: [],
+                    searchDiagnostics: nil,
+                    errorMessage: message
+                )
             }
-        }
+        )
     }
 
     private static func commandAttributes(
@@ -630,14 +611,15 @@ public enum CLIExecutor {
         guard exitCode != 0 else {
             return
         }
+        let error = JSONPayloadWriteError(command: command)
         iDocsTelemetry.captureException(
             TelemetryFailureDescriptor(
                 errorType: "internal",
                 category: "internal",
                 slug: "idocs.command.\(command).json_output_failed",
                 expected: false,
-                exceptionType: "JSONPayloadWriteError",
-                safeMessage: "JSON output encoding failed."
+                exceptionType: String(describing: type(of: error)),
+                safeMessage: error.errorDescription ?? "JSON output encoding failed."
             )
         )
     }
