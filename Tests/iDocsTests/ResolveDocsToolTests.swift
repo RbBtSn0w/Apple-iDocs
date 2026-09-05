@@ -236,6 +236,32 @@ struct ResolveDocsToolTests {
         #expect(result.resolveDiagnostics.contains { $0.reason == "member_kind_mismatch" })
     }
 
+    @Test("ResolveDocsTool prevents high confidence for typeproperty vs callable mismatch")
+    func typePropertyCallableMismatchPreventsHighConfidence() async throws {
+        let tool = ResolveDocsTool(
+            fetch: { _ in
+                FetchDocResult(
+                    markdown: "# present(_:animated:completion:)\n\nPresents a view controller.",
+                    source: .apple,
+                    sourceAttempts: [FetchSourceAttempt(source: .apple, status: .hit)]
+                )
+            }
+        )
+
+        let result = try await tool.run(
+            intent: ResolveDocsIntent(
+                framework: "UIKit",
+                type: "UIViewController",
+                member: "present",
+                memberKind: "typeproperty"
+            )
+        )
+
+        #expect(result.canonicalPath == nil)
+        #expect(result.confidence == .unresolved)
+        #expect(result.resolveDiagnostics.contains { $0.reason == "member_kind_mismatch" })
+    }
+
     @Test("ResolveDocsTool preserves direct fetch diagnostics when fallback succeeds")
     func fallbackSuccessPreservesDirectFetchDiagnostics() async throws {
         let attempts = PathAttemptCounter()

@@ -571,11 +571,12 @@ public struct ResolveDocsTool {
         }
 
         let combined = "\(path) \(evidence.title)".lowercased()
-        let looksCallable = combined.contains("(")
+        let looksCallable = combined.contains("(") || combined.contains("-swift.method") || combined.contains("-swift.type.method")
+        let looksProperty = combined.contains("-swift.property") || combined.contains("-swift.type.property")
         switch memberKind {
-        case "method", "function", "initializer":
-            return looksCallable
-        case "property", "variable":
+        case "method", "function", "initializer", "type_method", "typemethod":
+            return looksCallable && !looksProperty
+        case "property", "variable", "type_property", "typeproperty":
             return !looksCallable
         default:
             return true
