@@ -249,4 +249,33 @@ struct DocumentationServiceContractTests {
         #expect(scenario.error.errorDescription == scenario.expectedDescription)
         #expect(scenario.error.localizedDescription == scenario.expectedDescription)
     }
+
+    @Test("ResolveConfidence, CandidateSource and MatchQuality rawValues round-trip")
+    func resolveEnumsRawValues() {
+        #expect(ResolveConfidence(rawValue: "high") == .high)
+        #expect(ResolveConfidence(rawValue: "medium") == .medium)
+        #expect(ResolveConfidence(rawValue: "low") == .low)
+        #expect(ResolveConfidence(rawValue: "unresolved") == .unresolved)
+
+        #expect(ResolveCandidateSource(rawValue: "direct") == .direct)
+        #expect(ResolveCandidateSource(rawValue: "search_fallback") == .searchFallback)
+
+        #expect(ResolveMatchQuality(rawValue: "exact") == .exact)
+        #expect(ResolveMatchQuality(rawValue: "partial") == .partial)
+        #expect(ResolveMatchQuality(rawValue: "mismatch") == .mismatch)
+        #expect(ResolveMatchQuality(rawValue: "unknown") == .unknown)
+    }
+
+    @Test("safeAppleURL ensures URL host is developer.apple.com even for inputs with external schemes")
+    func safeAppleURLPreventsNonAppleHost() {
+        let externalInput = "https://evil.example/has space"
+        let url = DefaultDocumentationAdapter.safeAppleURL(for: externalInput)
+        #expect(url.host == "developer.apple.com")
+        #expect(url.path == "/has%20space" || url.path == "/has space")
+
+        let normalPath = "documentation/swiftui/view"
+        let normalURL = DefaultDocumentationAdapter.safeAppleURL(for: normalPath)
+        #expect(normalURL.host == "developer.apple.com")
+        #expect(normalURL.path == "/documentation/swiftui/view")
+    }
 }

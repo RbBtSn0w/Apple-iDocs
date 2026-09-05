@@ -322,4 +322,27 @@ struct XcodeLocalDocsMockTests {
         #expect(results.isEmpty)
         #expect(mockSearch.searchCallCount == 0)
     }
+
+    @Test("IndexStoreQueryCache evicts least recently used items on capacity overflow")
+    func testIndexStoreQueryCacheLRUEviction() async {
+        let testCapacity = 5
+        let cache = IndexStoreQueryCache(maxEntries: testCapacity)
+        for i in 0..<testCapacity {
+            await cache.setResults([IndexStoreQueryMatch(path: "/doc/\(i)", score: 1.0)], for: "key_\(i)")
+        }
+
+        // Access key_0 to make it recently used
+        _ = await cache.results(for: "key_0")
+
+        // Add 6th entry - should evict key_1 (oldest unaccessed), not key_0
+        await cache.setResults([IndexStoreQueryMatch(path: "/doc/new", score: 1.0)], for: "key_new")
+
+        let key0Result = await cache.results(for: "key_0")
+        let key1Result = await cache.results(for: "key_1")
+        let keyNewResult = await cache.results(for: "key_new")
+
+        #expect(key0Result != nil)
+        #expect(key1Result == nil)
+        #expect(keyNewResult != nil)
+    }
 }

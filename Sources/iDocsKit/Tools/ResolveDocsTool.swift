@@ -479,18 +479,46 @@ public struct ResolveDocsTool {
     }
 
     /// Apple renders callable members with their signature in the path slug
-    /// (e.g. `navigationtitle(_:)`), so the bare slug 404s for most methods.
-    /// Generate the common single-unlabeled-argument and no-argument signature
-    /// forms for callable member kinds. These are only guesses: fetch
-    /// verification stays the correctness gate, and a miss falls through to the
-    /// search fallback exactly as before. Labeled-argument signatures still rely
-    /// on `knownMemberAliases` or the search fallback. Takes the already-slugged
+    /// (e.g. `navigationtitle(_:)`), and disambiguates Swift properties or methods
+    /// in dual-language frameworks with `-swift.property` or `-swift.method`, so the
+    /// bare slug 404s in those cases.
+    /// Generate the common signature and disambiguation forms based on member kind.
+    /// These are only guesses: fetch verification stays the correctness gate, and a miss
+    /// falls through to the search fallback exactly as before. Labeled-argument signatures
+    /// still rely on `knownMemberAliases` or the search fallback. Takes the already-slugged
     /// member to avoid recomputing `slug(member)`.
     private func signatureCandidates(memberSlug: String, memberKind: String?) -> [String] {
-        guard let memberKind = memberKind?.lowercased() else { return [] }
+        guard let memberKind = memberKind?.lowercased() else {
+            return [
+                "\(memberSlug)(_:)",
+                "\(memberSlug)()",
+                "\(memberSlug)-swift.property",
+                "\(memberSlug)-swift.method"
+            ]
+        }
         switch memberKind {
         case "method", "function", "initializer":
-            return ["\(memberSlug)(_:)", "\(memberSlug)()"]
+            return [
+                "\(memberSlug)(_:)",
+                "\(memberSlug)()",
+                "\(memberSlug)-swift.method",
+                "\(memberSlug)-swift.type.method"
+            ]
+        case "property", "variable":
+            return [
+                "\(memberSlug)-swift.property",
+                "\(memberSlug)-swift.type.property"
+            ]
+        case "type_property", "typeproperty":
+            return [
+                "\(memberSlug)-swift.type.property",
+                "\(memberSlug)-swift.property"
+            ]
+        case "type_method", "typemethod":
+            return [
+                "\(memberSlug)-swift.type.method",
+                "\(memberSlug)-swift.method"
+            ]
         default:
             return []
         }
@@ -543,11 +571,12 @@ public struct ResolveDocsTool {
         }
 
         let combined = "\(path) \(evidence.title)".lowercased()
-        let looksCallable = combined.contains("(")
+        let looksCallable = combined.contains("(") || combined.contains("-swift.method") || combined.contains("-swift.type.method")
+        let looksProperty = combined.contains("-swift.property") || combined.contains("-swift.type.property")
         switch memberKind {
-        case "method", "function", "initializer":
-            return looksCallable
-        case "property", "variable":
+        case "method", "function", "initializer", "type_method", "typemethod":
+            return looksCallable && !looksProperty
+        case "property", "variable", "type_property", "typeproperty":
             return !looksCallable
         default:
             return true

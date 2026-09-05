@@ -86,7 +86,10 @@
     "query": "NSWindow toolbarStyle",
     "expectedOutcome": "canonical_doc",
     "capability": "resolve",
-    "canonicalPaths": ["/documentation/appkit/nswindow/toolbarstyle"],
+    "canonicalPaths": [
+      "/documentation/appkit/nswindow/toolbarstyle",
+      "/documentation/appkit/nswindow/toolbarstyle-swift.property"
+    ],
     "requiredTerms": ["toolbarStyle"],
     "sourceFamily": "documentation",
     "ciEligible": true,

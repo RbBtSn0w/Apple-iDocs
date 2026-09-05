@@ -193,7 +193,7 @@ public struct DefaultDocumentationAdapter: DocumentationService {
                         "locale": config.locale.identifier,
                         "source": output.source.rawValue
                     ],
-                    url: URLHelpers.webURL(for: id) ?? URL(string: id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "", relativeTo: URLHelpers.appleDocBaseURL)?.absoluteURL ?? URLHelpers.appleDocBaseURL,
+                    url: Self.safeAppleURL(for: id),
                     fetchDiagnostics: output.sourceAttempts.map(Self.mapFetchAttemptDiagnostic)
                 )
                 await recordUsageIfConfigured(
@@ -375,38 +375,15 @@ public struct DefaultDocumentationAdapter: DocumentationService {
     }
 
     private static func mapResolveConfidence(_ confidence: ResolveDocsConfidence) -> ResolveConfidence {
-        switch confidence {
-        case .high:
-            return .high
-        case .medium:
-            return .medium
-        case .low:
-            return .low
-        case .unresolved:
-            return .unresolved
-        }
+        ResolveConfidence(rawValue: confidence.rawValue) ?? .unresolved
     }
 
     private static func mapResolveCandidateSource(_ source: ResolveDocsCandidateSource) -> ResolveCandidateSource {
-        switch source {
-        case .direct:
-            return .direct
-        case .searchFallback:
-            return .searchFallback
-        }
+        ResolveCandidateSource(rawValue: source.rawValue) ?? .direct
     }
 
     private static func mapResolveMatchQuality(_ quality: ResolveDocsMatchQuality) -> ResolveMatchQuality {
-        switch quality {
-        case .exact:
-            return .exact
-        case .partial:
-            return .partial
-        case .mismatch:
-            return .mismatch
-        case .unknown:
-            return .unknown
-        }
+        ResolveMatchQuality(rawValue: quality.rawValue) ?? .unknown
     }
 
     private func mapResolveError(_ error: Error) -> DocumentationError {
@@ -627,5 +604,23 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             )
         }
         return attributes
+    }
+
+    static func safeAppleURL(for id: String) -> URL {
+        var pathCandidate = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let schemeRange = pathCandidate.range(of: "://") {
+            let afterScheme = pathCandidate[schemeRange.upperBound...]
+            if let firstSlash = afterScheme.firstIndex(of: "/") {
+                pathCandidate = String(afterScheme[firstSlash...])
+            } else {
+                pathCandidate = "/"
+            }
+        }
+        if let direct = URLHelpers.webURL(for: pathCandidate) {
+            return direct
+        }
+        let clean = URLHelpers.normalizePath(pathCandidate).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let encoded = clean.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        return URL(string: "https://developer.apple.com/\(encoded)") ?? URLHelpers.appleDocBaseURL
     }
 }

@@ -21,7 +21,10 @@ public struct DocCRenderer {
         // Primary Content Sections
         if let sections = content.primaryContentSections {
             for section in sections {
-                markdown += renderSection(section) + "\n"
+                let rendered = renderSection(section)
+                if !rendered.isEmpty {
+                    markdown += rendered + "\n"
+                }
             }
         }
         
@@ -40,6 +43,8 @@ public struct DocCRenderer {
             return renderBlocks(blocks.content)
         case .properties(let props):
             return "### Properties\n\n" + props.properties.map { "- **\($0.name)**: " + renderBlocks($0.content) }.joined(separator: "\n")
+        case .unknown:
+            return ""
         }
     }
     
