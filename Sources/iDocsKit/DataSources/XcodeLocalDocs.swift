@@ -534,7 +534,11 @@ public struct XcodeLocalDocInfo: Codable, Sendable {
 actor IndexStoreQueryCache {
     private var entries: [String: [IndexStoreQueryMatch]] = [:]
     private var accessOrder: [String] = []
-    private let maxEntries = 1000
+    let maxEntries: Int
+
+    init(maxEntries: Int = 1000) {
+        self.maxEntries = maxEntries
+    }
 
     func results(for key: String) -> [IndexStoreQueryMatch]? {
         guard let value = entries[key] else { return nil }

@@ -21,7 +21,10 @@ public struct DocCRenderer {
         // Primary Content Sections
         if let sections = content.primaryContentSections {
             for section in sections {
-                markdown += renderSection(section) + "\n"
+                let rendered = renderSection(section)
+                if !rendered.isEmpty {
+                    markdown += rendered + "\n"
+                }
             }
         }
         

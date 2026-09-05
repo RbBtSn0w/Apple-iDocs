@@ -211,4 +211,17 @@ struct DocCTypesTests {
             _ = try JSONDecoder().decode(DocCContent.self, from: data)
         }
     }
+
+    @Test("DocCRenderer omits empty unknown sections from output")
+    func testRendererOmitsEmptyUnknownSections() throws {
+        let content = DocCContent(
+            identifier: "doc://test",
+            metadata: DocCMetadata(title: "TestDoc", role: "symbol", platforms: []),
+            primaryContentSections: [.unknown(kind: "futureSection")]
+        )
+
+        let renderer = DocCRenderer()
+        let rendered = try renderer.render(content)
+        #expect(rendered == "# TestDoc\n\n")
+    }
 }
