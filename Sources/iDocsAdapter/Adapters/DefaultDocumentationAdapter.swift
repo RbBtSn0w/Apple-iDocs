@@ -33,50 +33,17 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             if let searchPerformer {
                 return try await searchPerformer(query)
             }
-            let cacheDirectory = config.xcodeDocumentationCachePath.map {
-                URL(fileURLWithPath: $0, isDirectory: true)
-            }
-            return try await SearchDocsTool(
-                api: defaultAppleAPI,
-                sosumiAPI: defaultSosumiAPI,
-                xcodeDocs: XcodeLocalDocs(
-                    fileManager: FileManager.default,
-                    searchProvider: SpotlightSearchProvider(),
-                    cacheDirectory: cacheDirectory
-                )
-            ).runDetailed(query: query)
+            let searchTool = Self.makeSearchTool(config: config, appleAPI: defaultAppleAPI, sosumiAPI: defaultSosumiAPI)
+            return try await searchTool.runDetailed(query: query)
         }
         self.resolvePerformer = configuredResolvePerformer ?? { intent, config in
-            let cacheDirectory = config.xcodeDocumentationCachePath.map {
-                URL(fileURLWithPath: $0, isDirectory: true)
-            }
-            let xcodeDocs = XcodeLocalDocs(
-                fileManager: FileManager.default,
-                searchProvider: SpotlightSearchProvider(),
-                cacheDirectory: cacheDirectory
-            )
-            let diskCache = DiskCache(
-                directory: URL(fileURLWithPath: config.cachePath, isDirectory: true),
-                fileManager: FileManager.default,
-                enableFileLocking: config.enableFileLocking
-            )
-            let fetchTool = FetchDocTool(
-                api: defaultAppleAPI,
-                sosumiAPI: defaultSosumiAPI,
-                xcodeDocs: xcodeDocs,
-                diskCache: diskCache
-            )
-            let searchTool = SearchDocsTool(
-                api: defaultAppleAPI,
-                sosumiAPI: defaultSosumiAPI,
-                xcodeDocs: xcodeDocs
-            )
+            let tools = Self.makeTools(config: config, appleAPI: defaultAppleAPI, sosumiAPI: defaultSosumiAPI)
             return try await ResolveDocsTool(
                 fetch: { path in
-                    try await fetchTool.runDetailed(path: path)
+                    try await tools.fetchTool.runDetailed(path: path)
                 },
                 search: { query in
-                    try await searchTool.run(query: query)
+                    try await tools.searchTool.run(query: query)
                 }
             ).run(intent: Self.mapResolveIntent(intent))
         }
@@ -216,28 +183,11 @@ public struct DefaultDocumentationAdapter: DocumentationService {
         return try await iDocsTelemetry.withSpan("idocs.adapter", attributes: attributes) {
             let start = ContinuousClock.now
             do {
-                let cacheURL = URL(fileURLWithPath: config.cachePath, isDirectory: true)
-                let diskCache = DiskCache(
-                    directory: cacheURL,
-                    fileManager: FileManager.default,
-                    enableFileLocking: config.enableFileLocking
-                )
-                let xcodeCacheDirectory = config.xcodeDocumentationCachePath.map {
-                    URL(fileURLWithPath: $0, isDirectory: true)
-                }
-                let output = try await FetchDocTool(
-                    api: appleAPI,
-                    sosumiAPI: sosumiAPI,
-                    xcodeDocs: XcodeLocalDocs(
-                        fileManager: FileManager.default,
-                        searchProvider: SpotlightSearchProvider(),
-                        cacheDirectory: xcodeCacheDirectory
-                    ),
-                    diskCache: diskCache
-                ).runDetailed(path: id)
+                let tools = Self.makeTools(config: config, appleAPI: appleAPI, sosumiAPI: sosumiAPI)
+                let output = try await tools.fetchTool.runDetailed(path: id)
 
                 let result = DocumentationContent(
-                    title: titleFromBody(output, fallback: id),
+                    title: MarkdownSummary.title(from: output.markdown, fallback: id),
                     body: output.markdown,
                     metadata: [
                         "locale": config.locale.identifier,
@@ -509,14 +459,68 @@ public struct DefaultDocumentationAdapter: DocumentationService {
             .joined(separator: " ")
     }
 
-    private func titleFromBody(_ content: FetchDocResult, fallback: String) -> String {
-        for line in content.markdown.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("#") {
-                return trimmed.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
-            }
+    private struct ToolGraph {
+        let xcodeDocs: XcodeLocalDocs
+        let diskCache: DiskCache
+        let fetchTool: FetchDocTool
+        let searchTool: SearchDocsTool
+    }
+
+    private static func makeSearchTool(
+        config: DocumentationConfig,
+        appleAPI: AppleJSONAPI,
+        sosumiAPI: SosumiAPI
+    ) -> SearchDocsTool {
+        let cacheDirectory = config.xcodeDocumentationCachePath.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
         }
-        return fallback
+        let xcodeDocs = XcodeLocalDocs(
+            fileManager: FileManager.default,
+            searchProvider: SpotlightSearchProvider(),
+            cacheDirectory: cacheDirectory
+        )
+        return SearchDocsTool(
+            api: appleAPI,
+            sosumiAPI: sosumiAPI,
+            xcodeDocs: xcodeDocs
+        )
+    }
+
+    private static func makeTools(
+        config: DocumentationConfig,
+        appleAPI: AppleJSONAPI,
+        sosumiAPI: SosumiAPI
+    ) -> ToolGraph {
+        let cacheDirectory = config.xcodeDocumentationCachePath.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        let xcodeDocs = XcodeLocalDocs(
+            fileManager: FileManager.default,
+            searchProvider: SpotlightSearchProvider(),
+            cacheDirectory: cacheDirectory
+        )
+        let diskCache = DiskCache(
+            directory: URL(fileURLWithPath: config.cachePath, isDirectory: true),
+            fileManager: FileManager.default,
+            enableFileLocking: config.enableFileLocking
+        )
+        let fetchTool = FetchDocTool(
+            api: appleAPI,
+            sosumiAPI: sosumiAPI,
+            xcodeDocs: xcodeDocs,
+            diskCache: diskCache
+        )
+        let searchTool = SearchDocsTool(
+            api: appleAPI,
+            sosumiAPI: sosumiAPI,
+            xcodeDocs: xcodeDocs
+        )
+        return ToolGraph(
+            xcodeDocs: xcodeDocs,
+            diskCache: diskCache,
+            fetchTool: fetchTool,
+            searchTool: searchTool
+        )
     }
 
     private func mapSource(_ source: DataSource) -> RetrievalSource {

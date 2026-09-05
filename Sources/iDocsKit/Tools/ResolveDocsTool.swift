@@ -592,19 +592,9 @@ public struct ResolveDocsTool {
             sourceFamily: sourceFamily,
             source: output.source,
             path: path,
-            title: title(from: output.markdown, fallback: path),
-            summary: summary(from: output.markdown)
+            title: MarkdownSummary.title(from: output.markdown, fallback: path),
+            summary: MarkdownSummary.summary(from: output.markdown)
         )
-    }
-
-    private func title(from markdown: String, fallback: String) -> String {
-        for line in markdown.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("#") {
-                return trimmed.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return fallback
     }
 
     private func recordResolveDiagnostics(_ diagnostics: [ResolveDocsDiagnostic]) {
@@ -620,17 +610,6 @@ public struct ResolveDocsTool {
             }
             iDocsTelemetry.addEvent("idocs.resolve.stage", attributes: attributes)
         }
-    }
-
-    private func summary(from markdown: String) -> String? {
-        for line in markdown.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") {
-                continue
-            }
-            return trimmed
-        }
-        return nil
     }
 
     private func fetchAttempts(from error: Error) -> [FetchSourceAttempt] {
