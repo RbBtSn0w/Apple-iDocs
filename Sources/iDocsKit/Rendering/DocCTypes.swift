@@ -286,6 +286,7 @@ public enum ContentSection: Codable, Sendable {
     case parameters(ParametersSection)
     case content(ContentBlockSection)
     case properties(PropertiesSection)
+    case unknown(kind: String)
     
     enum CodingKeys: String, CodingKey {
         case kind
@@ -309,7 +310,7 @@ public enum ContentSection: Codable, Sendable {
         case "properties":
             self = .properties(try PropertiesSection(from: decoder))
         default:
-            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown section kind: \(kind)")
+            self = .unknown(kind: kind)
         }
     }
     
@@ -328,6 +329,8 @@ public enum ContentSection: Codable, Sendable {
         case .properties(let section):
             try container.encode("properties", forKey: .kind)
             try container.encode(section.properties, forKey: .properties)
+        case .unknown(let kind):
+            try container.encode(kind, forKey: .kind)
         }
     }
 }

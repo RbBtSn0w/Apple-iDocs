@@ -189,13 +189,7 @@ public struct XcodeLocalDocs {
             if fileManager.fileExists(atPath: docPath.path) {
                 logger.info("Found local documentation at \(docPath.path)")
                 
-                // Keep mmap behavior for real FileManager, but honor injected FileSystem for tests/mocks.
-                let data: Data
-                if fileManager is FileManager {
-                    data = try Data(contentsOf: docPath, options: .mappedIfSafe)
-                } else {
-                    data = try fileManager.read(from: docPath)
-                }
+                let data = try fileManager.read(from: docPath, options: .mappedIfSafe)
                 return try JSONDecoder().decode(DocCContent.self, from: data)
             }
         }
@@ -249,11 +243,7 @@ public struct XcodeLocalDocs {
             for storeURL in indexStoreURLs(for: sdk.cachePath) {
                 let data: Data
                 do {
-                    if fileManager is FileManager {
-                        data = try Data(contentsOf: storeURL, options: .mappedIfSafe)
-                    } else {
-                        data = try fileManager.read(from: storeURL)
-                    }
+                    data = try fileManager.read(from: storeURL, options: .mappedIfSafe)
                 } catch {
                     continue
                 }
@@ -444,11 +434,7 @@ public struct XcodeLocalDocs {
     private func rankDocumentationPaths(from url: URL, tokens: [String], limit: Int) -> [IndexStoreQueryMatch] {
         let data: Data
         do {
-            if fileManager is FileManager {
-                data = try Data(contentsOf: url, options: .mappedIfSafe)
-            } else {
-                data = try fileManager.read(from: url)
-            }
+            data = try fileManager.read(from: url, options: .mappedIfSafe)
         } catch {
             return []
         }
@@ -547,17 +533,37 @@ public struct XcodeLocalDocInfo: Codable, Sendable {
 
 actor IndexStoreQueryCache {
     private var entries: [String: [IndexStoreQueryMatch]] = [:]
-    private let maxEntries = 1000
+    private var accessOrder: [String] = []
+    let maxEntries: Int
+
+    init(maxEntries: Int = 1000) {
+        self.maxEntries = maxEntries
+    }
 
     func results(for key: String) -> [IndexStoreQueryMatch]? {
-        entries[key]
+        guard let value = entries[key] else { return nil }
+        if let idx = accessOrder.firstIndex(of: key) {
+            accessOrder.remove(at: idx)
+            accessOrder.append(key)
+        }
+        return value
     }
 
     func setResults(_ results: [IndexStoreQueryMatch], for key: String) {
-        if entries.count >= maxEntries, let firstKey = entries.keys.first {
-            entries.removeValue(forKey: firstKey)
+        if entries[key] != nil {
+            entries[key] = results
+            if let idx = accessOrder.firstIndex(of: key) {
+                accessOrder.remove(at: idx)
+            }
+            accessOrder.append(key)
+            return
+        }
+        if entries.count >= maxEntries, let oldest = accessOrder.first {
+            entries.removeValue(forKey: oldest)
+            accessOrder.removeFirst()
         }
         entries[key] = results
+        accessOrder.append(key)
     }
 }
 
