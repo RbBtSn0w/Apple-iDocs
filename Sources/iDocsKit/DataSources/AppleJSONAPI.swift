@@ -116,10 +116,13 @@ public actor AppleJSONAPI {
                     if httpResponse.statusCode == 200 {
                         return data
                     } else if httpResponse.statusCode == 403 || httpResponse.statusCode == 429 {
+                        lastError = iDocsError.httpError(statusCode: httpResponse.statusCode)
                         logger.warning("Attempt \(attempt) failed with status code \(httpResponse.statusCode). Retrying...")
                     } else {
                         throw iDocsError.httpError(statusCode: httpResponse.statusCode)
                     }
+                } else {
+                    lastError = iDocsError.invalidResponse
                 }
             } catch {
                 lastError = error

@@ -5,26 +5,42 @@ public struct XcodeLocalDocs {
     private let logger = Logger(label: "com.snow.idocs-xcode-docs")
     private static let knownModuleNames: Set<String> = [
         "accelerate",
+        "accessibility",
         "appkit",
         "arkit",
+        "authenticationservices",
         "avfoundation",
+        "charts",
         "cloudkit",
         "combine",
         "coredata",
         "coregraphics",
+        "coreimage",
         "corelocation",
+        "coremedia",
+        "corevideo",
+        "createml",
         "foundation",
         "gamekit",
         "healthkit",
         "mapkit",
         "metal",
+        "network",
+        "oslog",
+        "pencilkit",
         "realitykit",
+        "safariservices",
         "scenekit",
+        "security",
+        "shazamkit",
         "spritekit",
+        "storekit",
         "swift",
         "swiftdata",
         "swiftui",
         "uikit",
+        "uniformtypeidentifiers",
+        "usernotifications",
         "vision",
         "widgetkit"
     ]
@@ -134,12 +150,13 @@ public struct XcodeLocalDocs {
         logger.info("Searching \(sdks.count) local SDK documentations for: \(trimmed)")
 
         var results: [SearchResult] = []
+        let dynamicModules: Set<String>? = trimmed.contains(where: \.isUppercase) ? discoveredModuleNames(sdks: sdks) : nil
 
         // Fast path: exact module queries can usually be satisfied from local
         // documentation roots or index stores without paying the cost of a
         // broader provider search. Symbol-like PascalCase queries must continue
         // into the broader path search so they are not misreported as modules.
-        if isLikelyModuleQuery(trimmed), !isLikelySymbolName(trimmed) {
+        if isLikelyModuleQuery(trimmed), !isLikelySymbolName(trimmed, dynamicModules: dynamicModules) {
             let directModuleResults = searchDocumentationRoots(query: trimmed, sdks: sdks, limit: 20)
             if !directModuleResults.isEmpty {
                 return directModuleResults
@@ -181,7 +198,7 @@ public struct XcodeLocalDocs {
             }
         }
 
-        if results.isEmpty, let moduleHint = extractModuleHint(from: trimmed) {
+        if results.isEmpty, let moduleHint = extractModuleHint(from: trimmed, dynamicModules: dynamicModules) {
             let fallback = moduleHintFallbackResults(moduleHint: moduleHint, originalQuery: trimmed, sdks: sdks)
             if !fallback.isEmpty {
                 logger.info("Recovered \(fallback.count) module-level fallback matches using hint '\(moduleHint)' for query: \(trimmed)")
@@ -199,13 +216,7 @@ public struct XcodeLocalDocs {
             if fileManager.fileExists(atPath: docPath.path) {
                 logger.info("Found local documentation at \(docPath.path)")
                 
-                // Keep mmap behavior for real FileManager, but honor injected FileSystem for tests/mocks.
-                let data: Data
-                if fileManager is FileManager {
-                    data = try Data(contentsOf: docPath, options: .mappedIfSafe)
-                } else {
-                    data = try fileManager.read(from: docPath)
-                }
+                let data = try fileManager.read(from: docPath, options: .mappedIfSafe)
                 return try JSONDecoder().decode(DocCContent.self, from: data)
             }
         }
@@ -259,11 +270,7 @@ public struct XcodeLocalDocs {
             for storeURL in indexStoreURLs(for: sdk.cachePath) {
                 let data: Data
                 do {
-                    if fileManager is FileManager {
-                        data = try Data(contentsOf: storeURL, options: .mappedIfSafe)
-                    } else {
-                        data = try fileManager.read(from: storeURL)
-                    }
+                    data = try fileManager.read(from: storeURL, options: .mappedIfSafe)
                 } catch {
                     continue
                 }
@@ -352,21 +359,37 @@ public struct XcodeLocalDocs {
         return query.count >= 3 && uppercaseCount >= 2
     }
 
-    private func isLikelySymbolName(_ query: String) -> Bool {
+    private func discoveredModuleNames(sdks: [XcodeLocalDocInfo]) -> Set<String> {
+        var modules = Set<String>()
+        for sdk in sdks {
+            let docsDir = sdk.cachePath.appendingPathComponent("documentation")
+            guard fileManager.fileExists(atPath: docsDir.path) else { continue }
+            let entries = (try? fileManager.contentsOfDirectory(at: docsDir, includingPropertiesForKeys: nil, options: [])) ?? []
+            for entry in entries where entry.hasDirectoryPath {
+                modules.insert(entry.lastPathComponent.lowercased())
+            }
+        }
+        return modules
+    }
+
+    private func isLikelySymbolName(_ query: String, dynamicModules: Set<String>? = nil) -> Bool {
         guard !query.contains(where: \.isWhitespace) else { return false }
         guard query.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil else { return false }
         guard let first = query.first, first.isUppercase else { return false }
-        guard !Self.knownModuleNames.contains(query.lowercased()) else { return false }
+        let lower = query.lowercased()
+        if let dynamicModules, dynamicModules.contains(lower) {
+            return false
+        }
+        guard !Self.knownModuleNames.contains(lower) else { return false }
         return true
     }
 
-
-    private func extractModuleHint(from query: String) -> String? {
+    private func extractModuleHint(from query: String, dynamicModules: Set<String>? = nil) -> String? {
         let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
         for token in tokens {
             guard token.count >= 3 else { continue }
             guard let first = token.first, first.isUppercase else { continue }
-            if isLikelyModuleQuery(token), !isLikelySymbolName(token) {
+            if isLikelyModuleQuery(token), !isLikelySymbolName(token, dynamicModules: dynamicModules) {
                 return token
             }
         }
@@ -431,11 +454,7 @@ public struct XcodeLocalDocs {
     private func rankDocumentationPaths(from url: URL, tokens: [String], limit: Int) -> [IndexStoreMatch] {
         let data: Data
         do {
-            if fileManager is FileManager {
-                data = try Data(contentsOf: url, options: .mappedIfSafe)
-            } else {
-                data = try fileManager.read(from: url)
-            }
+            data = try fileManager.read(from: url, options: .mappedIfSafe)
         } catch {
             return []
         }
@@ -459,18 +478,39 @@ public struct XcodeLocalDocInfo: Codable, Sendable {
 }
 
 actor IndexStoreQueryCache {
-    private var entries: [String: [IndexStoreMatch]] = [:]
-    private let maxEntries = 1000
+    private var entries: [String: [IndexStoreQueryMatch]] = [:]
+    private var accessOrder: [String] = []
+    let maxEntries: Int
 
-    func results(for key: String) -> [IndexStoreMatch]? {
-        entries[key]
+    init(maxEntries: Int = 1000) {
+        self.maxEntries = maxEntries
     }
 
-    func setResults(_ results: [IndexStoreMatch], for key: String) {
-        if entries.count >= maxEntries, let firstKey = entries.keys.first {
-            entries.removeValue(forKey: firstKey)
+    func results(for key: String) -> [IndexStoreQueryMatch]? {
+        guard let value = entries[key] else { return nil }
+        if let idx = accessOrder.firstIndex(of: key) {
+            accessOrder.remove(at: idx)
+            accessOrder.append(key)
+        }
+        return value
+    }
+
+    func setResults(_ results: [IndexStoreQueryMatch], for key: String) {
+        if entries[key] != nil {
+            entries[key] = results
+            if let idx = accessOrder.firstIndex(of: key) {
+                accessOrder.remove(at: idx)
+                accessOrder.append(key)
+            }
+            accessOrder.append(key)
+            return
+        }
+        if entries.count >= maxEntries, let oldest = accessOrder.first {
+            entries.removeValue(forKey: oldest)
+            accessOrder.removeFirst()
         }
         entries[key] = results
+        accessOrder.append(key)
     }
 }
 
