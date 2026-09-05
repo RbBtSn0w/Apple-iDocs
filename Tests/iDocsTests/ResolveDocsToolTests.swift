@@ -124,6 +124,50 @@ struct ResolveDocsToolTests {
         ])
     }
 
+    @Test("ResolveDocsTool recovers property disambiguation path without a hardcoded alias")
+    func propertyDisambiguationGuessRecoversMemberPath() async throws {
+        // Regression for issue #44: `NSWindow toolbarStyle` resolve must reach
+        // `/documentation/appkit/nswindow/toolbarstyle-swift.property` when the bare
+        // slug 404s.
+        let recorder = PathRecorder()
+        let tool = ResolveDocsTool(
+            fetch: { path in
+                await recorder.record(path)
+                if path == "/documentation/appkit/nswindow/toolbarstyle" {
+                    throw iDocsError.aggregateFetchFailure(
+                        path: path,
+                        attempts: [
+                            FetchSourceAttempt(source: .apple, status: .error, reason: "http_404", statusCode: 404)
+                        ]
+                    )
+                }
+                #expect(path == "/documentation/appkit/nswindow/toolbarstyle-swift.property")
+                return FetchDocResult(
+                    markdown: "# toolbarStyle\n\nThe style that determines the appearance and location of the toolbar.",
+                    source: .apple,
+                    sourceAttempts: [FetchSourceAttempt(source: .apple, status: .hit)]
+                )
+            }
+        )
+
+        let result = try await tool.run(
+            intent: ResolveDocsIntent(
+                framework: "AppKit",
+                type: "NSWindow",
+                member: "toolbarStyle",
+                memberKind: "property"
+            )
+        )
+
+        #expect(result.canonicalPath == "/documentation/appkit/nswindow/toolbarstyle-swift.property")
+        #expect(result.confidence == .high)
+        #expect(result.verifiedByFetch)
+        #expect(await recorder.paths == [
+            "/documentation/appkit/nswindow/toolbarstyle",
+            "/documentation/appkit/nswindow/toolbarstyle-swift.property"
+        ])
+    }
+
     @Test("ResolveDocsTool keeps unresolved when search fallback misses required symbol")
     func fallbackWrongSymbolStaysUnresolved() async throws {
         let tool = ResolveDocsTool(
