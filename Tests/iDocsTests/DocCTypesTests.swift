@@ -114,6 +114,21 @@ struct DocCTypesTests {
         }
         #expect(type == "newAppleInline")
     }
+
+    @Test("DocC ContentSection preserves unknown kinds")
+    func contentSectionPreservesUnknownKind() throws {
+        let data = """
+        {"kind":"newAppleSection","payload":{"unexpected":true}}
+        """.data(using: .utf8)!
+
+        let section = try JSONDecoder().decode(ContentSection.self, from: data)
+
+        guard case .unknown(let kind) = section else {
+            Issue.record("Expected unknown content section")
+            return
+        }
+        #expect(kind == "newAppleSection")
+    }
     
     @Test("SourceLanguage and DocumentKind Codable")
     func testEnums() throws {

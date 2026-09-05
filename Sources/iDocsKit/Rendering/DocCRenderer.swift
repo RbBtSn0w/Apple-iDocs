@@ -40,6 +40,8 @@ public struct DocCRenderer {
             return renderBlocks(blocks.content)
         case .properties(let props):
             return "### Properties\n\n" + props.properties.map { "- **\($0.name)**: " + renderBlocks($0.content) }.joined(separator: "\n")
+        case .unknown:
+            return ""
         }
     }
     

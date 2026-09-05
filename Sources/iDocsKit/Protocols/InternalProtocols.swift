@@ -16,6 +16,13 @@ public protocol FileSystem {
     func removeItem(at url: URL) throws
     func write(_ data: Data, to url: URL) throws
     func read(from url: URL) throws -> Data
+    func read(from url: URL, options: Data.ReadingOptions) throws -> Data
+}
+
+extension FileSystem {
+    public func read(from url: URL, options: Data.ReadingOptions) throws -> Data {
+        try read(from: url)
+    }
 }
 
 extension FileManager: FileSystem {
@@ -25,6 +32,10 @@ extension FileManager: FileSystem {
     
     public func read(from url: URL) throws -> Data {
         try Data(contentsOf: url)
+    }
+
+    public func read(from url: URL, options: Data.ReadingOptions) throws -> Data {
+        try Data(contentsOf: url, options: options)
     }
 }
 
