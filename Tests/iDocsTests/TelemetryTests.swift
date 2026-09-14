@@ -846,4 +846,73 @@ struct TelemetryTests {
         #expect(root.attributes["error"] == .bool(true))
         #expect(root.attributes["error.type"] == .string("custom_error_type"))
     }
+
+    @Test("Attribute filtering is case-insensitive for denylist and allowlist, and includes adapter keys")
+    func caseInsensitiveAndAdapterAttributeFiltering() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            iDocsTelemetry.setAttributes([
+                "IDOCS.query": .string("bypassed?"),
+                "IDOCS.path": .string("/private/secret"),
+                "IDOCS.unapproved_field": .string("leaked"),
+                "Idocs.command.name": .string("search"),
+                "idocs.operation.name": .string("resolve"),
+                "idocs.locale": .string("en-US")
+            ])
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["IDOCS.query"] == nil)
+        #expect(root.attributes["IDOCS.path"] == nil)
+        #expect(root.attributes["IDOCS.unapproved_field"] == nil)
+        #expect(root.attributes["Idocs.command.name"] == .string("search"))
+        #expect(root.attributes["idocs.operation.name"] == .string("resolve"))
+        #expect(root.attributes["idocs.locale"] == .string("en-US"))
+    }
+
+    @Test("SpanState synchronization prevents data races across concurrent child tasks")
+    func concurrentSpanStateAccess() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            await withTaskGroup(of: Void.self) { group in
+                for i in 0..<10 {
+                    group.addTask {
+                        if i % 2 == 0 {
+                            iDocsTelemetry.setExitCode(0)
+                        } else {
+                            iDocsTelemetry.markFailure(
+                                TelemetryFailureDescriptor(
+                                    errorType: "task_error",
+                                    category: "internal",
+                                    slug: "idocs.test.task_error",
+                                    expected: true,
+                                    exceptionType: "TaskError",
+                                    safeMessage: "Task error"
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] != nil)
+    }
 }

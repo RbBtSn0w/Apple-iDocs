@@ -28,8 +28,10 @@ Telemetry is streamed through the OpenTelemetry gateway (`https://telemetry-gate
 - `process.exit.code`: Process exit code (`0` for success, non-zero for failure; guaranteed on root span).
 - `process.command_args`: Sanitized CLI argument list (e.g. `["idocs", "search", "<argument>"]`).
 
-#### Command Spans (`name = "idocs.command.<name>"`, `span.kind = "internal"`)
+#### Command & Adapter Spans (`name = "idocs.command.<name>"` or `"idocs.adapter"`, `span.kind = "internal"`)
 - `idocs.command.name`: One of `search`, `resolve`, `fetch`, `list`.
+- `idocs.operation.name`: Adapter operation name (`search`, `resolve`, `fetch`, `list`).
+- `idocs.locale`: Language/locale identifier (e.g. `en-US`).
 - `idocs.output.format`: Output serialization format (`text` or `json`).
 - `idocs.caller.category`: Normalized caller type (`skill`, `mcp`, `benchmark`, `automation`, or `unknown`).
 - `idocs.result.count`: Number of returned items.

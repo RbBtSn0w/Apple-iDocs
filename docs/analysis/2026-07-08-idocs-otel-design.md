@@ -168,8 +168,8 @@ The following fields are explicitly denied at the telemetry boundary:
 
 In addition, defense-in-depth policy enforces:
 - Key names containing sensitive keywords (`token`, `secret`, `password`, `credential`, `bearer`, `private_key`) are unconditionally rejected;
-- Any attribute prefixed with `idocs.` must belong to an explicit allowlist (`idocs.command.name`, `idocs.output.format`, `idocs.caller.category`, `idocs.result.count`, `idocs.source`, `idocs.stage.name`, `idocs.stage.status`, `idocs.stage.reason_code`, `idocs.telemetry.schema.version`);
-- Task-local active span tracking (`SpanState`) ensures attribute operations accurately resolve in Swift 6 concurrency without thread-local context loss.
+- Any attribute prefixed with `idocs.` must belong to an explicit allowlist (`idocs.command.name`, `idocs.output.format`, `idocs.caller.category`, `idocs.result.count`, `idocs.source`, `idocs.stage.name`, `idocs.stage.status`, `idocs.stage.reason_code`, `idocs.telemetry.schema.version`, `idocs.operation.name`, `idocs.locale`);
+- Task-local active span tracking (`SpanState`) ensures thread-safe, synchronized attribute and state resolution in Swift 6 concurrency without context loss or race conditions.
 
 Callers are reduced to `skill`, `mcp`, `benchmark`, `automation`, or `unknown`.
 Reason codes must contain only lowercase ASCII letters, digits, `_`, `.`, or

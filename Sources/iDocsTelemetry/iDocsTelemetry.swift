@@ -106,8 +106,35 @@ public enum iDocsTelemetry {
 
     final class SpanState: @unchecked Sendable {
         let span: Span?
-        var hasExplicitErrorType = false
-        var hasExitCode = false
+        private let lock = NSLock()
+        private var _hasExplicitErrorType = false
+        private var _hasExitCode = false
+
+        var hasExplicitErrorType: Bool {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _hasExplicitErrorType
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _hasExplicitErrorType = newValue
+            }
+        }
+
+        var hasExitCode: Bool {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _hasExitCode
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _hasExitCode = newValue
+            }
+        }
 
         init(span: Span? = nil) {
             self.span = span
@@ -656,11 +683,12 @@ public enum iDocsTelemetry {
     }
 
     static func isAttributeAllowed(_ key: String) -> Bool {
-        if deniedAttributeKeys.contains(key) {
+        let lowercased = key.lowercased()
+
+        if deniedAttributeKeys.contains(lowercased) || deniedAttributeKeys.contains(key) {
             return false
         }
 
-        let lowercased = key.lowercased()
         let sensitiveKeywords = [
             "token",
             "secret",
@@ -675,8 +703,8 @@ public enum iDocsTelemetry {
             }
         }
 
-        if key.hasPrefix("idocs.") {
-            return allowedIdocsAttributeKeys.contains(key)
+        if lowercased.hasPrefix("idocs.") {
+            return allowedIdocsAttributeKeys.contains(lowercased)
         }
 
         return true
@@ -700,7 +728,9 @@ public enum iDocsTelemetry {
         "idocs.stage.name",
         "idocs.stage.status",
         "idocs.stage.reason_code",
-        "idocs.telemetry.schema.version"
+        "idocs.telemetry.schema.version",
+        "idocs.operation.name",
+        "idocs.locale"
     ]
 
     private static let allowedReasonCodes: Set<String> = [
