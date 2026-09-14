@@ -698,4 +698,152 @@ struct TelemetryTests {
         #expect(command.attributes["idocs.caller"] == nil)
         #expect(command.attributes["idocs.caller.category"] == .string("skill"))
     }
+
+    @Test("TaskLocal context correctly tracks active span across async tasks")
+    func taskLocalActiveSpanTracking() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            #expect(iDocsTelemetry.currentSpanName() == "idocs")
+            await iDocsTelemetry.withSpan("child.span") {
+                #expect(iDocsTelemetry.currentSpanName() == "child.span")
+                #expect(iDocsTelemetry.activeSpan != nil)
+            }
+            #expect(iDocsTelemetry.currentSpanName() == "idocs")
+        }
+        iDocsTelemetry.flush()
+
+        let spans = exporter.getFinishedSpanItems()
+        #expect(spans.count == 2)
+    }
+
+    @Test("Defense-in-depth rejects unapproved idocs attributes and sensitive keywords")
+    func defenseInDepthAttributeFiltering() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            iDocsTelemetry.setAttributes([
+                "idocs.unapproved_field": .string("leaked"),
+                "idocs.custom_prompt": .string("prompt"),
+                "auth_token": .string("secret"),
+                "user_password": .string("123456"),
+                "client_secret": .string("xyz"),
+                "idocs.result.count": .int(42)
+            ])
+            iDocsTelemetry.addEvent(
+                "test.event",
+                attributes: [
+                    "bearer_token": .string("secret"),
+                    "idocs.unapproved_event_field": .string("bad"),
+                    "idocs.stage.name": .string("cache")
+                ]
+            )
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["idocs.unapproved_field"] == nil)
+        #expect(root.attributes["idocs.custom_prompt"] == nil)
+        #expect(root.attributes["auth_token"] == nil)
+        #expect(root.attributes["user_password"] == nil)
+        #expect(root.attributes["client_secret"] == nil)
+        #expect(root.attributes["idocs.result.count"] == .int(42))
+
+        let event = try #require(root.events.first { $0.name == "test.event" })
+        #expect(event.attributes["bearer_token"] == nil)
+        #expect(event.attributes["idocs.unapproved_event_field"] == nil)
+        #expect(event.attributes["idocs.stage.name"] == .string("cache"))
+    }
+
+    @Test("Root span automatically assigns exit code 0 when operation does not set one")
+    func rootSpanAutomaticSuccessExitCode() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            // No explicit setExitCode call
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] == .int(0))
+        #expect(root.attributes["error"] == nil)
+    }
+
+    @Test("Root span automatically assigns exit code 1 when operation throws")
+    func rootSpanAutomaticFailureExitCode() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        struct TestError: LocalizedError {
+            var errorDescription: String? { "test failure" }
+        }
+
+        do {
+            try await iDocsTelemetry.withRootSpan(
+                arguments: ["idocs"],
+                serviceVersion: "1.0.0",
+                environment: [:]
+            ) {
+                throw TestError()
+            }
+        } catch {
+            // expected
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] == .int(1))
+        #expect(root.attributes["error"] == .bool(true))
+        #expect(root.attributes["error.type"] == .string("TestError"))
+    }
+
+    @Test("Explicit error descriptor type is preserved when setExitCode is subsequently called")
+    func errorTypePreservedWhenExitCodeCalled() async throws {
+        let exporter = InMemoryExporter()
+        iDocsTelemetry.installForTesting(spanExporter: exporter)
+        defer { iDocsTelemetry.shutdown() }
+
+        await iDocsTelemetry.withRootSpan(
+            arguments: ["idocs"],
+            serviceVersion: "1.0.0",
+            environment: [:]
+        ) {
+            iDocsTelemetry.markFailure(
+                TelemetryFailureDescriptor(
+                    errorType: "custom_error_type",
+                    category: "user",
+                    slug: "idocs.test.custom_error",
+                    expected: true,
+                    exceptionType: "CustomError",
+                    safeMessage: "Custom error message"
+                )
+            )
+            iDocsTelemetry.setExitCode(1)
+        }
+        iDocsTelemetry.flush()
+
+        let root = try #require(exporter.getFinishedSpanItems().first { $0.name == "idocs" })
+        #expect(root.attributes["process.exit.code"] == .int(1))
+        #expect(root.attributes["error"] == .bool(true))
+        #expect(root.attributes["error.type"] == .string("custom_error_type"))
+    }
 }
