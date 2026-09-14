@@ -68,15 +68,81 @@ public enum iDocsTelemetry {
     public static let testServiceName = "idocs-test"
     public static let telemetryEnvironmentVariable = "IDOCS_TELEMETRY_ENVIRONMENT"
 
-    private static let lock = NSLock()
-    private nonisolated(unsafe) static var runtime = RuntimeState(
-        tracerProvider: nil,
-        tracer: nil
-    )
+    private final class TelemetryStorage: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _tracerProvider: TracerProviderSdk?
+        private var _tracer: Tracer?
 
-    private struct RuntimeState: @unchecked Sendable {
-        let tracerProvider: TracerProviderSdk?
-        let tracer: Tracer?
+        var tracer: Tracer? {
+            lock.lock()
+            defer { lock.unlock() }
+            return _tracer
+        }
+
+        var tracerProvider: TracerProviderSdk? {
+            lock.lock()
+            defer { lock.unlock() }
+            return _tracerProvider
+        }
+
+        func set(tracerProvider: TracerProviderSdk?, tracer: Tracer?) {
+            lock.lock()
+            defer { lock.unlock() }
+            self._tracerProvider = tracerProvider
+            self._tracer = tracer
+        }
+
+        func reset() {
+            lock.lock()
+            defer { lock.unlock() }
+            self._tracerProvider = nil
+            self._tracer = nil
+        }
+    }
+
+    private static let storage = TelemetryStorage()
+
+    @TaskLocal static var currentSpanState: SpanState?
+
+    final class SpanState: @unchecked Sendable {
+        let span: Span?
+        private let lock = NSLock()
+        private var _hasExplicitErrorType = false
+        private var _hasExitCode = false
+
+        var hasExplicitErrorType: Bool {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _hasExplicitErrorType
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _hasExplicitErrorType = newValue
+            }
+        }
+
+        var hasExitCode: Bool {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _hasExitCode
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _hasExitCode = newValue
+            }
+        }
+
+        init(span: Span? = nil) {
+            self.span = span
+        }
+    }
+
+    public static var activeSpan: Span? {
+        currentSpanState?.span ?? OpenTelemetry.instance.contextProvider.activeSpan
     }
 
     public static func bootstrap(
@@ -84,12 +150,7 @@ public enum iDocsTelemetry {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         guard !telemetryDisabled(environment: environment) else {
-            lock.withLock {
-                runtime = RuntimeState(
-                    tracerProvider: nil,
-                    tracer: nil
-                )
-            }
+            storage.reset()
             return
         }
 
@@ -126,12 +187,7 @@ public enum iDocsTelemetry {
             instrumentationName: "com.snow.idocs.telemetry",
             instrumentationVersion: serviceVersion
         )
-        lock.withLock {
-            runtime = RuntimeState(
-                tracerProvider: provider,
-                tracer: tracer
-            )
-        }
+        storage.set(tracerProvider: provider, tracer: tracer)
     }
 
     public static func installForTesting(
@@ -154,39 +210,22 @@ public enum iDocsTelemetry {
             instrumentationName: "com.snow.idocs.telemetry",
             instrumentationVersion: serviceVersion
         )
-
-        lock.withLock {
-            runtime = RuntimeState(
-                tracerProvider: provider,
-                tracer: tracer
-            )
-        }
+        storage.set(tracerProvider: provider, tracer: tracer)
     }
 
     public static func resetForTesting() {
-        lock.withLock {
-            runtime = RuntimeState(
-                tracerProvider: nil,
-                tracer: nil
-            )
-        }
+        storage.reset()
     }
 
     public static func shutdown() {
-        let currentRuntime = lock.withLock { runtime }
-        currentRuntime.tracerProvider?.forceFlush(timeout: 0.2)
-        currentRuntime.tracerProvider?.shutdown()
-        lock.withLock {
-            runtime = RuntimeState(
-                tracerProvider: nil,
-                tracer: nil
-            )
-        }
+        let provider = storage.tracerProvider
+        provider?.forceFlush(timeout: 0.2)
+        provider?.shutdown()
+        storage.reset()
     }
 
     public static func flush(timeout: TimeInterval = 0.2) {
-        let currentRuntime = lock.withLock { runtime }
-        currentRuntime.tracerProvider?.forceFlush(timeout: timeout)
+        storage.tracerProvider?.forceFlush(timeout: timeout)
     }
 
     public static func resolveTracesEndpoint(
@@ -249,17 +288,17 @@ public enum iDocsTelemetry {
     }
 
     public static func currentSpanName() -> String? {
-        guard let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording else {
+        guard let span = activeSpan, span.isRecording else {
             return nil
         }
         return span.name
     }
 
     public static func setAttributes(_ attributes: [String: TelemetryAttributeValue]) {
-        guard let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording else {
+        guard let span = activeSpan, span.isRecording else {
             return
         }
-        for (key, value) in attributes where !deniedAttributeKeys.contains(key) {
+        for (key, value) in attributes where isAttributeAllowed(key) {
             span.setAttribute(key: key, value: value.otelValue)
         }
     }
@@ -268,23 +307,26 @@ public enum iDocsTelemetry {
         _ name: String,
         attributes: [String: TelemetryAttributeValue] = [:]
     ) {
-        guard let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording else {
+        guard let span = activeSpan, span.isRecording else {
             return
         }
         span.addEvent(
             name: name,
             attributes: attributes
-                .filter { !deniedAttributeKeys.contains($0.key) }
+                .filter { isAttributeAllowed($0.key) }
                 .mapValues(\.otelValue)
         )
     }
 
     public static func setExitCode(_ exitCode: Int32) {
+        currentSpanState?.hasExitCode = true
         setAttributes(["process.exit.code": .int(Int(exitCode))])
         if exitCode != 0 {
-            if let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording {
+            if let span = activeSpan, span.isRecording {
                 span.setAttribute(key: "error", value: AttributeValue(true))
-                span.setAttribute(key: "error.type", value: AttributeValue("_OTHER"))
+                if !(currentSpanState?.hasExplicitErrorType ?? false) {
+                    span.setAttribute(key: "error.type", value: AttributeValue("_OTHER"))
+                }
                 span.status = .error(description: "Process exited with non-zero code: \(exitCode)")
             }
         }
@@ -305,7 +347,8 @@ public enum iDocsTelemetry {
     }
 
     public static func markFailure(_ descriptor: TelemetryFailureDescriptor) {
-        guard let span = OpenTelemetry.instance.contextProvider.activeSpan, span.isRecording else {
+        currentSpanState?.hasExplicitErrorType = true
+        guard let span = activeSpan, span.isRecording else {
             return
         }
         span.setAttribute(key: "error", value: AttributeValue(true))
@@ -330,7 +373,7 @@ public enum iDocsTelemetry {
         resendCount: Int = 0,
         operation: @Sendable () async throws -> T
     ) async rethrows -> T {
-        guard let tracer = lock.withLock({ runtime.tracer }),
+        guard let tracer = storage.tracer,
               let scheme = url.scheme,
               let host = url.host else {
             return try await operation()
@@ -356,12 +399,15 @@ public enum iDocsTelemetry {
             _ = builder.setAttribute(key: "server.port", value: AttributeValue(port))
         }
 
-        return try await builder.withActiveSpan { _ in
-            do {
-                return try await operation()
-            } catch {
-                recordError(error)
-                throw error
+        return try await builder.withActiveSpan { span in
+            let spanState = SpanState(span: span as? Span)
+            return try await $currentSpanState.withValue(spanState) {
+                do {
+                    return try await operation()
+                } catch {
+                    recordError(error)
+                    throw error
+                }
             }
         }
     }
@@ -369,10 +415,11 @@ public enum iDocsTelemetry {
     public static func recordHTTPResponse(statusCode: Int) {
         setAttributes(["http.response.status_code": .int(statusCode)])
         guard statusCode >= 400,
-              let span = OpenTelemetry.instance.contextProvider.activeSpan,
+              let span = activeSpan,
               span.isRecording else {
             return
         }
+        currentSpanState?.hasExplicitErrorType = true
         span.setAttribute(key: "error", value: AttributeValue(true))
         span.setAttribute(key: "error.type", value: AttributeValue(String(statusCode)))
         span.status = .error(description: "HTTP \(statusCode)")
@@ -384,7 +431,7 @@ public enum iDocsTelemetry {
         arguments: [String],
         operation: () async throws -> T
     ) async rethrows -> T {
-        guard let tracer = lock.withLock({ runtime.tracer }) else {
+        guard let tracer = storage.tracer else {
             return try await operation()
         }
 
@@ -400,12 +447,15 @@ public enum iDocsTelemetry {
                 value: AttributeValue(sanitizeSubprocessArgs(arguments))
             )
 
-        return try await builder.withActiveSpan { _ in
-            do {
-                return try await operation()
-            } catch {
-                recordError(error)
-                throw error
+        return try await builder.withActiveSpan { span in
+            let spanState = SpanState(span: span as? Span)
+            return try await $currentSpanState.withValue(spanState) {
+                do {
+                    return try await operation()
+                } catch {
+                    recordError(error)
+                    throw error
+                }
             }
         }
     }
@@ -417,7 +467,7 @@ public enum iDocsTelemetry {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         operation: () async throws -> T
     ) async rethrows -> T {
-        let shouldBootstrap = lock.withLock { runtime.tracer == nil }
+        let shouldBootstrap = storage.tracer == nil
         if shouldBootstrap {
             bootstrap(serviceVersion: serviceVersion, environment: environment)
         }
@@ -427,7 +477,7 @@ public enum iDocsTelemetry {
             }
         }
 
-        guard let tracer = lock.withLock({ runtime.tracer }) else {
+        guard let tracer = storage.tracer else {
             return try await operation()
         }
 
@@ -447,12 +497,22 @@ public enum iDocsTelemetry {
             _ = builder.setNoParent()
         }
 
-        return try await builder.withActiveSpan { _ in
-            do {
-                return try await operation()
-            } catch {
-                recordError(error)
-                throw error
+        return try await builder.withActiveSpan { span in
+            let spanState = SpanState(span: span as? Span)
+            return try await $currentSpanState.withValue(spanState) {
+                do {
+                    let result = try await operation()
+                    if !spanState.hasExitCode {
+                        setExitCode(0)
+                    }
+                    return result
+                } catch {
+                    if !spanState.hasExitCode {
+                        setExitCode(1)
+                    }
+                    recordError(error)
+                    throw error
+                }
             }
         }
     }
@@ -463,7 +523,7 @@ public enum iDocsTelemetry {
         attributes: [String: TelemetryAttributeValue] = [:],
         operation: () async throws -> T
     ) async rethrows -> T {
-        guard let tracer = lock.withLock({ runtime.tracer }) else {
+        guard let tracer = storage.tracer else {
             return try await operation()
         }
 
@@ -471,12 +531,15 @@ public enum iDocsTelemetry {
             .setActive(true)
             .setSpanKind(spanKind: .internal)
 
-        for (key, value) in attributes where !deniedAttributeKeys.contains(key) {
+        for (key, value) in attributes where isAttributeAllowed(key) {
             _ = builder.setAttribute(key: key, value: value.otelValue)
         }
 
-        return try await builder.withActiveSpan { _ in
-            try await operation()
+        return try await builder.withActiveSpan { span in
+            let spanState = SpanState(span: span as? Span)
+            return try await $currentSpanState.withValue(spanState) {
+                try await operation()
+            }
         }
     }
 
@@ -619,6 +682,34 @@ public enum iDocsTelemetry {
         return fallback
     }
 
+    static func isAttributeAllowed(_ key: String) -> Bool {
+        let lowercased = key.lowercased()
+
+        if deniedAttributeKeys.contains(lowercased) || deniedAttributeKeys.contains(key) {
+            return false
+        }
+
+        let sensitiveKeywords = [
+            "token",
+            "secret",
+            "password",
+            "credential",
+            "bearer",
+            "private_key"
+        ]
+        for keyword in sensitiveKeywords {
+            if lowercased.contains(keyword) {
+                return false
+            }
+        }
+
+        if lowercased.hasPrefix("idocs.") {
+            return allowedIdocsAttributeKeys.contains(lowercased)
+        }
+
+        return true
+    }
+
     private static let deniedAttributeKeys: Set<String> = [
         "idocs.query",
         "idocs.path",
@@ -626,6 +717,20 @@ public enum iDocsTelemetry {
         "idocs.caller",
         "idocs.stage.reason",
         "idocs.category_filter"
+    ]
+
+    private static let allowedIdocsAttributeKeys: Set<String> = [
+        "idocs.command.name",
+        "idocs.output.format",
+        "idocs.caller.category",
+        "idocs.result.count",
+        "idocs.source",
+        "idocs.stage.name",
+        "idocs.stage.status",
+        "idocs.stage.reason_code",
+        "idocs.telemetry.schema.version",
+        "idocs.operation.name",
+        "idocs.locale"
     ]
 
     private static let allowedReasonCodes: Set<String> = [

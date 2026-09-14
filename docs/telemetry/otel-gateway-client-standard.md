@@ -39,8 +39,10 @@ non-default ports, and custom Collector endpoints do not inherit it.
 iDocs owns:
 
 - stable Resource identity and low-cardinality span names;
+- Swift 6 concurrency safety with TaskLocal SpanState propagation;
+- defense-in-depth attribute filtering with explicit allowlist and sensitive keyword rejection;
+- guaranteed process.exit.code and bounded error classification on root span;
 - CLI, command, HTTP, and subprocess span semantics;
-- sanitizer and privacy denylist behavior;
 - bounded queues, timeouts, flush, opt-out, and fail-open behavior;
 - final error fields on the owning span.
 
