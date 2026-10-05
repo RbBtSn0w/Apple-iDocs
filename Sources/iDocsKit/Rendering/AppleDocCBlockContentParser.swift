@@ -84,9 +84,30 @@ struct AppleDocCBlockContentParser: Sendable {
             context.appendPartial(path: path, reason: "block_items_not_array")
             return []
         }
-        return items.enumerated().compactMap { index, value -> [ContentBlock]? in
-            let blocks = parseBlocks(from: value, path: "\(path)[\(index)]", context: &context)
-            return blocks.isEmpty ? nil : blocks
+        return items.enumerated().compactMap { index, itemValue -> [ContentBlock]? in
+            let itemPath = "\(path)[\(index)]"
+            switch itemValue {
+            case .array:
+                let blocks = parseBlocks(from: itemValue, path: itemPath, context: &context)
+                return blocks.isEmpty ? nil : blocks
+            case .object(let object):
+                if let content = object["content"] {
+                    let blocks = parseBlocks(from: content, path: "\(itemPath).content", context: &context)
+                    return blocks.isEmpty ? nil : blocks
+                }
+                if object["type"] != nil, let block = parseBlock(itemValue, path: itemPath, context: &context) {
+                    return [block]
+                }
+                context.appendPartial(path: itemPath, reason: "item_missing_content")
+                return nil
+            case .string(let str):
+                let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                return [.paragraph([.text(trimmed)])]
+            default:
+                context.appendPartial(path: itemPath, reason: "invalid_block_item")
+                return nil
+            }
         }
     }
 
