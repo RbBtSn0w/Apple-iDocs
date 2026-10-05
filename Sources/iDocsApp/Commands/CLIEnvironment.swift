@@ -17,4 +17,8 @@ public enum CLIEnvironment {
     nonisolated(unsafe) public static var writeStderr: @Sendable (String) -> Void = { message in
         FileHandle.standardError.write(Data((message + "\n").utf8))
     }
+
+    public static func bootstrapLogging(isVerbose: Bool) {
+        DocumentationLoggingSystem.bootstrap(isVerbose: isVerbose)
+    }
 }

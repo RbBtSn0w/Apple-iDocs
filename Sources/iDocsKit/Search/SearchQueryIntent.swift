@@ -6,30 +6,26 @@ struct SearchQueryIntent: Sendable {
         let tokenStems: Set<String>
     }
 
-    private static let stopWords: Set<String> = [
-        "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
-        "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
-        "is", "are", "be", "by", "from", "using", "use", "app", "apps"
-    ]
-
     private static let technologyCompacts: Set<String> = [
         "swiftui", "uikit", "appkit", "foundation", "xcode", "appstoreconnect", "testflight",
         "coregraphics", "coredata", "swiftdata", "combine", "dispatch"
     ]
 
+    let profile: SearchRelevanceProfile
     let rawQuery: String
     let rawSegments: [String]
     let compactQuery: String
     let tokenStems: [String]
     let requiredSymbols: [RequiredSymbol]
 
-    init(_ query: String) {
+    init(_ query: String, profile: SearchRelevanceProfile = .standard) {
+        self.profile = profile
         self.rawQuery = query
         self.rawSegments = Self.segments(in: query)
         self.compactQuery = Self.compact(query)
 
         let tokens = Self.lexicalTokens(in: query)
-            .filter { !Self.stopWords.contains($0) }
+            .filter { !profile.stopWords.contains($0) }
         self.tokenStems = Self.stableUnique(tokens.map(Self.stem))
 
         self.requiredSymbols = Self.segments(in: query).compactMap { segment in
@@ -59,12 +55,7 @@ struct SearchQueryIntent: Sendable {
             || technology.url.lowercased().hasPrefix(xcodePath + "/")
             || technology.name.lowercased() == "xcode"
         if isXcode {
-            let xcodeKeywords: Set<String> = [
-                "xcode", "catalog", "string", "local", "localiz", "localizing", "localization",
-                "asset", "build", "setting", "agent", "testing", "preview", "scheme",
-                "workspace", "project"
-            ]
-            let xcodeStems = Set(xcodeKeywords.map(Self.stem))
+            let xcodeStems = Set(profile.xcodeKeywords.map(Self.stem))
             if !queryTokenSet.isDisjoint(with: xcodeStems) {
                 return true
             }

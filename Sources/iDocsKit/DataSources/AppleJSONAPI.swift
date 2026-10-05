@@ -371,25 +371,7 @@ public actor AppleJSONAPI {
                 )
 
                 let queryStems = Set(intent.tokenStems)
-                let urlLower = url.lowercased()
-                if urlLower.contains("localization") {
-                    let localizationStems: Set<String> = ["catalog", "string", "local", "localiz", "translat", "languag", "plural", "agent"]
-                    if !queryStems.isDisjoint(with: localizationStems) {
-                        score += 50.0
-                    }
-                }
-                if urlLower.contains("asset") {
-                    let assetStems: Set<String> = ["asset", "catalog", "image", "icon", "color"]
-                    if !queryStems.isDisjoint(with: assetStems) {
-                        score += 50.0
-                    }
-                }
-                if urlLower.contains("coding-intelligence") {
-                    let agentStems: Set<String> = ["agent", "intellig", "ai", "mcp", "complet"]
-                    if !queryStems.isDisjoint(with: agentStems) {
-                        score += 50.0
-                    }
-                }
+                score += intent.profile.boost(forSubgroupURL: url, queryStems: queryStems)
 
                 guard score > 0 else { return nil }
                 return (ref: ref, score: score, url: url)

@@ -84,7 +84,7 @@ public struct XcodeLocalDocs {
     
     public func listAvailableSDKs() async throws -> [XcodeLocalDocInfo] {
         guard fileManager.fileExists(atPath: cacheDirectory.path) else {
-            logger.warning("Xcode DocumentationCache not found at \(cacheDirectory.path)")
+            logger.info("Xcode DocumentationCache not found at \(cacheDirectory.path)")
             return []
         }
         

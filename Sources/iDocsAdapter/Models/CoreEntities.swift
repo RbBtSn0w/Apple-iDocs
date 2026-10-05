@@ -1,4 +1,7 @@
 import Foundation
+import iDocsKit
+
+public typealias DocumentationLoggingSystem = iDocsKit.DocumentationLoggingSystem
 
 public enum RetrievalSource: String, Sendable, Equatable {
     case cache
