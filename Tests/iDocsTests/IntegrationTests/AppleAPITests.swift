@@ -49,17 +49,17 @@ struct AppleAPITests {
 }
 
 // MARK: - Mock Types for Testing
-
-struct AppleSearchResponse: Codable {
+ 
+fileprivate struct AppleSearchResponse: Codable {
     let references: [String: AppleSearchResult]
 }
 
-struct AppleSearchResult: Codable {
+fileprivate struct AppleSearchResult: Codable {
     let title: String
     let type: String?
     let kindValue: String?
     let url: String
-    let abstract: [InlineText]?
+    let abstract: [AppleAPITestsInlineText]?
 
     enum CodingKeys: String, CodingKey {
         case title
@@ -74,7 +74,7 @@ struct AppleSearchResult: Codable {
     }
 }
 
-struct InlineText: Codable {
+fileprivate struct AppleAPITestsInlineText: Codable {
     let type: String?
     let text: String?
 }

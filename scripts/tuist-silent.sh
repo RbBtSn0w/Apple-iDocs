@@ -179,6 +179,7 @@ run_tuist_test_silent() {
     GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-}" \
     IDOCS_PROJECT_ROOT="${IDOCS_PROJECT_ROOT:-}" \
     IDOCS_LOCAL_BINARY="${IDOCS_LOCAL_BINARY:-}" \
+    IDOCS_RETRY_DELAY_NS="${IDOCS_RETRY_DELAY_NS:-0}" \
     tuist test "$TUIST_TEST_SCHEME" \
       ${inspect_mode_args[@]+"${inspect_mode_args[@]}"} \
       --no-upload \

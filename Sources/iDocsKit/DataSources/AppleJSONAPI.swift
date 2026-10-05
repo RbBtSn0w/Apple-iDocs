@@ -4,74 +4,32 @@ import iDocsTelemetry
 
 public actor AppleJSONAPI {
     private let logger = Logger(label: "com.snow.idocs-apple-api")
-    private let session: any NetworkSession
-    
-    public init(session: any NetworkSession = URLSession.shared) {
-        self.session = session
+    public let httpClient: AppleDocumentationHTTPClient
+    public let crawler: AppleRemoteSearchCrawler
+
+    public init(session: any NetworkSession = URLSession.shared, retryDelayNanoseconds: UInt64? = nil) {
+        let client = AppleDocumentationHTTPClient(session: session, retryDelayNanoseconds: retryDelayNanoseconds)
+        self.httpClient = client
+        self.crawler = AppleRemoteSearchCrawler(httpClient: client)
     }
-    
+
+    public init(httpClient: AppleDocumentationHTTPClient, crawler: AppleRemoteSearchCrawler? = nil) {
+        self.httpClient = httpClient
+        self.crawler = crawler ?? AppleRemoteSearchCrawler(httpClient: httpClient)
+    }
+
     public func search(query: String) async throws -> [SearchResult] {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedQuery.isEmpty else {
-            return []
+        try await crawler.search(query: query) { [self] in
+            try await self.fetchTechnologies()
         }
-
-        guard let url = URLHelpers.searchURL(query: query) else {
-            return []
-        }
-        
-        let data = try await fetchWithRetry(url: url)
-        let decoder = JSONDecoder()
-        let response = try decoder.decode(DocumentationIndexResponse.self, from: data)
-
-        let indexedResults: [SearchResult] = response.references.values.compactMap { reference -> SearchResult? in
-            guard let title = reference.title,
-                  let url = reference.url else {
-                return nil
-            }
-
-            let abstract = reference.abstractText
-            let haystack = "\(title) \(abstract ?? "") \(url)".lowercased()
-            guard haystack.contains(normalizedQuery) else {
-                return nil
-            }
-
-            let score = relevanceScore(for: normalizedQuery, title: title, abstract: abstract, path: url)
-            return SearchResult(
-                title: title,
-                abstract: abstract,
-                path: url,
-                kind: documentKind(kind: reference.kind, role: reference.role, type: reference.type),
-                source: .apple,
-                relevance: score
-            )
-        }
-        .sorted {
-            let left = $0.relevance ?? 0
-            let right = $1.relevance ?? 0
-            if left == right { return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            return left > right
-        }
-        .prefix(50)
-        .map { $0 }
-
-        if !indexedResults.isEmpty {
-            return indexedResults
-        }
-
-        return try await searchTechnologyGraph(query: query)
     }
-    
+
     public func fetchDoc(path: String) async throws -> DocCContent {
         try await fetchDocDetailed(path: path).content
     }
 
     public func fetchDocDetailed(path: String) async throws -> AppleDocCIngestionResult {
-        guard let url = URLHelpers.dataURL(for: path) else {
-            throw iDocsError.invalidURL
-        }
-        
-        let data = try await fetchWithRetry(url: url)
+        let data = try await httpClient.fetchData(for: path)
         do {
             return try AppleDocCIngestion().normalize(data, requestedPath: path)
         } catch let ingestionError as AppleDocCIngestionError {
@@ -82,347 +40,8 @@ public actor AppleJSONAPI {
     }
 
     public func fetchTechnologies() async throws -> [Technology] {
-        guard let url = URLHelpers.technologiesURL() else {
-            throw iDocsError.invalidURL
-        }
-
-        let data = try await fetchWithRetry(url: url)
+        let data = try await httpClient.fetchTechnologiesData()
         return try parseTechnologies(from: data)
-    }
-    
-    private func fetchWithRetry(url: URL, maxRetries: Int = 3) async throws -> Data {
-        var lastError: Error?
-        var delaySeconds: UInt64 = 1
-        
-        for attempt in 1...maxRetries {
-            do {
-                var request = URLRequest(url: url)
-                request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
-                let finalizedRequest = request
-                
-                let (data, response) = try await iDocsTelemetry.withHTTPClientSpan(
-                    method: "GET",
-                    url: url,
-                    resendCount: attempt - 1
-                ) {
-                    let result = try await session.data(for: finalizedRequest)
-                    if let http = result.1 as? HTTPURLResponse {
-                        iDocsTelemetry.recordHTTPResponse(statusCode: http.statusCode)
-                    }
-                    return result
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode == 200 {
-                        return data
-                    } else if httpResponse.statusCode == 403 || httpResponse.statusCode == 429 {
-                        lastError = iDocsError.httpError(statusCode: httpResponse.statusCode)
-                        logger.warning("Attempt \(attempt) failed with status code \(httpResponse.statusCode). Retrying...")
-                    } else {
-                        throw iDocsError.httpError(statusCode: httpResponse.statusCode)
-                    }
-                } else {
-                    lastError = iDocsError.invalidResponse
-                }
-            } catch {
-                let isCancelled = Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled
-                if isCancelled {
-                    throw CancellationError()
-                }
-                lastError = error
-                logger.error("Attempt \(attempt) failed with error: \(error.localizedDescription)")
-                if !shouldRetry(after: error) {
-                    throw error
-                }
-            }
-            
-            if attempt < maxRetries {
-                try await Task.sleep(nanoseconds: delaySeconds * 1_000_000_000)
-                delaySeconds *= 2
-            }
-        }
-        
-        throw lastError ?? iDocsError.maxRetriesReached
-    }
-
-    private func shouldRetry(after error: Error) -> Bool {
-        if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
-            return false
-        }
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .timedOut,
-                 .networkConnectionLost,
-                 .cannotFindHost,
-                 .cannotConnectToHost,
-                 .dnsLookupFailed,
-                 .resourceUnavailable,
-                 .notConnectedToInternet:
-                return true
-            default:
-                return false
-            }
-        }
-
-        guard let idocsError = error as? iDocsError else {
-            return true
-        }
-
-        switch idocsError {
-        case .httpError(let statusCode):
-            return statusCode == 403 || statusCode == 429
-        case .maxRetriesReached:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private nonisolated func documentKind(kind: String?, role: String?, type: String?) -> DocumentKind {
-        let value = (kind ?? role ?? type ?? "").lowercased()
-        switch value {
-        case "framework", "module":
-            return .framework
-        case "class":
-            return .class
-        case "struct", "structure":
-            return .structure
-        case "protocol":
-            return .protocol
-        case "enum", "enumeration":
-            return .enumeration
-        case "function":
-            return .function
-        case "property":
-            return .property
-        case "typealias":
-            return .typealias
-        case "associatedtype":
-            return .associatedtype
-        case "operator":
-            return .operator
-        case "macro":
-            return .macro
-        case "variable":
-            return .variable
-        case "initializer", "init":
-            return .initializer
-        case "instancetype", "instancemethod":
-            return .instanceMethod
-        case "typemethod":
-            return .typeMethod
-        case "instanceproperty":
-            return .instanceProperty
-        case "typeproperty":
-            return .typeProperty
-        case "article":
-            return .article
-        case "sample code", "samplecode", "sample-code":
-            return .sampleCode
-        default:
-            return .overview
-        }
-    }
-
-    private func relevanceScore(for query: String, title: String, abstract: String?, path: String) -> Double {
-        let q = query.lowercased()
-        let t = title.lowercased()
-        let a = (abstract ?? "").lowercased()
-        let p = path.lowercased()
-        var score = 0.0
-
-        if t == q { score += 120 }
-        if t.hasPrefix(q) { score += 80 }
-        if t.contains(q) { score += 40 }
-        if p.contains("/\(q)") || p.hasSuffix("/\(q)") { score += 30 }
-        if p.contains(q) { score += 20 }
-        if a.contains(q) { score += 10 }
-
-        // Slightly prefer shorter titles for the same token match.
-        score -= Double(title.count) * 0.01
-        return score
-    }
-
-    private func searchTechnologyGraph(query: String) async throws -> [SearchResult] {
-        let intent = SearchQueryIntent(query)
-        let technologies = try await fetchTechnologies()
-        var matchedTechnologies = technologies.filter { intent.matches(technology: $0) }
-        if matchedTechnologies.isEmpty && !intent.requiredSymbols.isEmpty {
-            let priorityTechnologies = ["swiftui", "uikit", "appkit", "foundation", "xcode", "swiftdata", "coredata", "combine"]
-            let filtered = technologies.compactMap { tech -> (Technology, Int)? in
-                let norm = URLHelpers.normalizePath(tech.url).lowercased()
-                guard let idx = priorityTechnologies.firstIndex(where: { norm.contains($0) }) else {
-                    return nil
-                }
-                return (tech, idx)
-            }
-            .sorted { $0.1 < $1.1 }
-            .map { $0.0 }
-            matchedTechnologies = filtered.isEmpty ? Array(technologies.prefix(15)) : filtered
-        }
-        let candidateTechnologies = matchedTechnologies
-            .compactMap { technologyRootPath(for: $0) }
-
-        guard !candidateTechnologies.isEmpty else {
-            return []
-        }
-
-        var results: [SearchResult] = []
-        var firstFailure: Error?
-
-        await withTaskGroup(of: TechnologyGraphLookupResult.self) { group in
-            for rootPath in candidateTechnologies {
-                group.addTask { [self] in
-                    do {
-                        let matches = try await searchTechnologyReferences(rootPath: rootPath, intent: intent)
-                        return .hit(matches)
-                    } catch {
-                        if isTechnologyGraphMiss(error) {
-                            return .miss(path: rootPath, errorDescription: error.localizedDescription)
-                        }
-                        return .failure(error)
-                    }
-                }
-            }
-
-            for await lookupResult in group {
-                switch lookupResult {
-                case .hit(let matches):
-                    results.append(contentsOf: matches)
-                case .miss(let path, let errorDescription):
-                    logger.debug("Apple technology graph missed: \(path) (\(errorDescription))")
-                case .failure(let error):
-                    firstFailure = firstFailure ?? error
-                }
-            }
-        }
-
-        if results.isEmpty, let firstFailure {
-            throw firstFailure
-        }
-
-        return SearchResultRanker(intent: intent).rankedRemoteResults(results, limit: 50)
-    }
-
-    private func searchTechnologyReferences(rootPath: String, intent: SearchQueryIntent) async throws -> [SearchResult] {
-        guard let url = URLHelpers.dataURL(for: rootPath) else {
-            throw iDocsError.invalidURL
-        }
-
-        let data = try await fetchWithRetry(url: url)
-        let graph = try JSONDecoder().decode(TechnologyGraphSearchDocument.self, from: data)
-        var matches: [SearchResult] = (graph.references ?? [:]).values.compactMap { reference in
-            guard let title = reference.title,
-                  let path = reference.url,
-                  intent.acceptsCandidate(title: title, path: path, abstract: reference.abstractText) else {
-                return nil
-            }
-
-            let sourceKind = AppleSourceKind(path: path)
-            let kind = documentKind(kind: reference.kind, role: reference.role, type: reference.type)
-            let matchScope = SearchResult.inferMatchScope(path: path, kind: kind)
-            let score = intent.score(
-                title: title,
-                path: path,
-                abstract: reference.abstractText,
-                sourceKind: sourceKind,
-                fetchSupported: sourceKind.fetchSupportedByIDocs,
-                matchScope: matchScope
-            )
-
-            guard score > 0 else {
-                return nil
-            }
-
-            return SearchResult(
-                title: title,
-                abstract: reference.abstractText,
-                path: path,
-                kind: kind,
-                source: .apple,
-                relevance: score,
-                sourceKind: sourceKind,
-                fetchSupported: sourceKind.fetchSupportedByIDocs,
-                matchScope: matchScope
-            )
-        }
-
-        let xcodeRoot = DocumentationPath.make("xcode")
-        let xcodePrefix = xcodeRoot + "/"
-        if rootPath.lowercased() == xcodeRoot {
-            let candidateGroups = (graph.references ?? [:]).values.filter { ref in
-                guard ref.role == "collectionGroup", let url = ref.url, url.lowercased().hasPrefix(xcodePrefix) else {
-                    return false
-                }
-                return true
-            }
-
-            let scoredGroups: [(ref: DocumentationReference, score: Double, url: String)] = candidateGroups.compactMap { ref in
-                guard let url = ref.url else { return nil }
-                let title = ref.title ?? ""
-                let abstract = ref.abstractText ?? ""
-                var score = intent.score(
-                    title: title,
-                    path: url,
-                    abstract: abstract,
-                    sourceKind: .documentation,
-                    fetchSupported: true,
-                    matchScope: .module
-                )
-
-                let queryStems = Set(intent.tokenStems)
-                score += intent.profile.boost(forSubgroupURL: url, queryStems: queryStems)
-
-                guard score > 0 else { return nil }
-                return (ref: ref, score: score, url: url)
-            }
-
-            let sortedGroups = scoredGroups.sorted { left, right in
-                if left.score != right.score {
-                    return left.score > right.score
-                }
-                return left.url < right.url
-            }
-
-            for scored in sortedGroups.prefix(3) {
-                do {
-                    let subMatches = try await searchTechnologyReferences(rootPath: scored.url, intent: intent)
-                    matches.append(contentsOf: subMatches)
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    logger.debug("Failed to search Xcode subGroup \(scored.url): \(error.localizedDescription)")
-                }
-            }
-        }
-
-        return SearchResultRanker(intent: intent)
-            .rankedRemoteResults(matches, limit: 50)
-    }
-
-    private func technologyRootPath(for technology: Technology) -> String? {
-        let normalized = URLHelpers.normalizePath(technology.url)
-        guard normalized.hasPrefix(DocumentationPath.prefix) else {
-            return nil
-        }
-
-        let components = normalized.split(separator: "/")
-        guard components.count >= 2 else {
-            return nil
-        }
-
-        return DocumentationPath.make(String(components[1]))
-    }
-
-    private nonisolated func isTechnologyGraphMiss(_ error: Error) -> Bool {
-        switch error {
-        case iDocsError.invalidURL:
-            return true
-        case iDocsError.httpError(let statusCode):
-            return statusCode == 404
-        default:
-            return false
-        }
     }
 
     private func parseTechnologies(from data: Data) throws -> [Technology] {
@@ -467,17 +86,7 @@ public actor AppleJSONAPI {
     }
 }
 
-private enum TechnologyGraphLookupResult: Sendable {
-    case hit([SearchResult])
-    case miss(path: String, errorDescription: String)
-    case failure(any Error)
-}
-
 // MARK: - API Response Types
-
-private struct TechnologyGraphSearchDocument: Codable {
-    let references: [String: DocumentationReference]?
-}
 
 private struct TechnologiesResponse: Codable {
     let technologies: [Technology]
@@ -511,31 +120,12 @@ public struct Technology: Codable, Sendable {
     public let name: String
     public let url: String
     public let kind: String
-}
 
-private struct DocumentationIndexResponse: Codable {
-    let references: [String: DocumentationReference]
-}
-
-private struct DocumentationReference: Codable {
-    let title: String?
-    let type: String?
-    let role: String?
-    let kind: String?
-    let url: String?
-    let abstract: [InlineText]?
-
-    var abstractText: String? {
-        let text = abstract?
-            .compactMap { $0.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        return text?.isEmpty == false ? text : nil
+    public init(name: String, url: String, kind: String) {
+        self.name = name
+        self.url = url
+        self.kind = kind
     }
-}
-
-private struct InlineText: Codable {
-    let text: String?
 }
 
 // MARK: - Custom Errors
