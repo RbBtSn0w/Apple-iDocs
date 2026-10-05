@@ -9,7 +9,7 @@ struct SearchQueryIntent: Sendable {
     private static let stopWords: Set<String> = [
         "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
         "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
-        "is", "are", "be", "by", "from", "using", "use"
+        "is", "are", "be", "by", "from", "using", "use", "app", "apps"
     ]
 
     private static let technologyCompacts: Set<String> = [
@@ -52,6 +52,18 @@ struct SearchQueryIntent: Sendable {
 
         if !nameTokens.isEmpty && nameTokens.isSubset(of: queryTokenSet) {
             return true
+        }
+
+        if technology.url.lowercased().hasPrefix("/documentation/xcode") || technology.name.lowercased() == "xcode" {
+            let xcodeKeywords: Set<String> = [
+                "xcode", "catalog", "string", "local", "localiz", "localizing", "localization",
+                "asset", "build", "setting", "agent", "testing", "preview", "scheme",
+                "workspace", "project"
+            ]
+            let xcodeStems = Set(xcodeKeywords.map(Self.stem))
+            if !queryTokenSet.isDisjoint(with: xcodeStems) {
+                return true
+            }
         }
 
         return !pathTokens.isDisjoint(with: queryTokenSet)
@@ -307,16 +319,34 @@ struct SearchResultRanker: Sendable {
         self.intent = intent
     }
 
-    func rankedRemoteResults(_ results: [SearchResult]) -> [SearchResult] {
-        results
-            .filter(intent.acceptsRemoteResult)
-            .sorted { left, right in
-                let leftScore = intent.score(result: left)
-                let rightScore = intent.score(result: right)
-                if leftScore == rightScore {
-                    return left.title.localizedCaseInsensitiveCompare(right.title) == .orderedAscending
-                }
-                return leftScore > rightScore
+    func rankedRemoteResults(_ results: [SearchResult], limit: Int = 50) -> [SearchResult] {
+        var highestScoreByPath: [String: (result: SearchResult, score: Double)] = [:]
+        let isTechQuery = intent.rawQuery.lowercased().contains("technolog")
+
+        for result in results where intent.acceptsRemoteResult(result) {
+            let normalized = URLHelpers.normalizePath(result.path)
+            let lowerPath = normalized.lowercased()
+            if lowerPath == "/documentation/technologies" && !isTechQuery {
+                continue
             }
+            let score = intent.score(result: result)
+            if let existing = highestScoreByPath[lowerPath] {
+                if score > existing.score {
+                    highestScoreByPath[lowerPath] = (result: result, score: score)
+                }
+            } else {
+                highestScoreByPath[lowerPath] = (result: result, score: score)
+            }
+        }
+
+        return highestScoreByPath.values
+            .sorted { left, right in
+                if left.score != right.score {
+                    return left.score > right.score
+                }
+                return left.result.title.localizedCaseInsensitiveCompare(right.result.title) == .orderedAscending
+            }
+            .prefix(limit)
+            .map { $0.result }
     }
 }

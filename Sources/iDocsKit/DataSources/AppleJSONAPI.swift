@@ -125,6 +125,10 @@ public actor AppleJSONAPI {
                     lastError = iDocsError.invalidResponse
                 }
             } catch {
+                let isCancelled = Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled
+                if isCancelled {
+                    throw CancellationError()
+                }
                 lastError = error
                 logger.error("Attempt \(attempt) failed with error: \(error.localizedDescription)")
                 if !shouldRetry(after: error) {
@@ -142,7 +146,7 @@ public actor AppleJSONAPI {
     }
 
     private func shouldRetry(after error: Error) -> Bool {
-        if error is CancellationError {
+        if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
             return false
         }
         if let urlError = error as? URLError {
@@ -244,7 +248,17 @@ public actor AppleJSONAPI {
         let technologies = try await fetchTechnologies()
         var matchedTechnologies = technologies.filter { intent.matches(technology: $0) }
         if matchedTechnologies.isEmpty && !intent.requiredSymbols.isEmpty {
-            matchedTechnologies = technologies
+            let priorityTechnologies = ["swiftui", "uikit", "appkit", "foundation", "xcode", "swiftdata", "coredata", "combine"]
+            let filtered = technologies.compactMap { tech -> (Technology, Int)? in
+                let norm = URLHelpers.normalizePath(tech.url).lowercased()
+                guard let idx = priorityTechnologies.firstIndex(where: { norm.contains($0) }) else {
+                    return nil
+                }
+                return (tech, idx)
+            }
+            .sorted { $0.1 < $1.1 }
+            .map { $0.0 }
+            matchedTechnologies = filtered.isEmpty ? Array(technologies.prefix(15)) : filtered
         }
         let candidateTechnologies = matchedTechnologies
             .compactMap { technologyRootPath(for: $0) }
@@ -287,7 +301,7 @@ public actor AppleJSONAPI {
             throw firstFailure
         }
 
-        return SearchResultRanker(intent: intent).rankedRemoteResults(results)
+        return SearchResultRanker(intent: intent).rankedRemoteResults(results, limit: 50)
     }
 
     private func searchTechnologyReferences(rootPath: String, intent: SearchQueryIntent) async throws -> [SearchResult] {
@@ -297,7 +311,7 @@ public actor AppleJSONAPI {
 
         let data = try await fetchWithRetry(url: url)
         let graph = try JSONDecoder().decode(TechnologyGraphSearchDocument.self, from: data)
-        let matches: [SearchResult] = (graph.references ?? [:]).values.compactMap { reference in
+        var matches: [SearchResult] = (graph.references ?? [:]).values.compactMap { reference in
             guard let title = reference.title,
                   let path = reference.url,
                   intent.acceptsCandidate(title: title, path: path, abstract: reference.abstractText) else {
@@ -333,10 +347,73 @@ public actor AppleJSONAPI {
             )
         }
 
+        if rootPath.lowercased() == "/documentation/xcode" {
+            let candidateGroups = (graph.references ?? [:]).values.filter { ref in
+                guard ref.role == "collectionGroup", let url = ref.url, url.lowercased().hasPrefix("/documentation/xcode/") else {
+                    return false
+                }
+                return true
+            }
+
+            let scoredGroups: [(ref: DocumentationReference, score: Double, url: String)] = candidateGroups.compactMap { ref in
+                guard let url = ref.url else { return nil }
+                let title = ref.title ?? ""
+                let abstract = ref.abstractText ?? ""
+                var score = intent.score(
+                    title: title,
+                    path: url,
+                    abstract: abstract,
+                    sourceKind: .documentation,
+                    fetchSupported: true,
+                    matchScope: .module
+                )
+
+                let queryStems = Set(intent.tokenStems)
+                let urlLower = url.lowercased()
+                if urlLower.contains("localization") {
+                    let localizationStems: Set<String> = ["catalog", "string", "local", "localiz", "translat", "languag", "plural", "agent"]
+                    if !queryStems.isDisjoint(with: localizationStems) {
+                        score += 50.0
+                    }
+                }
+                if urlLower.contains("asset") {
+                    let assetStems: Set<String> = ["asset", "catalog", "image", "icon", "color"]
+                    if !queryStems.isDisjoint(with: assetStems) {
+                        score += 50.0
+                    }
+                }
+                if urlLower.contains("coding-intelligence") {
+                    let agentStems: Set<String> = ["agent", "intellig", "ai", "mcp", "complet"]
+                    if !queryStems.isDisjoint(with: agentStems) {
+                        score += 50.0
+                    }
+                }
+
+                guard score > 0 else { return nil }
+                return (ref: ref, score: score, url: url)
+            }
+
+            let sortedGroups = scoredGroups.sorted { left, right in
+                if left.score != right.score {
+                    return left.score > right.score
+                }
+                return left.url < right.url
+            }
+
+            for scored in sortedGroups.prefix(3) {
+                do {
+                    let subMatches = try await searchTechnologyReferences(rootPath: scored.url, intent: intent)
+                    matches.append(contentsOf: subMatches)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    logger.debug("Failed to search Xcode subGroup \(scored.url): \(error.localizedDescription)")
+                }
+            }
+        }
+
         return SearchResultRanker(intent: intent)
-            .rankedRemoteResults(matches)
-            .prefix(50)
-            .map { $0 }
+            .rankedRemoteResults(matches, limit: 50)
     }
 
     private func technologyRootPath(for technology: Technology) -> String? {

@@ -73,4 +73,33 @@ struct NetworkToolTests {
         #expect(!results.isEmpty)
         #expect(results.first?.source == .sosumi)
     }
+
+    @Test("Live fetch release notes renders DocC list items and tables without dropped content")
+    func liveFetchReleaseNotesListItems() async throws {
+        let tool = FetchDocTool()
+        let markdown = try await tool.run(path: "/documentation/xcode-release-notes/xcode-27-release-notes")
+        #expect(markdown.contains("- "), "Rendered markdown should contain bullet list items")
+        #expect(markdown.contains("Localization"), "Rendered markdown should contain Localization section")
+    }
+
+    @Test("Live search recalls Xcode guide articles and bounds duplicate technologies")
+    func liveSearchXcodeGuides() async throws {
+        let api = AppleJSONAPI()
+        let results = try await api.search(query: "localizing your app using agents")
+        #expect(!results.isEmpty)
+        #expect(results.count <= 50, "Results should be capped at 50")
+        #expect(results.contains { $0.path == "/documentation/xcode/localizing-your-app-using-agents" }, "Should recall agent localization article")
+
+        let techCount = results.filter { $0.path == "/documentation/technologies" }.count
+        #expect(techCount <= 1, "Should not duplicate technologies breadcrumb")
+    }
+
+    @Test("Live search recalls Xcode String Catalog articles")
+    func liveSearchStringCatalog() async throws {
+        let api = AppleJSONAPI()
+        let results = try await api.search(query: "String Catalog")
+        #expect(!results.isEmpty)
+        #expect(results.count <= 50, "Results should be capped at 50")
+        #expect(results.contains { $0.path.contains("catalog") }, "Should recall catalog articles")
+    }
 }
