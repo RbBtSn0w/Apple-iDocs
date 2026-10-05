@@ -10,8 +10,8 @@ struct SearchDocsToolDeduplicationTests {
         let ranker = SearchResultRanker(query: "NavigationSplitView")
 
         let lowerScoreResult = SearchResult(
-            title: "NavigationSplitView",
-            abstract: "A view that presents views in two or three columns.",
+            title: "SplitViewHelper",
+            abstract: "Mentions NavigationSplitView in abstract only.",
             path: "/documentation/swiftui/navigationsplitview",
             kind: .structure,
             source: .apple,
@@ -27,11 +27,15 @@ struct SearchDocsToolDeduplicationTests {
             relevance: 50.0
         )
 
-        let duplicateResults = [lowerScoreResult, higherScoreResult]
-        let ranked = ranker.rankedRemoteResults(duplicateResults)
+        let ranked1 = ranker.rankedRemoteResults([lowerScoreResult, higherScoreResult])
+        #expect(ranked1.count == 1)
+        #expect(ranked1.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(ranked1.first?.title == "NavigationSplitView", "Higher scoring title match must win over abstract match")
 
-        #expect(ranked.count == 1)
-        #expect(ranked.first?.path == "/documentation/swiftui/navigationsplitview")
+        let ranked2 = ranker.rankedRemoteResults([higherScoreResult, lowerScoreResult])
+        #expect(ranked2.count == 1)
+        #expect(ranked2.first?.path == "/documentation/swiftui/navigationsplitview")
+        #expect(ranked2.first?.title == "NavigationSplitView", "Higher scoring title match must win over abstract match")
     }
 
     @Test("SearchResultRanker filters out /documentation/technologies breadcrumb unless query requests technologies")

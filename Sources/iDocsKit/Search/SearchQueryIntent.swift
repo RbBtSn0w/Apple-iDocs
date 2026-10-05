@@ -54,7 +54,11 @@ struct SearchQueryIntent: Sendable {
             return true
         }
 
-        if technology.url.lowercased().hasPrefix("/documentation/xcode") || technology.name.lowercased() == "xcode" {
+        let xcodePath = DocumentationPath.make("xcode")
+        let isXcode = technology.url.lowercased() == xcodePath
+            || technology.url.lowercased().hasPrefix(xcodePath + "/")
+            || technology.name.lowercased() == "xcode"
+        if isXcode {
             let xcodeKeywords: Set<String> = [
                 "xcode", "catalog", "string", "local", "localiz", "localizing", "localization",
                 "asset", "build", "setting", "agent", "testing", "preview", "scheme",
@@ -326,7 +330,7 @@ struct SearchResultRanker: Sendable {
         for result in results where intent.acceptsRemoteResult(result) {
             let normalized = URLHelpers.normalizePath(result.path)
             let lowerPath = normalized.lowercased()
-            if lowerPath == "/documentation/technologies" && !isTechQuery {
+            if lowerPath == DocumentationPath.make("technologies") && !isTechQuery {
                 continue
             }
             let score = intent.score(result: result)

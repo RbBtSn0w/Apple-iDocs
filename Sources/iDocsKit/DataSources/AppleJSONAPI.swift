@@ -347,9 +347,11 @@ public actor AppleJSONAPI {
             )
         }
 
-        if rootPath.lowercased() == "/documentation/xcode" {
+        let xcodeRoot = DocumentationPath.make("xcode")
+        let xcodePrefix = xcodeRoot + "/"
+        if rootPath.lowercased() == xcodeRoot {
             let candidateGroups = (graph.references ?? [:]).values.filter { ref in
-                guard ref.role == "collectionGroup", let url = ref.url, url.lowercased().hasPrefix("/documentation/xcode/") else {
+                guard ref.role == "collectionGroup", let url = ref.url, url.lowercased().hasPrefix(xcodePrefix) else {
                     return false
                 }
                 return true
