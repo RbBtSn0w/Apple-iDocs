@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: npm/package-lock.json
 
       - name: Install Node dependencies for npm wrapper
-        run: npm --prefix npm ci
+        run: npm --prefix npm ci --no-audit --no-fund
 
       - name: Run iDocs CLI E2E (live)
         id: run_live

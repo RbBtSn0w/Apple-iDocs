@@ -141,7 +141,7 @@ assertIncludes(
 );
 assertOrder(
   workflow,
-  "npx semantic-release@25",
+  "npx --yes semantic-release@25",
   "./scripts/publish-homebrew-formula.sh",
   "Homebrew formula publication must run after semantic-release creates release assets"
 );
