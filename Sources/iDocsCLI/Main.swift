@@ -15,6 +15,9 @@ struct Main {
         let version = CLIVersion.current()
         let environment = ProcessInfo.processInfo.environment
 
+        let isVerbose = parsedArguments.contains("--verbose") || environment["IDOCS_VERBOSE"] == "1"
+        CLIEnvironment.bootstrapLogging(isVerbose: isVerbose)
+
         await runCLI(
             arguments: arguments,
             parsedArguments: parsedArguments,

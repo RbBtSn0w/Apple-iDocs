@@ -18,3 +18,34 @@ public struct NoopDocumentationLogger: DocumentationLogger {
         _ = (level, message, context)
     }
 }
+
+#if canImport(Logging)
+import Logging
+#endif
+
+private final class BootstrapState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isBootstrapped = false
+
+    func bootstrapOnce(isVerbose: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isBootstrapped else { return }
+        isBootstrapped = true
+        #if canImport(Logging)
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardError(label: label)
+            handler.logLevel = isVerbose ? .debug : .warning
+            return handler
+        }
+        #endif
+    }
+}
+
+public enum DocumentationLoggingSystem {
+    private static let state = BootstrapState()
+
+    public static func bootstrap(isVerbose: Bool = false) {
+        state.bootstrapOnce(isVerbose: isVerbose)
+    }
+}

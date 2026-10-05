@@ -97,16 +97,21 @@ assert_exit_nonzero() {
 
 RUN_CODE=""
 RUN_OUTPUT=""
+RUN_STDOUT=""
+RUN_STDERR=""
 
 run_cmd_capture() {
-  local out_file
-  out_file="$(mktemp)"
+  local stdout_file stderr_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
   set +e
-  "$@" >"$out_file" 2>&1
+  "$@" >"$stdout_file" 2>"$stderr_file"
   RUN_CODE=$?
   set -e
-  RUN_OUTPUT="$(cat "$out_file")"
-  rm -f "$out_file"
+  RUN_STDOUT="$(cat "$stdout_file")"
+  RUN_STDERR="$(cat "$stderr_file")"
+  RUN_OUTPUT="$(cat "$stdout_file" "$stderr_file")"
+  rm -f "$stdout_file" "$stderr_file"
 }
 
 echo "[E2E] Mode: $MODE"
@@ -168,6 +173,43 @@ if [[ "$MODE" == "live" ]]; then
   run_cmd_capture idocs list --category Frameworks
   assert_exit_zero "$RUN_CODE" "idocs list (link flow)"
   assert_contains "$RUN_OUTPUT" "/documentation/" "idocs list structured path output (link flow)"
+
+  # Regression check for Issue #53: DocC list items and tables rendered without dropped content
+  run_cmd_capture idocs fetch "/documentation/xcode-release-notes/xcode-27-release-notes"
+  assert_exit_zero "$RUN_CODE" "idocs fetch release notes (link flow)"
+  assert_contains "$RUN_OUTPUT" "- " "idocs fetch release notes renders bullet items (link flow)"
+  assert_contains "$RUN_OUTPUT" "Localization" "idocs fetch release notes section heading (link flow)"
+
+  run_cmd_capture idocs fetch "/documentation/xcode-release-notes/xcode-27-release-notes" --json
+  assert_exit_zero "$RUN_CODE" "idocs fetch release notes --json (link flow)"
+  if [[ "$RUN_OUTPUT" == *"content_blocks_not_array"* ]]; then
+    echo "[FAIL] idocs fetch release notes contains content_blocks_not_array diagnostics" >&2
+    exit 1
+  fi
+
+  # Regression check for Issue #54: guide article search recall, bounded count, deduplication, no stderr cancellation log
+  run_cmd_capture idocs search "localizing your app using agents" --json
+  assert_exit_zero "$RUN_CODE" "idocs search agents --json (link flow)"
+  assert_contains "$RUN_OUTPUT" "localizing-your-app-using-agents" "idocs search recalls agent localization guide (link flow)"
+  if [[ "$RUN_STDERR" == *"Attempt 1 failed with error: cancelled"* ]]; then
+    echo "[FAIL] idocs search stderr contains cancelled log spam" >&2
+    exit 1
+  fi
+  tech_count="$(echo "$RUN_STDOUT" | jq '[.results[]? | select(.id == "/documentation/technologies")] | length')"
+  if [[ "$tech_count" -gt 1 ]]; then
+    echo "[FAIL] idocs search has $tech_count duplicate /documentation/technologies entries" >&2
+    exit 1
+  fi
+  results_count="$(echo "$RUN_STDOUT" | jq '.results | length')"
+  if [[ "$results_count" -gt 50 ]]; then
+    echo "[FAIL] idocs search results count $results_count exceeds bound 50" >&2
+    exit 1
+  fi
+
+  # Regression check for Issue #54: String Catalog guide recall
+  run_cmd_capture idocs search "String Catalog" --json
+  assert_exit_zero "$RUN_CODE" "idocs search String Catalog --json (link flow)"
+  assert_contains "$RUN_OUTPUT" "catalog" "idocs search String Catalog recalls catalog documentation (link flow)"
 fi
 
 echo "[E2E] Path B: npm pack + local install flow"
@@ -234,6 +276,14 @@ if [[ "$MODE" == "live" ]]; then
   run_cmd_capture "$BIN" search "SwiftUI"
   assert_exit_zero "$RUN_CODE" "idocs search (pack flow)"
   assert_search_observability_or_no_result "$RUN_OUTPUT" "idocs search contract (pack flow)"
+
+  run_cmd_capture "$BIN" search "localizing your app using agents" --json
+  assert_exit_zero "$RUN_CODE" "idocs search agents (pack flow)"
+  assert_contains "$RUN_OUTPUT" "localizing-your-app-using-agents" "idocs search recalls agent localization guide (pack flow)"
+
+  run_cmd_capture "$BIN" fetch "/documentation/xcode-release-notes/xcode-27-release-notes"
+  assert_exit_zero "$RUN_CODE" "idocs fetch release notes (pack flow)"
+  assert_contains "$RUN_OUTPUT" "- " "idocs fetch release notes renders bullet items (pack flow)"
 fi
 
 echo "[PASS] E2E CLI checks completed (mode: $MODE)."

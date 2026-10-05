@@ -6,30 +6,26 @@ struct SearchQueryIntent: Sendable {
         let tokenStems: Set<String>
     }
 
-    private static let stopWords: Set<String> = [
-        "how", "do", "does", "can", "i", "we", "you", "a", "an", "the",
-        "to", "in", "on", "for", "with", "and", "or", "of", "my", "your",
-        "is", "are", "be", "by", "from", "using", "use"
-    ]
-
     private static let technologyCompacts: Set<String> = [
         "swiftui", "uikit", "appkit", "foundation", "xcode", "appstoreconnect", "testflight",
         "coregraphics", "coredata", "swiftdata", "combine", "dispatch"
     ]
 
+    let profile: SearchRelevanceProfile
     let rawQuery: String
     let rawSegments: [String]
     let compactQuery: String
     let tokenStems: [String]
     let requiredSymbols: [RequiredSymbol]
 
-    init(_ query: String) {
+    init(_ query: String, profile: SearchRelevanceProfile = .standard) {
+        self.profile = profile
         self.rawQuery = query
         self.rawSegments = Self.segments(in: query)
         self.compactQuery = Self.compact(query)
 
         let tokens = Self.lexicalTokens(in: query)
-            .filter { !Self.stopWords.contains($0) }
+            .filter { !profile.stopWords.contains($0) }
         self.tokenStems = Self.stableUnique(tokens.map(Self.stem))
 
         self.requiredSymbols = Self.segments(in: query).compactMap { segment in
@@ -52,6 +48,17 @@ struct SearchQueryIntent: Sendable {
 
         if !nameTokens.isEmpty && nameTokens.isSubset(of: queryTokenSet) {
             return true
+        }
+
+        let xcodePath = DocumentationPath.make("xcode")
+        let isXcode = technology.url.lowercased() == xcodePath
+            || technology.url.lowercased().hasPrefix(xcodePath + "/")
+            || technology.name.lowercased() == "xcode"
+        if isXcode {
+            let xcodeStems = Set(profile.xcodeKeywords.map(Self.stem))
+            if !queryTokenSet.isDisjoint(with: xcodeStems) {
+                return true
+            }
         }
 
         return !pathTokens.isDisjoint(with: queryTokenSet)
@@ -307,16 +314,34 @@ struct SearchResultRanker: Sendable {
         self.intent = intent
     }
 
-    func rankedRemoteResults(_ results: [SearchResult]) -> [SearchResult] {
-        results
-            .filter(intent.acceptsRemoteResult)
-            .sorted { left, right in
-                let leftScore = intent.score(result: left)
-                let rightScore = intent.score(result: right)
-                if leftScore == rightScore {
-                    return left.title.localizedCaseInsensitiveCompare(right.title) == .orderedAscending
-                }
-                return leftScore > rightScore
+    func rankedRemoteResults(_ results: [SearchResult], limit: Int = 50) -> [SearchResult] {
+        var highestScoreByPath: [String: (result: SearchResult, score: Double)] = [:]
+        let isTechQuery = intent.rawQuery.lowercased().contains("technolog")
+
+        for result in results where intent.acceptsRemoteResult(result) {
+            let normalized = URLHelpers.normalizePath(result.path)
+            let lowerPath = normalized.lowercased()
+            if lowerPath == DocumentationPath.make("technologies") && !isTechQuery {
+                continue
             }
+            let score = intent.score(result: result)
+            if let existing = highestScoreByPath[lowerPath] {
+                if score > existing.score {
+                    highestScoreByPath[lowerPath] = (result: result, score: score)
+                }
+            } else {
+                highestScoreByPath[lowerPath] = (result: result, score: score)
+            }
+        }
+
+        return highestScoreByPath.values
+            .sorted { left, right in
+                if left.score != right.score {
+                    return left.score > right.score
+                }
+                return left.result.title.localizedCaseInsensitiveCompare(right.result.title) == .orderedAscending
+            }
+            .prefix(limit)
+            .map { $0.result }
     }
 }

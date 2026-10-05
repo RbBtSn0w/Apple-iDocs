@@ -431,4 +431,135 @@ struct AppleDocCIngestionTests {
         #expect(result.diagnostics.contains { $0.path == "abstract" && $0.reason == "inline_array_not_array" })
         #expect(result.diagnostics.contains { $0.path == "topicSections[0].identifiers[1]" && $0.reason == "string_array_element_not_string" })
     }
+
+    @Test("AppleDocCIngestion parses standard Apple DocC object-wrapped list items and tables")
+    func parsesObjectWrappedListItemsAndTables() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/xcode-release-notes/xcode-27-release-notes",
+            "metadata": {
+                "title": "Xcode 27 Release Notes",
+                "role": "article",
+                "platforms": []
+            },
+            "primaryContentSections": [
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "heading",
+                            "level": 2,
+                            "text": "Localization"
+                        },
+                        {
+                            "type": "unorderedList",
+                            "items": [
+                                {
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "inlineContent": [{ "type": "text", "text": "Agent translation support" }]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "inlineContent": [{ "type": "text", "text": "Leveraged machine translation" }]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "orderedList",
+                            "items": [
+                                {
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "inlineContent": [{ "type": "text", "text": "Open project settings" }]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "table",
+                            "header": [
+                                {
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "inlineContent": [{ "type": "text", "text": "Key" }]
+                                        }
+                                    ]
+                                }
+                            ],
+                            "rows": [
+                                [
+                                    {
+                                        "content": [
+                                            {
+                                                "type": "paragraph",
+                                                "inlineContent": [{ "type": "text", "text": "Value" }]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/xcode-release-notes/xcode-27-release-notes")
+
+        #expect(!result.diagnostics.contains { $0.reason == "content_blocks_not_array" })
+        #expect(!result.diagnostics.contains { $0.reason == "block_items_not_array" })
+
+        let markdown = try DocCRenderer().render(result.content)
+        #expect(markdown.contains("- Agent translation support"))
+        #expect(markdown.contains("- Leveraged machine translation"))
+        #expect(markdown.contains("1. Open project settings"))
+        #expect(markdown.contains("| Key |"))
+        #expect(markdown.contains("| Value |"))
+    }
+
+    @Test("AppleDocCIngestion parses raw string list items defensively")
+    func parsesRawStringListItemsDefensively() throws {
+        let data = Data("""
+        {
+            "identifier": "doc://com.apple.documentation/documentation/sample/article",
+            "metadata": {
+                "title": "Sample Article",
+                "role": "article",
+                "platforms": []
+            },
+            "primaryContentSections": [
+                {
+                    "kind": "content",
+                    "content": [
+                        {
+                            "type": "unorderedList",
+                            "items": [
+                                "Raw string item 1",
+                                "Raw string item 2"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """.utf8)
+
+        let result = try AppleDocCIngestion().normalize(data, requestedPath: "/documentation/sample/article")
+        let markdown = try DocCRenderer().render(result.content)
+        #expect(markdown.contains("- Raw string item 1"))
+        #expect(markdown.contains("- Raw string item 2"))
+    }
 }
+

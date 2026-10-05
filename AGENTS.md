@@ -55,6 +55,7 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 - **Agent-Facing Documentation Entry**: `idocs resolve` is the P0 agent-facing capability for structured Apple documentation evidence retrieval. Agents should prefer structured resolve intents for API evidence, use `idocs fetch` as the canonical evidence authority for known paths, and treat `idocs search` as exploration and candidate discovery rather than the primary correctness path.
 
 ## Recent Changes
+- 016-docc-lists-and-search-ranking: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, DocC list parsing, bounded search ranking and regression test suites
 - 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
 - 014-fix-docc-identifier: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
 
@@ -72,5 +73,5 @@ Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/015-resilient-docc-ingestion/plan.md
+specs/016-docc-lists-and-search-ranking/plan.md
 <!-- SPECKIT END -->
