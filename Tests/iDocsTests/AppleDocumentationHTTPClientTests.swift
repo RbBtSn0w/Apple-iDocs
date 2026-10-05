@@ -88,4 +88,40 @@ struct AppleDocumentationHTTPClientTests {
         let data = try await client.fetchData(for: path)
         #expect(data == payload)
     }
+
+    @Test("fetchWithRetry aborts immediately upon task cancellation")
+    func fetchRespectsCancellation() async throws {
+        let session = MockNetworkSession(stubbedError: URLError(.cancelled))
+        let client = AppleDocumentationHTTPClient(session: session, retryDelayNanoseconds: 0, maxRetries: 3)
+        let url = URL(string: "https://developer.apple.com/test")!
+
+        await #expect(throws: CancellationError.self) {
+            try await client.fetchWithRetry(url: url)
+        }
+        #expect(session.requestCount == 1)
+    }
+
+    @Test("fetchWithRetry handles 429 Retry-After header")
+    func fetchHandlesRetryAfterHeader() async throws {
+        let session = MockNetworkSession()
+        let url = URL(string: "https://developer.apple.com/test")!
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: 429,
+            httpVersion: nil,
+            headerFields: ["Retry-After": "2"]
+        )!
+        session.stubbedResponse = response
+        session.stubbedData = Data()
+
+        // Pass retryDelayNanoseconds: 0 so test runs instantly
+        let client = AppleDocumentationHTTPClient(session: session, retryDelayNanoseconds: 0, maxRetries: 2)
+        do {
+            _ = try await client.fetchWithRetry(url: url)
+            Issue.record("Expected httpError(429)")
+        } catch iDocsError.httpError(let code) {
+            #expect(code == 429)
+        }
+        #expect(session.requestCount == 2)
+    }
 }

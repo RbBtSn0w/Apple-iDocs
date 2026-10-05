@@ -87,4 +87,21 @@ struct AppleRemoteSearchCrawlerTests {
         #expect(results.first?.title == "SplitNavigationContainer")
         #expect(results.first?.path == "/documentation/swiftui/splitnavigationcontainer")
     }
+
+    @Test("searchTechnologyGraph aborts upon cancellation")
+    func searchTechnologyGraphRespectsCancellation() async throws {
+        let session = MockNetworkSession(stubbedError: URLError(.cancelled))
+        let client = AppleDocumentationHTTPClient(session: session, retryDelayNanoseconds: 0)
+        let crawler = AppleRemoteSearchCrawler(httpClient: client)
+        let tech = Technology(name: "SwiftUI", url: "/documentation/swiftui", kind: "framework")
+
+        let task = Task {
+            try await crawler.searchTechnologyGraph(query: "SwiftUI View", technologies: [tech])
+        }
+        task.cancel()
+
+        await #expect(throws: CancellationError.self) {
+            try await task.value
+        }
+    }
 }

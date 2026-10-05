@@ -97,13 +97,25 @@ public struct AppleRemoteSearchCrawler: Sendable {
         var results: [SearchResult] = []
         var firstFailure: Error?
 
+        try Task.checkCancellation()
+
         await withTaskGroup(of: TechnologyGraphLookupResult.self) { group in
             for rootPath in candidateTechnologies {
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
                 group.addTask {
+                    guard !Task.isCancelled else {
+                        return .failure(CancellationError())
+                    }
                     do {
                         let matches = try await self.searchTechnologyReferences(rootPath: rootPath, intent: intent)
                         return .hit(matches)
                     } catch {
+                        if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                            return .failure(CancellationError())
+                        }
                         if self.isTechnologyGraphMiss(error) {
                             return .miss(path: rootPath, errorDescription: error.localizedDescription)
                         }
@@ -113,15 +125,26 @@ public struct AppleRemoteSearchCrawler: Sendable {
             }
 
             for await lookupResult in group {
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
                 switch lookupResult {
                 case .hit(let matches):
                     results.append(contentsOf: matches)
                 case .miss(let path, let errorDescription):
                     logger.debug("Apple technology graph missed: \(path) (\(errorDescription))")
                 case .failure(let error):
+                    if error is CancellationError {
+                        group.cancelAll()
+                    }
                     firstFailure = firstFailure ?? error
                 }
             }
+        }
+
+        if Task.isCancelled {
+            throw CancellationError()
         }
 
         if results.isEmpty, let firstFailure {
@@ -212,6 +235,9 @@ public struct AppleRemoteSearchCrawler: Sendable {
             }
 
             for scored in sortedGroups.prefix(3) {
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
                 do {
                     let subMatches = try await searchTechnologyReferences(rootPath: scored.url, intent: intent)
                     matches.append(contentsOf: subMatches)

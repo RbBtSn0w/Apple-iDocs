@@ -14,8 +14,8 @@ public struct SearchRelevanceProfile: Sendable {
         public let boost: Double
 
         public init(urlFragment: String, relevantStems: Set<String>, boost: Double = 50.0) {
-            self.urlFragment = urlFragment
-            self.relevantStems = relevantStems
+            self.urlFragment = urlFragment.lowercased()
+            self.relevantStems = Set(relevantStems.map { $0.lowercased() })
             self.boost = boost
         }
     }

@@ -72,4 +72,20 @@ struct SearchRelevanceProfileTests {
         let boost = customProfile.boost(forSubgroupURL: "https://example.com/custom", queryStems: ["boostme"])
         #expect(boost == 100.0)
     }
+
+    @Test("SubgroupBoostRule normalizes casing for robust matching")
+    func testCaseInsensitiveSubgroupBoostRule() {
+        let rule = SearchRelevanceProfile.SubgroupBoostRule(
+            urlFragment: "Localization",
+            relevantStems: ["Catalog", "String"],
+            boost: 75.0
+        )
+        let profile = SearchRelevanceProfile(subgroupBoostRules: [rule])
+
+        let boost = profile.boost(
+            forSubgroupURL: "/documentation/xcode/localization",
+            queryStems: ["catalog"]
+        )
+        #expect(boost == 75.0)
+    }
 }

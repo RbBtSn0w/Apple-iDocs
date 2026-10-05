@@ -31,12 +31,19 @@ public struct AppleDocumentationHTTPClient: Sendable {
         self.maxRetries = maxRetries
     }
 
+    public static let maxRetryDelayNanoseconds: UInt64 = 30_000_000_000
+
     public func fetchWithRetry(url: URL, maxRetries: Int? = nil) async throws -> Data {
         let retries = maxRetries ?? self.maxRetries
         var lastError: Error?
         var delayMultiplier: UInt64 = 1
 
         for attempt in 1...retries {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+
+            var serverRetryAfterDelay: UInt64?
             do {
                 var request = URLRequest(url: url)
                 request.setValue(UserAgentPool.random(), forHTTPHeaderField: "User-Agent")
@@ -59,6 +66,11 @@ public struct AppleDocumentationHTTPClient: Sendable {
                         return data
                     } else if httpResponse.statusCode == 403 || httpResponse.statusCode == 429 {
                         lastError = iDocsError.httpError(statusCode: httpResponse.statusCode)
+                        if httpResponse.statusCode == 429,
+                           let retryHeader = httpResponse.value(forHTTPHeaderField: "Retry-After"),
+                           let seconds = UInt64(retryHeader.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                            serverRetryAfterDelay = seconds * 1_000_000_000
+                        }
                         logger.warning("Attempt \(attempt) failed with status code \(httpResponse.statusCode). Retrying...")
                     } else {
                         throw iDocsError.httpError(statusCode: httpResponse.statusCode)
@@ -79,11 +91,23 @@ public struct AppleDocumentationHTTPClient: Sendable {
             }
 
             if attempt < retries {
-                let delay = delayMultiplier * retryDelayNanoseconds
-                if delay > 0 {
-                    try await Task.sleep(nanoseconds: delay)
+                if Task.isCancelled {
+                    throw CancellationError()
                 }
-                delayMultiplier *= 2
+                let baseDelay: UInt64
+                if retryDelayNanoseconds == 0 {
+                    baseDelay = 0
+                } else if let serverDelay = serverRetryAfterDelay {
+                    baseDelay = min(serverDelay, Self.maxRetryDelayNanoseconds)
+                } else {
+                    let overflow = delayMultiplier.multipliedReportingOverflow(by: retryDelayNanoseconds)
+                    baseDelay = overflow.overflow ? Self.maxRetryDelayNanoseconds : min(overflow.partialValue, Self.maxRetryDelayNanoseconds)
+                }
+
+                if baseDelay > 0 {
+                    try await Task.sleep(nanoseconds: baseDelay)
+                }
+                delayMultiplier = min(delayMultiplier * 2, 64)
             }
         }
 
