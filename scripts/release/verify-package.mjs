@@ -21,6 +21,14 @@ export function extract(archive, destination, prefix) {
   execFileSync('tar', ['-xzf', archive, '-C', destination]);
 }
 
+export async function cleanupConsumer(server, temporary) {
+  try {
+    if (server.listening) {
+      await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+}
+
 export async function verifyPackage(tarball, nativeArchive, version) {
   if (![tarball, nativeArchive].every(isAbsolute) || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Absolute archive paths and stable version required');
   const before = createHash('sha256').update(readFileSync(tarball)).digest('hex');
@@ -50,7 +58,7 @@ export async function verifyPackage(tarball, nativeArchive, version) {
     assert.match(run('--help'), /USAGE:/);
     assert.equal(readFileSync(join(packageRoot, 'dist/idocs.version'), 'utf8').trim(), version);
     assert.equal(createHash('sha256').update(readFileSync(tarball)).digest('hex'), before);
-  } finally { await new Promise((resolve) => server.close(resolve)); rmSync(temporary, { recursive: true, force: true }); }
+  } finally { await cleanupConsumer(server, temporary); }
 }
 
 if (process.argv[1] && basename(process.argv[1]) === 'verify-package.mjs') {

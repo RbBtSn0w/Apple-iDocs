@@ -157,6 +157,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           owner: RbBtSn0w
           repositories: homebrew-tap
+          permission-contents: write
       - name: Publish Homebrew formula
         env:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
