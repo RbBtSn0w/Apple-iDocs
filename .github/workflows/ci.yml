@@ -2,9 +2,12 @@ name: iDocs CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main ]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +22,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Tuist
         uses: ./.github/actions/setup-tuist
@@ -26,15 +31,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "lts/*"
+          node-version: "22.22.2"
 
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
       - name: Verify Binary
         run: |
-          ls -l $IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs
-          file $IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs
+          ls -l "$IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs"
+          file "$IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs"
 
       - name: Run Default Test Suite
         run: ./scripts/tuist-silent.sh test
@@ -43,11 +48,11 @@ jobs:
           IDOCS_PROJECT_ROOT: ${{ github.workspace }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
-      - name: Verify npm publish script
-        run: bash ./scripts/test-publish-npm-package.sh
-
       - name: Verify Homebrew publish script
         run: bash ./scripts/test-publish-homebrew-formula.sh
+
+      - name: Install frozen release tools
+        run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
 
       - name: Verify release configuration
         run: bash ./scripts/test-release-config.sh
@@ -59,6 +64,8 @@ jobs:
       IDOCS_LOCAL_BINARY: ${{ github.workspace }}/.deriveddata/Build/Products/Debug/idocs
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Tuist
         uses: ./.github/actions/setup-tuist
@@ -69,7 +76,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "lts/*"
+          node-version: "22.22.2"
           cache: 'npm'
           cache-dependency-path: npm/package-lock.json
 
@@ -78,116 +85,3 @@ jobs:
 
       - name: Run iDocs CLI E2E (offline deterministic gate)
         run: IDOCS_NPM_STRICT_INSTALL=1 ./scripts/e2e-cli.sh offline
-
-  release:
-    name: Build and Release
-    needs: [build-and-test, e2e-cli-offline]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: macos-26
-    outputs:
-      package_version: ${{ steps.release-result.outputs.version }}
-      released: ${{ steps.release-result.outputs.released }}
-    permissions:
-      contents: write
-      id-token: write
-      issues: write
-      pull-requests: write
-      packages: write
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Tuist
-        uses: ./.github/actions/setup-tuist
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "lts/*"
-          cache: 'npm'
-          cache-dependency-path: npm/package-lock.json
-
-      - name: Install Release Plugins
-        run: |
-          cd npm
-          npm install -D \
-            semantic-release@25 \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            @semantic-release/changelog \
-            @semantic-release/exec \
-            @semantic-release/npm \
-            @semantic-release/github \
-            @semantic-release/git
-
-      - name: Run Semantic Release
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
-        run: |
-          cd npm
-          npx --yes semantic-release@25
-
-      - name: Resolve release result
-        id: release-result
-        if: success()
-        run: |
-          version="$(node -p "JSON.parse(require('fs').readFileSync('npm/package.json', 'utf8')).version")"
-          tag="$(git tag --points-at HEAD --list "v$version")"
-          if [ -z "$tag" ]; then
-            echo "released=false" >> "$GITHUB_OUTPUT"
-            echo "version=" >> "$GITHUB_OUTPUT"
-            echo "semantic-release did not create a release tag; skipping package publication."
-            exit 0
-          fi
-          echo "released=true" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to npmjs.org
-        if: steps.release-result.outputs.released == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          ./scripts/publish-npm-package.sh npmjs
-
-      - name: Publish to GitHub Packages
-        if: steps.release-result.outputs.released == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ./scripts/publish-npm-package.sh github
-
-  publish-homebrew:
-    name: Publish Homebrew
-    needs: release
-    if: >-
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      needs.release.outputs.released == 'true'
-    runs-on: macos-26
-    permissions:
-      contents: read
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Generate Homebrew tap token
-        id: homebrew-tap-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          owner: RbBtSn0w
-          repositories: homebrew-tap
-
-      - name: Publish Homebrew formula
-        env:
-          HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap
-          HOMEBREW_TAP_TOKEN: ${{ steps.homebrew-tap-token.outputs.token }}
-        run: |
-          ./scripts/publish-homebrew-formula.sh "${{ needs.release.outputs.package_version }}"

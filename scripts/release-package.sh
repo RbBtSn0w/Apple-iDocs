@@ -14,9 +14,9 @@ VERSION_FILE="$BUNDLE_DIR/idocs.version"
 
 mkdir -p "$OUTPUT_DIR"
 
-if [[ ! -d "iDocs.xcworkspace" ]]; then
-  tuist generate --no-open >/dev/null
-fi
+# Tuist test can leave a focused test-only graph with no CLI BuildAction.
+# The final release must synchronize the full graph even when a workspace exists.
+tuist generate --no-open >/dev/null
 
 xcodebuild build \
   -workspace iDocs.xcworkspace \
