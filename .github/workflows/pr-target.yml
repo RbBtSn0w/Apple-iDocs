@@ -1,25 +1,16 @@
-name: PR Target Branch
-
+name: PR Target
 on:
   pull_request:
-    types: [ opened, edited, synchronize, reopened ]
-
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
 jobs:
-  validate-base:
+  validate:
     name: Validate base branch
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Check target branch
+      - name: Require main
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if [ "${BASE_REF}" = "main" ]; then
-            if [ "${HEAD_REF}" = "develop" ]; then
-              echo "Allowing release PR: develop -> main"
-              exit 0
-            fi
-            echo "::error::PRs directly targeting 'main' are not allowed. Please change the base branch to 'develop'."
-            exit 1
-          fi
-          echo "Base branch '${BASE_REF}' is allowed."
+        run: test "$BASE_REF" = main

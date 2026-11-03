@@ -1,0 +1,4 @@
+{
+  "branches": ["main"],
+  "plugins": ["./scripts/release/cli-guard.mjs"]
+}

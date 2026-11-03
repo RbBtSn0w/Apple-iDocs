@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "type": "module",
+  "engines": {"node": "^22.14.0 || >=24.10.0"},
+  "dependencies": {
+    "semantic-release": "25.0.9",
+    "@commitlint/lint": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "conventional-changelog-conventionalcommits": "9.3.0",
+    "publint": "0.3.25"
+  }
+}
