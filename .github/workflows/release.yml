@@ -112,7 +112,7 @@ jobs:
       - name: Install frozen tools without lifecycle hooks
         run: |
           npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
-          npm install --global npm@11.21.0 --ignore-scripts --no-audit --no-fund
+          npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.verify.outputs.artifact-id }}

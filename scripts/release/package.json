@@ -1,12 +1,25 @@
 {
   "private": true,
   "type": "module",
-  "engines": {"node": "^22.14.0 || >=24.10.0"},
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26"
+  },
   "dependencies": {
     "semantic-release": "25.0.9",
     "@commitlint/lint": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
     "conventional-changelog-conventionalcommits": "9.3.0",
     "publint": "0.3.25"
+  },
+  "overrides": {
+    "handlebars": "^4.7.10",
+    "undici": "^7.30.1",
+    "@actions/http-client": {
+      "undici": "^6.29.1"
+    },
+    "node-gyp": {
+      "undici": "^6.29.1"
+    },
+    "npm": "12.2.2"
   }
 }
