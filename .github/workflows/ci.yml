@@ -36,6 +36,9 @@ jobs:
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
+      - name: Check synchronized release implementation
+        run: node .github/release-train/sync.mjs check --consumer .
+
       - name: Verify Binary
         run: |
           ls -l "$IDOCS_DERIVED_DATA_PATH/Build/Products/Debug/idocs"

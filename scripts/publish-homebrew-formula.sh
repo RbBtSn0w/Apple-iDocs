@@ -130,6 +130,15 @@ NEXT_FORMULA="$(new_tmp_dir)/idocs.rb"
 mkdir -p "$FORMULA_DIR"
 write_formula "$NEXT_FORMULA" "$SHA256"
 
+# Stable tap history is monotonic even when recovering an older release.
+if [[ -f "$FORMULA_PATH" ]]; then
+  TAP_ACTION="$(node "$ROOT_DIR/scripts/release/tap-policy.mjs" "$FORMULA_PATH" "$VERSION" "$SHA256")"
+  if [[ "$TAP_ACTION" = retain ]]; then
+    echo "Newer Homebrew formula retained; no tap update required."
+    exit 0
+  fi
+fi
+
 if [[ -f "$FORMULA_PATH" ]] && cmp -s "$NEXT_FORMULA" "$FORMULA_PATH"; then
   echo "Formula unchanged; skipping Homebrew tap commit."
   exit 0

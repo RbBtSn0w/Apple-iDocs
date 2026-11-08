@@ -187,4 +187,21 @@ if [[ "$(cat "$TMP_GIT_LOG")" == *" commit "* || "$(cat "$TMP_GIT_LOG")" == *" p
   exit 1
 fi
 
+
+echo "[TEST] old recovery retains a newer tap formula"
+FORMULA_PATH="$TMP_TAP_DIR/Formula/idocs.rb"
+cp "$FORMULA_PATH" "$FORMULA_PATH.expected"
+: > "$TMP_GIT_LOG"
+run_cmd_capture env PATH="$TMP_BIN_DIR:$PATH" GIT_STUB_LOG="$TMP_GIT_LOG" HOMEBREW_TAP_LOCAL_PATH="$TMP_TAP_DIR" IDOCS_HOMEBREW_CHECKSUM_FILE="$TMP_CHECKSUM_FILE" bash "$SCRIPT_PATH" 1.1.0
+assert_exit_zero "$RUN_CODE" "newer tap retention"
+cmp "$FORMULA_PATH" "$FORMULA_PATH.expected"
+if [[ -s "$TMP_GIT_LOG" ]]; then echo '[FAIL] old recovery must not mutate tap'; exit 1; fi
+
+echo "[TEST] same version with conflicting digest is rejected"
+: > "$TMP_GIT_LOG"
+run_cmd_capture env PATH="$TMP_BIN_DIR:$PATH" GIT_STUB_LOG="$TMP_GIT_LOG" HOMEBREW_TAP_LOCAL_PATH="$TMP_TAP_DIR" IDOCS_HOMEBREW_SHA256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" bash "$SCRIPT_PATH" 1.2.3
+if [[ "$RUN_CODE" -eq 0 ]]; then echo '[FAIL] conflicting stable formula accepted'; exit 1; fi
+cmp "$FORMULA_PATH" "$FORMULA_PATH.expected"
+if [[ -s "$TMP_GIT_LOG" ]]; then echo '[FAIL] conflict must not mutate tap'; exit 1; fi
+
 echo "[PASS] publish-homebrew-formula checks completed."

@@ -4,11 +4,11 @@
 
 `main` is the only integration trunk. Short-lived feature/fix PRs target main and use reviewed Conventional Commit squash messages, including breaking-change footers. Retain branch cleanup. Remote develop may remain inactive; retirement needs separate authorization. This migration starts at main `69649730d68dcf24cfbda8d6ff79fd6682532f55` (the published `v1.10.0`); develop has no outstanding business delta. Existing dependency PR #58 stays independent.
 
-Friday 15:00 Asia/Singapore/Asia/Shanghai is `0 7 * * 5` UTC. The same `release.yml` supports immediate `workflow_dispatch` on main after validated code merges. Ordinary push/PR CI never publishes. Schedule delivery can be delayed; a manual invocation does not bypass checks or select a version. All publication is default-off unless repository variable `RELEASE_ENABLED` equals `true`.
+Friday 15:00 Asia/Singapore/Asia/Shanghai is `0 7 * * 5` UTC. The same `release.yml` supports immediate `workflow_dispatch` on main after validated code merges. Ordinary push/PR CI never publishes. Schedule delivery can be delayed; a manual invocation does not bypass checks or select a version. Analysis and needed exact-candidate verification run without activation. All publication is default-off unless repository variable `RELEASE_ENABLED` equals `true`. A proven no-change plan skips native/product builds.
 
 ## Candidate, version and payload
 
-The read-only job checks out the exact event SHA with full history/tags and runs product tests. A thin upstream semantic-release JS API dry-run executes in an isolated temporary local mirror, with real tags/notes and no service credentials. Both phases share `scripts/release/config.mjs`; no independent tag/version algorithm exists. Analysis must actually execute before false means no releasable changes. PR title/body and the actual engine-selected commit range use strict commitlint with the same Conventional Commits preset. Existing malformed commits are not exempted.
+The read-only job checks out the exact event SHA with full history/tags and runs product tests. A thin upstream semantic-release JS API dry-run executes in an isolated temporary local mirror, with real tags/notes and no service credentials. Both phases share `scripts/release/config.mjs`; no independent tag/version algorithm exists. Analysis must actually execute before false means no releasable changes. PR title/body retains strict commitlint. The actual engine-selected historical range validates parseable Conventional Commit release semantics, including breaking footers, without imposing PR style rules retroactively. Genuine multi-parent merge metadata is accepted; malformed ordinary or fake merge commits fail, including skip-marker commits. The published baseline remains mandatory.
 
 Only when a release is needed, the read-only job builds the final native archive with the engine's version in `idocs.version`, creates the versioned npm wrapper, and runs publint and the actual wrapper installer/CLI against that same local archive through a temporary HTTP server. It seals the plan, both archives and native checksum. Publisher handoff uses this run's immutable artifact ID plus candidate SHA and per-file SHA-256 checks, not artifact-name lookup.
 
@@ -30,11 +30,68 @@ Source changes and local checks establish **Staged**, not live publication. Befo
 
 Tags, GitHub assets, npmjs, GitHub Packages and Homebrew are independent side effects. Publication receipts are retained even on failure. Inspect all targets before retrying: do not delete tags, choose another version, regenerate an archive, or blindly rerun semantic-release after a tag exists.
 
-Download the failed run's artifact by its explicit immutable artifact ID, verify the archived plan/checksums and source commit, and check out that committed source. Confirm the remote tag's peeled SHA equals `plan.candidate`. If the tag exists but the GitHub Release or some assets are missing, first use the owning `gh` tool to repair that missing side effect: create a missing release with `gh release create TAG --verify-tag --title TAG --notes-file FILE` using the original engine-generated `plan.notes`, then `gh release upload TAG MISSING_FILES` for only absent sealed artifacts. Compare SHA-256 before accepting any existing asset. Never use `--clobber`; mismatched bytes or another tag SHA stop recovery. This creates no new version or tag and never rebuilds.
+Dispatch **Release** on main with `operation=recover` and the original
+normal `source_run_id` / immutable `artifact_id`. Trusted current-main tools bind
+the actual same-repository/same-workflow completed main schedule/manual run,
+artifact ownership, sealed plan/checksums and existing tag's peeled candidate SHA.
+The original run may have failed. Continue to use that original source pair for
+later retries, never a recovery run. Main advancing does not invalidate sealed
+original bytes. Expired artifacts or missing/different tags fail closed.
 
-The GitHub plugin initially creates a draft and publishes it only after asset uploads. If a matching draft already exists, reuse that release ID rather than creating another release. Verify its tag/SHA, compare existing assets and upload only missing sealed files; after every required asset matches, finish with `gh release edit TAG --draft=false`. Only then continue registry recovery, which deliberately rejects draft or prerelease state.
+Recovery never selects a version, builds native code or wrapper, creates a tag,
+or overwrites an asset. Missing-release creation and matching-draft completion
+explicitly avoid changing GitHub latest; sealed notes are used for a missing
+release and existing release notes are preserved. It reuses matching GitHub releases/assets, repairs only
+missing sealed assets, completes a matching draft, then reconciles npmjs and
+GitHub Packages integrity independently. Only after both registries are verified
+does the tap update run. Recovery publishes missing wrapper bytes under an
+original-candidate recovery tag and verifies integrity. It only reads `latest`:
+an equal or newer stable version confirms delivery; an older, missing or unreadable
+channel remains incomplete. Recovery never rewrites shared distribution tags or
+deletes its retained recovery label. A known channel gap preserves the original
+IDs but suppresses an ineffective automatic recovery command. Normal
+publication refuses to downgrade a newer registry channel. The tap likewise
+retains a newer formula and rejects a same-version native checksum conflict.
+The shared release lock serializes these workflows; it does not establish an
+atomic guarantee against independent external registry or tap writers.
 
-Once the matching stable GitHub Release and native asset are available, use the same committed release tooling and authorized registry credentials to invoke `node scripts/release/release.mjs recover /absolute/verified-input VERSION`. Recovery verifies the existing tag and native asset, then uploads only missing registry bytes; conflicts fail closed. Homebrew-only recovery uses `scripts/publish-homebrew-formula.sh VERSION` with the published native checksum and scoped tap credentials. Retain the original receipt and recovered target results. No recovery operation is authorized by merely reading this document.
+The dependency remains native archive -> wrapper ->
+GitHub assets -> both registries -> tap. No native build occurs with credentials.
+
+`release-result.json` and the Actions summary record verification and publication
+separately, with independent GitHub/npm/GitHub Packages/tap results. Target
+readbacks and receipts survive later target failure. Local verification is not
+runtime activation or production delivery acceptance.
+
+The `Release` workflow identifies scheduled, manual and original-recovery runs.
+Its v2 outcome starts with the result and next action, followed by channel evidence
+and collapsed technical details. Successful jobs without matching remote receipts
+remain unconfirmed. First-failure recovery includes the original sealed producer
+ID, digest, attempt and expiry only after the original tag is verified. Missing or
+conflicting evidence blocks recovery rather than rebuilding the release.
+
+Consumer-common code is generated under `.github/release-train/`; configuration
+is `.github/release-train.json`. Product/native packaging and dual-registry/tap
+adapters remain in this repository. Do not hand-edit generated modules. CI runs
+`node .github/release-train/sync.mjs check --consumer .` entirely locally. An
+authorized maintainer updates the generated directory using the owning Skill's
+`scripts/release-train/sync.mjs sync --consumer <checkout> --revision <source-sha>`;
+the manifest records the selected source and every file digest. Unknown or modified
+generated files stop synchronization before replacement.
+
+Use a new workflow dispatch to analyze current main. Re-running all jobs stops
+before analysis, since an earlier attempt may already have created a tag. Re-running
+only failed jobs preserves the successful producer's immutable IDs. A partial
+publication is repaired through the original recovery identity printed in its
+outcome; the static Actions form does not prefill or execute that command.
+
+The npm registry Settings binding remains unobserved: current `ci.yml` versus
+`release.yml` trust must be checked in Settings before activation; source evidence
+alone does not establish a defect. Recovery no longer invokes `npm dist-tag add/rm`, so the independent **Allow npm dist-tag** permission is not an activation prerequisite for this read-only channel policy. It remains a distinct, default-off publisher capability; no setting was changed. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing). GitHub Packages read probing returned 403,
+which does not prove absence or successful delivery. Release App ID `2758804`
+and `RELEASE_BOT_PRIVATE_KEY` metadata exist; tap installation is unverified.
+These are external readiness checks, not local code blockers. No remote setting,
+credential, dispatch, tag or publication was changed by this implementation.
 
 ## Local checks
 
@@ -48,3 +105,25 @@ actionlint .github/workflows/*.yml
 ```
 
 For a final candidate, build the native archive before publication, pack the wrapper once, then run `verify-package.mjs` with absolute wrapper/archive paths and the engine-selected version. The consumer must never import the source tree or build/repack. Remote rehearsals, synthetic PRs and test releases are excluded.
+
+## Historical squash compatibility (2026-11-07)
+
+Historical standard GitHub PR squash envelopes are ordinary commits: their full
+Conventional Commit body must validate. Thin `release-commit-analyzer.mjs` and
+`release-notes-generator.mjs` adapters use the same message projection and forward
+all existing options to the official plugins. True multi-parent merges retain
+original messages and complete breaking notes. Empty/malformed/nested bodies and
+invalid skip-marker messages still fail. No SHA exemption, baseline fabrication
+or Git history rewrite is used.
+
+Recovery requires the sealed original release notes to be a string and exactly
+match any existing Release before asset writes. After asset reconciliation, recheck
+the identity and notes before publishing a draft, then verify them on final
+readback. Missing or conflicting notes stop recovery; an existing body is never
+replaced. Only an entirely absent Release is created using the original notes.
+
+The outcome uses the same read-only notes and asset preflight as recovery. A
+verified tag alone cannot authorize a recovery command: conflicting or unreadable
+publication evidence blocks it. A matching draft or missing asset remains
+repairable. Recovery checks every existing asset before uploading any missing
+asset, so a later conflict cannot leave an earlier partial upload.
