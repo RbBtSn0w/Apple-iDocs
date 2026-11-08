@@ -6,16 +6,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import semanticRelease from 'semantic-release';
-import { analyzeCommits } from './release-commit-analyzer.mjs';
-import { generateNotes } from './release-notes-generator.mjs';
-import { analyzeCommits as validateSemantics } from './commit-semantics.mjs';
+import { analyzeCommits } from '../../.github/release-train/release-commit-analyzer.mjs';
+import { generateNotes } from '../../.github/release-train/release-notes-generator.mjs';
+import { analyzeCommits as validateSemantics } from '../../.github/release-train/commit-semantics.mjs';
 import configuration from './config.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
 export const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.fsmonitor=', '-C', cwd, ...args], { encoding: 'utf8', timeout: 30000 }).trim();
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const configurationDigest = () => digest(Buffer.concat(['config.mjs', 'release.mjs', 'commit-semantics.mjs', 'release-commit-analyzer.mjs', 'release-notes-generator.mjs', 'package-lock.json'].map((name) => readFileSync(join(here, name)))));
+const configurationDigest = () => digest(Buffer.concat(['scripts/release/config.mjs', 'scripts/release/release.mjs', '.github/release-train/commit-semantics.mjs', '.github/release-train/release-commit-analyzer.mjs', '.github/release-train/release-notes-generator.mjs', 'scripts/release/package-lock.json'].map(name => readFileSync(join(root, name)))));
 const baseline = ({ lastRelease = {} }) => ({ gitTag: lastRelease.gitTag ?? null, version: lastRelease.version ?? null, gitHead: lastRelease.gitHead ?? null });
 const next = ({ nextRelease }) => nextRelease ? ({ version: nextRelease.version, gitTag: nextRelease.gitTag, channel: nextRelease.channel ?? null }) : null;
 
@@ -24,7 +24,7 @@ export function checkEntrypoint(ref, event) {
 }
 
 export function checkPlan(expected, actual) {
-  for (const key of ['candidate', 'baseline', 'next', 'configuration']) {
+  for (const key of ['candidate', 'baseline', 'next', 'configuration', 'notes']) {
     if (!isDeepStrictEqual(expected[key], actual[key])) throw new Error(`Release plan changed: ${key}`);
   }
 }
@@ -114,14 +114,17 @@ export async function publish(directory) {
   const result = await semanticRelease({ ...configuration, repositoryUrl: `https://github.com/${repository}.git`, ci: true, plugins: [
     ...analysisPlugins(() => {}),
     { verifyRelease: async (_options, context) => {
-      checkPlan(plan, { candidate: git(root, 'rev-parse', 'HEAD'), baseline: baseline(context), next: next(context), configuration: configurationDigest() });
+      checkPlan(plan, { candidate: git(root, 'rev-parse', 'HEAD'), baseline: baseline(context), next: next(context), configuration: configurationDigest(), notes: plan.notes });
       checkReleaseArtifacts(directory, plan);
+    }, prepare: async (_options, context) => {
+      if (typeof plan.notes !== 'string') throw new Error('Original release notes are unavailable');
+      checkPlan(plan, {...plan, notes: context.nextRelease.notes});
     } },
     [{ ...github }, { assets: [join(directory, 'idocs-darwin-arm64.tar.gz'), join(directory, 'idocs-darwin-arm64.sha256'), join(directory, 'package.tgz'), join(directory, 'artifact.json'), join(directory, 'plan.json')] }],
-    { publish: async () => { writeFileSync(join(directory, 'github-result.json'), JSON.stringify({status: 'completed'})); await publishRegistries(directory, plan); return { name: 'npmjs and GitHub Packages' }; } },
+    { publish: async () => { await publishRegistries(directory, plan); return { name: 'npmjs and GitHub Packages' }; } },
   ] }, { cwd: root, env: process.env });
   if (!result) throw new Error('Planned release became stale/already released; inspect target states');
-  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\nreleased=true\n`, { flag: 'a' });
+  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(directory,plan).files['idocs-darwin-arm64.tar.gz']}\n`, { flag: 'a' });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -140,10 +143,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const input = resolve(directory);
       const plan = recoveryPlan(input, process.env.RECOVERY_CANDIDATE);
       execFileSync('python3', [join(here, 'recovery.py'), '--directory', input], {stdio: 'inherit', timeout: 300000});
-      writeFileSync(join(input, 'github-result.json'), JSON.stringify({status: 'completed'}));
       const { publishRegistries } = await import('./registries.mjs');
       await publishRegistries(input, plan, {recovery: true});
-      if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\n`, {flag: 'a'});
+      if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(input,plan).files['idocs-darwin-arm64.tar.gz']}\n`, {flag: 'a'});
     }
     else if (command === 'seal') {
       const plan = JSON.parse(readFileSync(join(directory, 'plan.json')));

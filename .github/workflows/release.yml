@@ -1,4 +1,6 @@
-name: Scheduled Release
+name: Release
+run-name: >-
+  ${{ inputs.operation == 'recover' && format('Recover release · run {0}', inputs.source_run_id) || github.event_name == 'schedule' && 'Release main · scheduled' || 'Release main · manual' }}
 
 on:
   schedule:
@@ -10,12 +12,13 @@ on:
         type: choice
         options: [release, recover]
         default: release
+        description: Release current main, or complete an original release
       source_run_id:
         type: string
-        description: Original main release run ID (recover only)
+        description: Original release run ID — required only for recover
       artifact_id:
         type: string
-        description: Immutable verified artifact ID (recover only)
+        description: Original recovery artifact ID — copy from Release outcome
 
 permissions:
   actions: read
@@ -31,11 +34,13 @@ env:
 
 jobs:
   verify:
+    name: Analyze and validate candidate
     if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.operation != 'recover'
     runs-on: macos-26
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+      analysis_artifact_id: ${{ steps.analysis_artifact.outputs.artifact-id }}
       source_sha: ${{ github.sha }}
       version: ${{ steps.plan.outputs.version }}
       needed: ${{ steps.plan.outputs.needed }}
@@ -55,6 +60,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.2'
+      - name: Check synchronized release implementation
+        run: node .github/release-train/sync.mjs check --consumer .
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - name: Check release behavior
@@ -65,7 +72,7 @@ jobs:
         id: plan
         run: |
           mkdir release-input
-          node scripts/release/release.mjs plan release-input
+          node .github/release-train/cli.mjs analyze --directory release-input
       - uses: ./.github/actions/setup-tuist
         if: steps.plan.outputs.needed == 'true'
       - name: Build and test exact candidate
@@ -93,7 +100,7 @@ jobs:
           node -e 'const fs=require("fs"),rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/idocs-pack.json"));if(rows.length!==1)throw Error("Expected one wrapper");fs.renameSync("release-input/"+rows[0].filename,"release-input/package.tgz")'
           scripts/release/node_modules/.bin/publint release-input/package.tgz --strict
           node scripts/release/verify-package.mjs "$PWD/release-input/package.tgz" "$PWD/release-input/idocs-darwin-arm64.tar.gz" "$RELEASE_VERSION"
-          node scripts/release/release.mjs seal release-input
+          node .github/release-train/cli.mjs seal --directory release-input
       - name: Hand off this run's verified payload
         id: artifact
         if: steps.plan.outputs.needed == 'true'
@@ -105,6 +112,7 @@ jobs:
           retention-days: 30
 
       - name: Retain read-only analysis
+        id: analysis_artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -112,6 +120,7 @@ jobs:
           path: release-input/plan.json
           if-no-files-found: warn
   recovery-input:
+    name: Validate original recovery identity
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.operation == 'recover'
     runs-on: ubuntu-latest
     outputs:
@@ -139,7 +148,7 @@ jobs:
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" > "$RUNNER_TEMP/source-run.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/source-artifact.json"
-          node scripts/release/recovery-source.mjs --run "$RUNNER_TEMP/source-run.json" --artifact "$RUNNER_TEMP/source-artifact.json" --repository "$GITHUB_REPOSITORY" --source-run-id "$SOURCE_RUN_ID" --artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/recovery-source.json"
+          node .github/release-train/recovery-source.mjs --run "$RUNNER_TEMP/source-run.json" --artifact "$RUNNER_TEMP/source-artifact.json" --repository "$GITHUB_REPOSITORY" --source-run-id "$SOURCE_RUN_ID" --artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/recovery-source.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/source-artifact.zip"
           node --input-type=module -e 'import {readFileSync} from "node:fs";import {createHash} from "node:crypto";const p=process.env.RUNNER_TEMP,m=JSON.parse(readFileSync(p+"/source-artifact.json"));if(!m.name.startsWith("verified-idocs-")||m.digest!=="sha256:"+createHash("sha256").update(readFileSync(p+"/source-artifact.zip")).digest("hex"))throw Error("Original verified artifact name/digest mismatch")'
           python3 scripts/release/check_artifact_zip.py "$RUNNER_TEMP/source-artifact.zip"
@@ -161,6 +170,7 @@ jobs:
           python3 -c 'import os; from scripts.release.recovery import verify_tag; import json; from pathlib import Path; p=json.loads(Path("verified/plan.json").read_text()); verify_tag("RbBtSn0w/Apple-iDocs",p["next"]["gitTag"],os.environ["CANDIDATE"])'
 
   release:
+    name: Publish native archive and registries
     needs: [verify, recovery-input]
     if: always() && vars.RELEASE_ENABLED == 'true' && ((needs.verify.result == 'success' && needs.verify.outputs.needed == 'true') || needs.recovery-input.result == 'success')
     runs-on: macos-26
@@ -175,6 +185,9 @@ jobs:
     outputs:
       version: ${{ steps.publish.outputs.version }}
       released: ${{ steps.publish.outputs.released }}
+      native_sha256: ${{ steps.publish.outputs.native_sha256 }}
+      source_sha: ${{ needs.recovery-input.outputs.source_sha || needs.verify.outputs.source_sha }}
+      publication_artifact_id: ${{ steps.publication_artifact.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -212,11 +225,12 @@ jobs:
           printf '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' > "$RUNNER_TEMP/idocs-publish.npmrc"
           export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/idocs-publish.npmrc"
           if [ "$OPERATION" = recover ]; then
-            node scripts/release/release.mjs recover "$PWD/release-input"
+            node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
           else
-            node scripts/release/release.mjs publish "$PWD/release-input"
+            node .github/release-train/cli.mjs publish --directory "$PWD/release-input"
           fi
       - name: Retain independent target receipts, including partial failures
+        id: publication_artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -226,7 +240,10 @@ jobs:
           retention-days: 90
 
   publish-homebrew:
+    name: Publish Homebrew
     needs: release
+    outputs:
+      receipt_artifact_id: ${{ steps.homebrew_receipt.outputs.artifact-id }}
     if: needs.release.outputs.released == 'true'
     runs-on: macos-26
     timeout-minutes: 15
@@ -248,13 +265,32 @@ jobs:
           repositories: homebrew-tap
           permission-contents: write
       - name: Publish Homebrew formula
+        id: publish_formula
         env:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
           HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap
           HOMEBREW_TAP_TOKEN: ${{ steps.homebrew-tap-token.outputs.token }}
         run: ./scripts/publish-homebrew-formula.sh "$RELEASE_VERSION"
+      - name: Read back published Homebrew identity
+        if: always() && steps.publish_formula.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.homebrew-tap-token.outputs.token }}
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
+          RELEASE_CANDIDATE: ${{ needs.release.outputs.source_sha }}
+          RELEASE_NATIVE_SHA256: ${{ needs.release.outputs.native_sha256 }}
+          HOMEBREW_TAP_REPOSITORY: RbBtSn0w/homebrew-tap
+        run: node scripts/release/observe-homebrew.mjs
+      - name: Preserve Homebrew readback receipt
+        id: homebrew_receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-receipt-${{ github.run_attempt }}
+          path: homebrew-receipt.json
+          if-no-files-found: ignore
 
   result:
+    name: Release outcome
     needs: ['verify', 'recovery-input', 'release', 'publish-homebrew']
     if: always()
     runs-on: ubuntu-latest
@@ -267,12 +303,17 @@ jobs:
         with:
           node-version: '22.22.2'
       - name: Restore plan for result context
+        id: analysis_plan
+        continue-on-error: true
         if: needs.verify.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: release-analysis-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.verify.outputs.analysis_artifact_id }}
+          merge-multiple: true
           path: result-input
       - name: Restore original recovery plan
+        id: original_plan
+        continue-on-error: true
         if: needs.recovery-input.result == 'success'
         uses: actions/download-artifact@v4
         with:
@@ -282,20 +323,41 @@ jobs:
           merge-multiple: true
           path: result-input
       - name: Restore independent publication receipts
-        if: always() && (needs.release.result == 'success' || needs.release.result == 'failure')
+        id: publication_receipts
+        if: always() && needs.release.outputs.publication_artifact_id != ''
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: idocs-publication-${{ github.sha }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.release.outputs.publication_artifact_id }}
+          merge-multiple: true
           path: publication-input
+      - name: Restore Homebrew readback receipt
+        id: homebrew_receipts
+        if: always() && needs.publish-homebrew.outputs.receipt_artifact_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.publish-homebrew.outputs.receipt_artifact_id }}
+          merge-multiple: true
+          path: publication-input
+      - name: Read back GitHub assets and original recovery identity
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          ORIGINAL_RUN_ID: ${{ inputs.operation == 'recover' && inputs.source_run_id || github.run_id }}
+          RECOVERY_ARTIFACT_ID: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
+        run: node scripts/release/observe-platforms.mjs
       - name: Record independent verification and publication results
         if: always()
         env:
           RELEASE_NEEDS: ${{ toJSON(needs) }}
+          REPORT_DOWNLOADS: '{"analysis":"${{ steps.analysis_plan.outcome }}","original":"${{ steps.original_plan.outcome }}","publication":"${{ steps.publication_receipts.outcome }}","homebrew":"${{ steps.homebrew_receipts.outcome }}"}'
           RELEASE_TARGETS: '{"github": "release", "npm": "release", "github-packages": "release", "homebrew": "publish-homebrew"}'
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
           RELEASE_OPERATION: ${{ inputs.operation }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-        run: node scripts/release/observe.mjs
+        run: node .github/release-train/cli.mjs report
       - uses: actions/upload-artifact@v4
         if: always()
         with:

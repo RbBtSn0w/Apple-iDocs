@@ -1,0 +1,14 @@
+import {execFileSync} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+const {GITHUB_REPOSITORY, RELEASE_VERSION: version, RELEASE_CANDIDATE: candidate, RELEASE_NATIVE_SHA256: checksum, HOMEBREW_TAP_REPOSITORY: repository} = process.env;
+if (!/^[a-f0-9]{40}$/.test(candidate || '') || !/^\d+\.\d+\.\d+$/.test(version || '') || !/^[a-f0-9]{64}$/.test(checksum || '') || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || '')) throw Error('Exact source, version, native digest and tap identity are required');
+const response = JSON.parse(execFileSync('gh', ['api', `repos/${repository}/contents/Formula/idocs.rb?ref=main`], {encoding:'utf8',timeout:30000}));
+const formula = Buffer.from(response.content, 'base64').toString();
+const versions = [...formula.matchAll(/^  version "([^"]+)"$/gm)];
+const hashes = [...formula.matchAll(/^  sha256 "([a-f0-9]{64})"$/gm)];
+if (!response.sha || versions.length !== 1 || hashes.length !== 1 || !/^\d+\.\d+\.\d+$/.test(versions[0][1])) throw Error('Cannot establish current remote tap formula');
+const current = versions[0][1];
+const a = current.split('.').map(BigInt), b = version.split('.').map(BigInt);
+const different = a.findIndex((n, i) => n !== b[i]);
+if ((different >= 0 && a[different] < b[different]) || (different < 0 && hashes[0][1] !== checksum)) throw Error('Remote tap is older or has conflicting original native bytes');
+writeFileSync('homebrew-receipt.json', JSON.stringify({status:current === version ? 'completed' : 'unknown', candidate_sha:candidate, version, sha256:checksum, remote_version:current, preserved_newer:current !== version, reason:current !== version ? 'Newer stable formula retained; original formula identity is not confirmed and will not be restored over it' : 'Exact remote formula verified', observed_at:new Date().toISOString(), remote_id:response.sha, url:response.html_url || `https://github.com/${repository}/blob/main/Formula/idocs.rb`, source_repository:GITHUB_REPOSITORY},null,2)+'\n');

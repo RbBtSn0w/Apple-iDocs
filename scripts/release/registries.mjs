@@ -58,7 +58,7 @@ export async function publishRegistries(directory, plan, {recovery = false} = {}
   const downloaded = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/assets/${remote}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024, timeout: 60000 });
   const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
   if (sha256(downloaded) !== sha256(readFileSync(join(directory, 'idocs-darwin-arm64.tar.gz')))) throw new Error('Published native asset differs from verified archive');
-  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {npm: 'not-run', github: 'not-run'} };
+  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {npm: 'not-run', github: 'not-run'}, receipts: {} };
   for (const [name, registry] of Object.entries({ npm: 'https://registry.npmjs.org', github: 'https://npm.pkg.github.com' })) {
     try {
       const env = { ...process.env, NPM_CONFIG_IGNORE_SCRIPTS: 'true' };
@@ -80,6 +80,9 @@ export async function publishRegistries(directory, plan, {recovery = false} = {}
       if (after !== integrity) throw new Error(`${name} publication integrity not confirmed`);
       reconcileChannels(registry, plan, env, recoveryTag);
       receipt.registries[name] = 'verified';
+      receipt.receipts[name] = {status: 'completed', candidate_sha: plan.candidate, version: plan.next.version,
+        integrity, observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`,
+        url: name === 'npm' ? `https://www.npmjs.com/package/@rbbtsn0w/idocs/v/${plan.next.version}` : `https://github.com/${process.env.GITHUB_REPOSITORY || 'RbBtSn0w/Apple-iDocs'}/pkgs/npm/idocs`};
       writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
     } catch (error) {
       receipt.registries[name] = 'unknown';

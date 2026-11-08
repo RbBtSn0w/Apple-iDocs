@@ -63,6 +63,28 @@ separately, with independent GitHub/npm/GitHub Packages/tap results. Target
 readbacks and receipts survive later target failure. Local verification is not
 runtime activation or production delivery acceptance.
 
+The `Release` workflow identifies scheduled, manual and original-recovery runs.
+Its v2 outcome starts with the result and next action, followed by channel evidence
+and collapsed technical details. Successful jobs without matching remote receipts
+remain unconfirmed. First-failure recovery includes the original sealed producer
+ID, digest, attempt and expiry only after the original tag is verified. Missing or
+conflicting evidence blocks recovery rather than rebuilding the release.
+
+Consumer-common code is generated under `.github/release-train/`; configuration
+is `.github/release-train.json`. Product/native packaging and dual-registry/tap
+adapters remain in this repository. Do not hand-edit generated modules. CI runs
+`node .github/release-train/sync.mjs check --consumer .` entirely locally. An
+authorized maintainer updates the generated directory using the owning Skill's
+`scripts/release-train/sync.mjs sync --consumer <checkout> --revision <source-sha>`;
+the manifest records the selected source and every file digest. Unknown or modified
+generated files stop synchronization before replacement.
+
+Use a new workflow dispatch to analyze current main. Re-running all jobs stops
+before analysis, since an earlier attempt may already have created a tag. Re-running
+only failed jobs preserves the successful producer's immutable IDs. A partial
+publication is repaired through the original recovery identity printed in its
+outcome; the static Actions form does not prefill or execute that command.
+
 The npm registry Settings binding remains unobserved: current `ci.yml` versus
 `release.yml` trust must be checked in Settings before activation; source evidence
 alone does not establish a defect. Recovery channel reconciliation additionally requires the trusted publisher's independent **Allow npm dist-tag** permission (default off); npm 12.2.2 meets the documented CLI requirement. Its current permission state is unverified. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing). GitHub Packages read probing returned 403,

@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os';
 import test from 'node:test';
 import * as release from './release.mjs';
 
+test('generated notes must match the exact original plan before publication', () => {
+  const expected = {candidate:'a'.repeat(40),notes:'Original notes'};
+  assert.doesNotThrow(()=>release.checkPlan(expected,{...expected}));
+  assert.throws(()=>release.checkPlan(expected,{...expected,notes:'Changed notes'}),/notes/);
+});
+
 test('trusted main recovery accepts original sealed plan after main advances', () => {
   const directory = mkdtempSync(join(tmpdir(), 'idocs-original-'));
   try {
