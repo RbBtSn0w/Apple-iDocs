@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const [file, wanted, checksum] = process.argv.slice(2);
+const text = fs.readFileSync(file, 'utf8');
+const versions = [...text.matchAll(/^  version "([^"]+)"$/gm)];
+const hashes = [...text.matchAll(/^  sha256 "([a-fA-F0-9]{64})"$/gm)];
+const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+if (versions.length !== 1 || hashes.length !== 1 || !stable.test(versions[0][1]) || !stable.test(wanted)) throw Error('Cannot establish stable tap identity');
+const current = versions[0][1].split('.').map(BigInt);
+const next = wanted.split('.').map(BigInt);
+const differing = current.findIndex((value, index) => value !== next[index]);
+if (differing >= 0 && current[differing] > next[differing]) console.log('retain');
+else if (differing < 0 && hashes[0][1].toLowerCase() !== checksum) throw Error('Existing stable version has different native bytes');
+else console.log('continue');

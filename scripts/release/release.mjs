@@ -6,18 +6,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import semanticRelease from 'semantic-release';
-import { analyzeCommits } from '@semantic-release/commit-analyzer';
-import { generateNotes } from '@semantic-release/release-notes-generator';
-import lint from '@commitlint/lint';
-import conventional from '@commitlint/config-conventional';
-import preset from 'conventional-changelog-conventionalcommits';
+import { analyzeCommits } from './release-commit-analyzer.mjs';
+import { generateNotes } from './release-notes-generator.mjs';
+import { analyzeCommits as validateSemantics } from './commit-semantics.mjs';
 import configuration from './config.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
 export const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.fsmonitor=', '-C', cwd, ...args], { encoding: 'utf8', timeout: 30000 }).trim();
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const configurationDigest = () => digest(Buffer.concat(['config.mjs', 'release.mjs', 'package-lock.json'].map((name) => readFileSync(join(here, name)))));
+const configurationDigest = () => digest(Buffer.concat(['config.mjs', 'release.mjs', 'commit-semantics.mjs', 'release-commit-analyzer.mjs', 'release-notes-generator.mjs', 'package-lock.json'].map((name) => readFileSync(join(here, name)))));
 const baseline = ({ lastRelease = {} }) => ({ gitTag: lastRelease.gitTag ?? null, version: lastRelease.version ?? null, gitHead: lastRelease.gitHead ?? null });
 const next = ({ nextRelease }) => nextRelease ? ({ version: nextRelease.version, gitTag: nextRelease.gitTag, channel: nextRelease.channel ?? null }) : null;
 
@@ -57,21 +55,14 @@ export function checkReleaseArtifacts(directory, plan) {
 
 export async function lintRange(context) {
   if (configuration.requireBaseline && !context.lastRelease.gitHead) throw new Error('Published baseline is missing; refusing an unexpected first release');
-  const range = context.lastRelease.gitHead ? `${context.lastRelease.gitHead}..HEAD` : 'HEAD';
-  const history = execFileSync('git', ['log', '-z', '--format=%H%x00%B', range], { cwd: context.cwd, encoding: 'utf8', timeout: 30000 }).split('\0');
-  const parserOpts = (await preset()).parser;
-  for (let index = 0; index + 1 < history.length; index += 2) {
-    const [sha, message] = history.slice(index, index + 2);
-    const result = await lint(message, { ...conventional.rules, 'body-max-line-length': [0], 'footer-max-line-length': [0] }, { parserOpts, defaultIgnores: false });
-    if (!message.trim() || !result.valid || result.warnings.length) throw new Error(`Invalid Conventional Commit ${sha}: ${[...result.errors, ...result.warnings].map(({ message }) => message).join('; ')}`);
-  }
+  await validateSemantics({}, {...context, env: {...context.env, RELEASE_TOOLS: here}});
 }
 
 function analysisPlugins(observe) {
   return [
     { analyzeCommits: async (_options, context) => { await lintRange(context); observe(context); return null; } },
-    { analyzeCommits: (options, context) => analyzeCommits({ ...configuration.analyzer, ...options }, context) },
-    { generateNotes: (options, context) => generateNotes({ ...configuration.notes, ...options }, { ...context, options: { ...context.options, repositoryUrl: 'https://github.com/RbBtSn0w/Apple-iDocs.git' } }) },
+    { analyzeCommits: (options, context) => analyzeCommits({ ...configuration.analyzer, ...options }, { ...context, env: { ...context.env, RELEASE_TOOLS: here } }) },
+    { generateNotes: (options, context) => generateNotes({ ...configuration.notes, ...options }, { ...context, env: { ...context.env, RELEASE_TOOLS: here }, options: { ...context.options, repositoryUrl: 'https://github.com/RbBtSn0w/Apple-iDocs.git' } }) },
   ];
 }
 
@@ -97,6 +88,17 @@ export async function runAnalysis(source = root) {
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 }
 
+// Recovery trusts the original immutable handoff, never the current checkout's
+// version or configuration. Provenance is validated by the read-only input job.
+export function recoveryPlan(directory, candidate) {
+  const plan = JSON.parse(readFileSync(join(directory, 'plan.json')));
+  if (!/^[a-f0-9]{40}$/.test(candidate || '') || plan.candidate !== candidate
+      || !plan.next || !/^\d+\.\d+\.\d+$/.test(plan.next.version)
+      || plan.next.gitTag !== `v${plan.next.version}`) throw new Error('Invalid original recovery candidate');
+  checkReleaseArtifacts(directory, plan);
+  return plan;
+}
+
 export async function publish(directory) {
   checkEntrypoint(process.env.GITHUB_REF, process.env.GITHUB_EVENT_NAME);
   if (process.env.RELEASE_ENABLED !== 'true') throw new Error('Release activation is disabled');
@@ -116,7 +118,7 @@ export async function publish(directory) {
       checkReleaseArtifacts(directory, plan);
     } },
     [{ ...github }, { assets: [join(directory, 'idocs-darwin-arm64.tar.gz'), join(directory, 'idocs-darwin-arm64.sha256'), join(directory, 'package.tgz'), join(directory, 'artifact.json'), join(directory, 'plan.json')] }],
-    { publish: async () => { await publishRegistries(directory, plan); return { name: 'npmjs and GitHub Packages' }; } },
+    { publish: async () => { writeFileSync(join(directory, 'github-result.json'), JSON.stringify({status: 'completed'})); await publishRegistries(directory, plan); return { name: 'npmjs and GitHub Packages' }; } },
   ] }, { cwd: root, env: process.env });
   if (!result) throw new Error('Planned release became stale/already released; inspect target states');
   if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\nreleased=true\n`, { flag: 'a' });
@@ -133,19 +135,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `needed=${Boolean(plan.next)}\nversion=${plan.next?.version ?? ''}\n`, { flag: 'a' });
     } else if (command === 'publish') await publish(resolve(directory));
     else if (command === 'recover') {
+      checkEntrypoint(process.env.GITHUB_REF, process.env.GITHUB_EVENT_NAME);
+      if (process.env.RELEASE_ENABLED !== 'true') throw new Error('Release activation is disabled');
       const input = resolve(directory);
-      const plan = JSON.parse(readFileSync(join(input, 'plan.json')));
-      const version = process.argv[4];
-      if (!plan.next || plan.next.version !== version || git(root, 'rev-parse', 'HEAD') !== plan.candidate) throw new Error('Recovery requires explicit original version and committed source');
-      checkReleaseArtifacts(input, plan);
-      if (configurationDigest() !== plan.configuration) throw new Error('Recovery tools differ from original candidate');
-      const release = JSON.parse(execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/tags/${plan.next.gitTag}`], { encoding: 'utf8', timeout: 30000 }));
-      if (release.draft || release.prerelease || release.tag_name !== plan.next.gitTag) throw new Error('Recovery requires existing stable release');
-      const tag = execFileSync('git', ['ls-remote', 'https://github.com/RbBtSn0w/Apple-iDocs.git', `refs/tags/${plan.next.gitTag}`, `refs/tags/${plan.next.gitTag}^{}`], { encoding: 'utf8', timeout: 30000 }).trim().split('\n').map((line) => line.split(/\s+/));
-      const peeled = tag.find((row) => row[1]?.endsWith('^{}')) ?? tag.find((row) => row[1] === `refs/tags/${plan.next.gitTag}`);
-      if (peeled?.[0] !== plan.candidate) throw new Error('Recovery tag does not identify the verified candidate');
+      const plan = recoveryPlan(input, process.env.RECOVERY_CANDIDATE);
+      execFileSync('python3', [join(here, 'recovery.py'), '--directory', input], {stdio: 'inherit', timeout: 300000});
+      writeFileSync(join(input, 'github-result.json'), JSON.stringify({status: 'completed'}));
       const { publishRegistries } = await import('./registries.mjs');
-      await publishRegistries(input, plan);
+      await publishRegistries(input, plan, {recovery: true});
+      if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\n`, {flag: 'a'});
     }
     else if (command === 'seal') {
       const plan = JSON.parse(readFileSync(join(directory, 'plan.json')));
