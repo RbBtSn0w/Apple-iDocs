@@ -30,7 +30,7 @@ Source changes and local checks establish **Staged**, not live publication. Befo
 
 Tags, GitHub assets, npmjs, GitHub Packages and Homebrew are independent side effects. Publication receipts are retained even on failure. Inspect all targets before retrying: do not delete tags, choose another version, regenerate an archive, or blindly rerun semantic-release after a tag exists.
 
-Dispatch **Scheduled Release** on main with `operation=recover` and the original
+Dispatch **Release** on main with `operation=recover` and the original
 normal `source_run_id` / immutable `artifact_id`. Trusted current-main tools bind
 the actual same-repository/same-workflow completed main schedule/manual run,
 artifact ownership, sealed plan/checksums and existing tag's peeled candidate SHA.
@@ -121,3 +121,9 @@ match any existing Release before asset writes. After asset reconciliation, rech
 the identity and notes before publishing a draft, then verify them on final
 readback. Missing or conflicting notes stop recovery; an existing body is never
 replaced. Only an entirely absent Release is created using the original notes.
+
+The outcome uses the same read-only notes and asset preflight as recovery. A
+verified tag alone cannot authorize a recovery command: conflicting or unreadable
+publication evidence blocks it. A matching draft or missing asset remains
+repairable. Recovery checks every existing asset before uploading any missing
+asset, so a later conflict cannot leave an earlier partial upload.
