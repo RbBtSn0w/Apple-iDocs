@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { validateLatestVersion } from '../../.github/release-train/npm-channel.mjs';
 
 export function registryState(registry, version, environment = process.env) {
   try {
@@ -31,22 +32,10 @@ function compareStable(left, right) {
   return index < 0 ? 0 : a[index] > b[index] ? 1 : -1;
 }
 
-function reconcileChannels(registry, plan, env, recoveryTag) {
-  const tags = readTags(registry, env);
-  const version = plan.next.version;
-  if (!tags.latest || compareStable(tags.latest, version) < 0) {
-    execFileSync('npm', ['dist-tag', 'add', `@rbbtsn0w/idocs@${version}`, 'latest', '--registry', registry], {env, stdio: 'inherit', timeout: 60000});
-    const confirmed = readTags(registry, env).latest;
-    if (!confirmed || compareStable(confirmed, version) < 0) throw Error('Stable registry channel not confirmed');
-  }
-  // Remove only this original candidate's own temporary label after its bytes and
-  // the stable channel are verified. A different value is never deleted.
-  if (recoveryTag) {
-    const current = readTags(registry, env)[recoveryTag];
-    if (current !== undefined && current !== version) throw Error('Recovery tag ownership conflict');
-    if (current === version) execFileSync('npm', ['dist-tag', 'rm', '@rbbtsn0w/idocs', recoveryTag, '--registry', registry], {env, stdio: 'inherit', timeout: 60000});
-    if (readTags(registry, env)[recoveryTag] !== undefined) throw Error('Recovery tag cleanup not confirmed');
-  }
+function observeChannel(registry, plan, env) {
+  const latest = readTags(registry, env).latest;
+  validateLatestVersion({version: plan.next.version}, latest);
+  return {latest_version: latest, channel_observed_at: new Date().toISOString()};
 }
 
 export async function publishRegistries(directory, plan, {recovery = false} = {}) {
@@ -78,10 +67,17 @@ export async function publishRegistries(directory, plan, {recovery = false} = {}
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
       if (after !== integrity) throw new Error(`${name} publication integrity not confirmed`);
-      reconcileChannels(registry, plan, env, recoveryTag);
+      let channel;
+      try {channel = observeChannel(registry, plan, env);}
+      catch (error) {
+        receipt.receipts[name] = {status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
+          integrity, observed_at: new Date().toISOString(), bytes_verified: true, channel_blocked: true,
+          reason: error.message, remote_id: `@rbbtsn0w/idocs@${plan.next.version}`};
+        throw error;
+      }
       receipt.registries[name] = 'verified';
       receipt.receipts[name] = {status: 'completed', candidate_sha: plan.candidate, version: plan.next.version,
-        integrity, observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`,
+        integrity, ...channel, ...(recoveryTag ? {recovery_tag: recoveryTag} : {}), observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`,
         url: name === 'npm' ? `https://www.npmjs.com/package/@rbbtsn0w/idocs/v/${plan.next.version}` : `https://github.com/${process.env.GITHUB_REPOSITORY || 'RbBtSn0w/Apple-iDocs'}/pkgs/npm/idocs`};
       writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
     } catch (error) {

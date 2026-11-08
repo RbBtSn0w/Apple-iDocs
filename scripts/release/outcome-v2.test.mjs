@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {mkdtempSync, readFileSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -54,4 +55,13 @@ test('report download failure writes its receipt before failing the native job',
     assert.notEqual(result.publication,'completed');
     assert.match(readFileSync(join(cwd,'summary.md'),'utf8'),/could not be downloaded/);
   } finally {rmSync(cwd,{recursive:true,force:true});}
+});
+
+for(const [latest,blocked,confirmed]of [['1.2.3',false,true],['2.0.0',false,true],['1.0.0',false,false],[undefined,false,false],['1.0.0',true,false]])test(`registry outcome binds channel evidence ${latest}/${blocked}`,()=>{
+  const integrity='sha512-'+createHash('sha512').update(JSON.stringify('wrapper')).digest('base64');
+  const receipt={status:blocked?'unknown':'completed',candidate_sha:candidate,version:'1.2.3',integrity,observed_at:'2026-11-08T00:00:00Z',remote_id:'package@1.2.3',latest_version:latest,channel_observed_at:'2026-11-08T00:00:00Z',...(blocked?{channel_blocked:true,bytes_verified:true,reason:'latest is older'}:{})};
+  const recovery={available:true,tag_verified:true,source_run_id:'12',artifact_id:'34',source_attempt:1,digest:'sha256:'+'b'.repeat(64),expires_at:'2099-01-01T00:00:00Z',command:'gh workflow run release.yml -f operation=recover -f source_run_id=12 -f artifact_id=34'};
+  const {result}=observe({'package.tgz':'wrapper','registries.json':{candidate,version:'1.2.3',integrity,registries:{npm:blocked?'unknown':'verified'},receipts:{npm:receipt}},'recovery-availability.json':recovery});
+  assert.equal(result.targets.npm.status,confirmed?'completed':'unknown');
+  if(!confirmed){assert.equal(result.recovery.available,false);assert.equal(result.recovery.source_run_id,'12');assert.equal(result.recovery.command,undefined);assert.match(result.recovery.blocked_reason,/channel|latest/i);}
 });

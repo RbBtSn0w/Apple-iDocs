@@ -26,7 +26,7 @@ test('later registry failure preserves verified independent target results', () 
   const integrity = 'sha512-' + createHash('sha512').update('original package').digest('base64');
   const result = observe({verify: {result: 'success', outputs: {source_sha: 'a'.repeat(40), version: '1.2.3'}}, release: {result: 'failure'}}, {
     'github-observation.json': {targets: {github: identity}}, 'package.tgz': 'original package',
-    'registries.json': {candidate: identity.candidate_sha, version: identity.version, integrity, registries: {npm: 'verified', github: 'unknown'}, receipts: {npm: {...identity, integrity}}},
+    'registries.json': {candidate: identity.candidate_sha, version: identity.version, integrity, registries: {npm: 'verified', github: 'unknown'}, receipts: {npm: {...identity, integrity, latest_version: identity.version, channel_observed_at: identity.observed_at}}},
   });
   assert.equal(result.targets.github.status, 'completed');
   assert.equal(result.targets.npm.status, 'completed');

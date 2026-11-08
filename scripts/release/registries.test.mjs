@@ -48,13 +48,15 @@ else process.exit(99);
     writeFileSync(stateFile, '{}');
     assert.throws(() => run({RECOVERY: 'true', READ_TAG_ERROR: 'true'}));
     assert.deepEqual(JSON.parse(readFileSync(logFile)), calls);
-    for (const latest of ['0.9.0', '1.0.1', '2.0.0']) {
-      writeFileSync(stateFile, '{}');
-      run({RECOVERY: 'true', LATEST_VERSION: latest});
+    for (const latest of [undefined, '0.9.0', '1.0.1', '2.0.0']) {
+      writeFileSync(stateFile, JSON.stringify(latest===undefined?{'tags:https://registry.npmjs.org':{},'tags:https://npm.pkg.github.com':{}}:{}));
+      if(latest===undefined||latest==='0.9.0')assert.throws(()=>run({RECOVERY:'true',LATEST_VERSION:latest}));
+      else run({RECOVERY: 'true', LATEST_VERSION: latest});
       const recovered = JSON.parse(readFileSync(stateFile));
-      for (const registry of ['https://registry.npmjs.org', 'https://npm.pkg.github.com']) {
-        assert.equal(recovered['tags:'+registry].latest, latest === '2.0.0' ? latest : '1.0.1');
-        assert.deepEqual(Object.keys(recovered['tags:'+registry]), ['latest']);
+      for (const registry of latest===undefined||latest==='0.9.0'?['https://registry.npmjs.org']:['https://registry.npmjs.org', 'https://npm.pkg.github.com']) {
+        assert.equal(recovered['tags:'+registry].latest, latest);
+        assert.ok(Object.keys(recovered['tags:'+registry]).some(tag=>tag.startsWith('idocs-recovery-')));
+        if(latest!==undefined&&latest!=='0.9.0'){const evidence=JSON.parse(readFileSync(join(root,'registries.json'))).receipts[registry.includes('npmjs')?'npm':'github'];assert.equal(evidence.latest_version,latest);assert.ok(Number.isFinite(Date.parse(evidence.channel_observed_at)));}
         assert.match(recovered['published:'+registry], /^idocs-recovery-/);
       }
     }

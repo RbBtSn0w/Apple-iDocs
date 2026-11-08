@@ -45,11 +45,11 @@ release and existing release notes are preserved. It reuses matching GitHub rele
 missing sealed assets, completes a matching draft, then reconciles npmjs and
 GitHub Packages integrity independently. Only after both registries are verified
 does the tap update run. Recovery publishes missing wrapper bytes under an
-original-candidate recovery tag, verifies integrity, then explicitly reconciles
-`latest`: retain a newer stable version, verify an equal version, or promote an
-older/missing channel to the verified original version and read it back. It
-removes only its own recovery tag after confirming its ownership. Unknown/read
-failures stop channel changes and leave an incomplete target result. Normal
+original-candidate recovery tag and verifies integrity. It only reads `latest`:
+an equal or newer stable version confirms delivery; an older, missing or unreadable
+channel remains incomplete. Recovery never rewrites shared distribution tags or
+deletes its retained recovery label. A known channel gap preserves the original
+IDs but suppresses an ineffective automatic recovery command. Normal
 publication refuses to downgrade a newer registry channel. The tap likewise
 retains a newer formula and rejects a same-version native checksum conflict.
 The shared release lock serializes these workflows; it does not establish an
@@ -87,7 +87,7 @@ outcome; the static Actions form does not prefill or execute that command.
 
 The npm registry Settings binding remains unobserved: current `ci.yml` versus
 `release.yml` trust must be checked in Settings before activation; source evidence
-alone does not establish a defect. Recovery channel reconciliation additionally requires the trusted publisher's independent **Allow npm dist-tag** permission (default off); npm 12.2.2 meets the documented CLI requirement. Its current permission state is unverified. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing). GitHub Packages read probing returned 403,
+alone does not establish a defect. Recovery no longer invokes `npm dist-tag add/rm`, so the independent **Allow npm dist-tag** permission is not an activation prerequisite for this read-only channel policy. It remains a distinct, default-off publisher capability; no setting was changed. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing). GitHub Packages read probing returned 403,
 which does not prove absence or successful delivery. Release App ID `2758804`
 and `RELEASE_BOT_PRIVATE_KEY` metadata exist; tap installation is unverified.
 These are external readiness checks, not local code blockers. No remote setting,
