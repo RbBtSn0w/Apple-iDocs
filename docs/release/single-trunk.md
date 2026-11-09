@@ -127,3 +127,29 @@ verified tag alone cannot authorize a recovery command: conflicting or unreadabl
 publication evidence blocks it. A matching draft or missing asset remains
 repairable. Recovery checks every existing asset before uploading any missing
 asset, so a later conflict cannot leave an earlier partial upload.
+
+
+### Recovery request evidence and one-shot intents
+
+Use the original publication artifact containing the sealed bytes and request
+receipts. A structured E404 does not prove that no request was sent: accepted or
+uncertain requests are observed without uploading again. Missing original request
+evidence cannot authorize a recovery upload.
+
+The recovery workflow records an immutable Actions intent before invoking its
+trusted inspection/publishing code. This intentionally consumes an original
+`not-run` authorization once. A failure during inspection, authentication or a
+read before the actual upload can therefore leave a conservative intent behind.
+Later recoveries observe the original bytes but cannot consume that authorization
+again. A same-run job rerun can encounter the immutable artifact name; a new
+recover dispatch with the same original IDs still observes prior intents.
+
+If visibility never arrives and the request cannot be proven unsent, keep the
+target unconfirmed. Do not delete intent artifacts, force publication, change
+latest or overwrite a version to bypass this condition. Diagnose the original
+run and retain its evidence; use a genuine forward fix through the normal verified
+main/semantic-release path when the old delivery cannot be safely completed.
+Normal scheduled publication retains its automated path; this restriction applies
+to uncertain recovery, not a recurring approval.
+
+For iDocs, copy the original `idocs-publication-<sha>-<attempt>` artifact ID, which contains request receipts. A legacy `verified-idocs` artifact remains readable but cannot establish that an absent registry version was never requested.

@@ -1,4 +1,4 @@
-import {createNpmObservationBudget, parseNpmView, npmRequestState, allowRecoveryRequest} from '../../.github/release-train/npm-view.mjs';
+import {createNpmObservationBudget, parseNpmView, npmRequestState, npmRequestFacts, allowRecoveryRequest} from '../../.github/release-train/npm-view.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -73,7 +73,7 @@ export async function publishRegistries(directory, plan, {recovery = false, obse
     observationBudget.assertRemaining();
     const original=originalReceipts[name];
     const requestState=npmRequestState(metadata,original);
-    receipt.receipts[name] = {...original,status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
+    receipt.receipts[name] = {...npmRequestFacts(metadata,original),status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
       integrity, observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`};
     persist();
     try {

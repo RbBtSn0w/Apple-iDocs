@@ -78,3 +78,12 @@ test('legacy recovery with no request evidence remains unknown without an upload
   const state=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(state['publish:https://registry.npmjs.org'],undefined);assert.equal(f.receipt().receipts.npm.status,'unknown');
  }finally{f.clean();}
 });
+
+test('a failed channel recheck preserves request facts without historical channel evidence', () => {
+ const f=fixture();try{
+  const identity={candidate_sha:'original',version:'1.0.1',integrity:f.integrity};
+  writeFileSync(join(f.root,'registries.json'),JSON.stringify({receipts:{npm:{...identity,status:'completed',request_started_at:'2026-11-09T01:00:00Z',publication_accepted:true,accepted_at:'2026-11-09T01:01:00Z',latest_version:'1.0.1',channel_observed_at:'2026-11-09T01:02:00Z'},github:{...identity,status:'not-run'}}}));
+  assert.throws(()=>f.run({RECOVERY:'true'}),/channel/);
+  const receipt=f.receipt().receipts.npm;assert.equal(receipt.status,'unknown');assert.equal(receipt.publication_accepted,true);assert.equal(receipt.request_started_at,'2026-11-09T01:00:00Z');assert.equal(receipt.latest_version,undefined);assert.equal(receipt.channel_observed_at,undefined);
+ }finally{f.clean();}
+});
