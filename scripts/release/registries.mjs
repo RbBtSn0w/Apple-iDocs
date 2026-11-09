@@ -1,25 +1,31 @@
+import {parseNpmView} from '../../.github/release-train/npm-view.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateLatestVersion } from '../../.github/release-train/npm-channel.mjs';
 
+function missingPackage(error) {
+  try { return parseNpmView(String(error.stdout)).error?.code === 'E404'; }
+  catch { return false; }
+}
+
 export function registryState(registry, version, environment = process.env) {
   try {
-    return JSON.parse(execFileSync('npm', ['view', `@rbbtsn0w/idocs@${version}`, 'dist.integrity', '--registry', registry, '--json'], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }));
+    return parseNpmView(execFileSync('npm', ['view', `@rbbtsn0w/idocs@${version}`, 'dist.integrity', '--registry', registry, '--json'], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }));
   } catch (error) {
-    if (/\bE404\b/.test(String(error.stderr))) return null;
+    if (missingPackage(error)) return null;
     throw new Error(`Cannot inspect registry ${registry}; publication stopped`);
   }
 }
 
 function readTags(registry, env) {
   try {
-    const tags = JSON.parse(execFileSync('npm', ['view', '@rbbtsn0w/idocs', 'dist-tags', '--registry', registry, '--json'], {env, encoding: 'utf8', timeout: 60000}));
+    const tags = parseNpmView(execFileSync('npm', ['view', '@rbbtsn0w/idocs', 'dist-tags', '--registry', registry, '--json'], {env, encoding: 'utf8', timeout: 60000}));
     if (!tags || typeof tags !== 'object' || Array.isArray(tags)) throw Error('Malformed registry tags');
     return tags;
   } catch (error) {
-    if (/\bE404\b/.test(String(error.stderr))) return {};
+    if (missingPackage(error)) return {};
     throw new Error('Cannot verify registry channel; refusing tag changes');
   }
 }
