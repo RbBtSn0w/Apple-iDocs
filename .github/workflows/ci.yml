@@ -34,7 +34,10 @@ jobs:
           node-version: "22.22.2"
 
       - name: Use npm 12
-        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
@@ -87,7 +90,10 @@ jobs:
           cache-dependency-path: npm/package-lock.json
 
       - name: Use npm 12
-        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Install Node dependencies for npm wrapper
         run: npm --prefix npm ci --no-audit --no-fund

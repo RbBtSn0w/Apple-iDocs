@@ -63,7 +63,10 @@ jobs:
       - name: Check synchronized release implementation
         run: node .github/release-train/sync.mjs check --consumer .
       - name: Install release npm 12
-        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - name: Check release behavior
@@ -163,7 +166,10 @@ jobs:
           merge-multiple: true
           path: verified
       - name: Install release npm 12
-        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Validate original sealed plan and existing tag
         id: plan
         env:
