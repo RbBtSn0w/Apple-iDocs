@@ -5,11 +5,16 @@ This package distributes the `idocs` Swift CLI through npm.
 ## Install
 
 ```bash
-npm install -g @rbbtsn0w/idocs
+npm install -g @rbbtsn0w/idocs --allow-scripts=@rbbtsn0w/idocs
 idocs --help
 ```
 
-For normal users, this is the complete install flow. `postinstall` downloads the matching `idocs-darwin-arm64.tar.gz` asset from GitHub Releases automatically.
+npm 12 blocks dependency install scripts by default. The flag permits only iDocs
+for this installation; it does not change global policy. For npm 11 or earlier,
+omit the flag. `postinstall` downloads the matching `idocs-darwin-arm64.tar.gz`
+asset from GitHub Releases automatically. For project-scoped installs, record a
+package-specific `allowScripts` policy in the project instead of using this
+global-install flag.
 
 If install fails, rerun the install and inspect the npm output. A failed download should be treated as a release packaging problem, not as an expected manual setup step.
 
@@ -19,7 +24,7 @@ If install fails, rerun the install and inspect the npm output. A failed downloa
 
 ```bash
 export IDOCS_RELEASE_BASE_URL="https://github.com/<owner>/<repo>/releases/download/v{version}"
-npm install -g @rbbtsn0w/idocs
+npm install -g @rbbtsn0w/idocs --allow-scripts=@rbbtsn0w/idocs
 ```
 
 The archive is expected to contain:

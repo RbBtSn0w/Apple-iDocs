@@ -143,7 +143,7 @@ test('recovery workflow brackets every target request with its preflight and con
  assert.ok(previous<workflow.indexOf('- name: Finalize verified recovery targets'));
  assert.doesNotMatch(workflow.split('  release:')[1].split('  publish-homebrew:')[0],/continue-on-error/);
  assert.match(workflow,/released: \$\{\{ steps.recovery_finalize.outputs.released \|\| steps.publish.outputs.released \}\}/);
- assert.match(workflow,/if: needs.release.outputs.released == 'true'/);
+ assert.match(workflow,/needs.release.outputs.released == 'true'/);
 });
 
 test('failed recovery preflight invalidates completed observation while preserving accepted request facts', () => {

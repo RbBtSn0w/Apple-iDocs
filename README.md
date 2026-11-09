@@ -39,11 +39,13 @@ Requirements:
 Normal users only need:
 
 ```bash
-npm install -g @rbbtsn0w/idocs
+npm install -g @rbbtsn0w/idocs --allow-scripts=@rbbtsn0w/idocs
 idocs --help
 ```
 
-The npm wrapper downloads the matching CLI bundle from GitHub Releases during `postinstall`.
+With npm 12, the flag permits only iDocs to run its native-download `postinstall`;
+other packages remain blocked. For npm 11 or earlier, omit the flag. The wrapper
+downloads the matching CLI bundle from GitHub Releases during `postinstall`.
 If install fails, treat it as a packaging problem and inspect the npm output.
 
 ### Build from source (development)
@@ -96,7 +98,7 @@ IDOCS_LOCAL_BINARY="${PWD}/.deriveddata/Build/Products/Debug/idocs" \
 If you intentionally want a wrapper-only install for local debugging, opt out of fail-fast explicitly:
 
 ```bash
-IDOCS_NPM_STRICT_INSTALL=0 npm install -g @rbbtsn0w/idocs
+IDOCS_NPM_STRICT_INSTALL=0 npm install -g @rbbtsn0w/idocs --allow-scripts=@rbbtsn0w/idocs
 ```
 
 Unified E2E validation (link + pack paths):
