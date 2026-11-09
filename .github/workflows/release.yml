@@ -342,7 +342,7 @@ jobs:
     needs: release
     outputs:
       receipt_artifact_id: ${{ steps.homebrew_receipt.outputs.artifact-id }}
-    if: needs.release.outputs.released == 'true'
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.release.outputs.released == 'true' }}
     runs-on: macos-26
     timeout-minutes: 15
     steps:

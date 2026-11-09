@@ -33,6 +33,14 @@ test('workflow analyzes without activation and exposes source-bound recovery', (
   assert.match(workflow, /release-result.json/);
 });
 
+test('Homebrew follows a successful publisher across skipped alternate branches', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
+  const homebrew = workflow.split('  publish-homebrew:')[1].split('  result:')[0];
+  assert.match(homebrew, /if:.*!cancelled\(\)/);
+  assert.match(homebrew, /if:.*needs\.release\.result == 'success'/);
+  assert.match(homebrew, /if:.*needs\.release\.outputs\.released == 'true'/);
+});
+
 test('every release job installs npm without mutating the runner toolchain', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
   const commands = workflow.split('\n').filter(line => /^\s+npm install\b/.test(line));
