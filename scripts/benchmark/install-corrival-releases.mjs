@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import {parseNpmView} from "../../.github/release-train/npm-view.mjs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { DEFAULT_PACKAGE_SPECS, parsePackageSpecs } from "./search-quality-lib.mjs";
@@ -14,6 +13,9 @@ const installDir = args.get("install-dir") ?? ".tmp/search-quality-corrivals";
 let packages;
 try {
   packages = parsePackageSpecs(packageSpec);
+  for (const item of packages) {
+  if (!/^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(item.packageName)) throw Error("Expected a registry package name");
+  }
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exit(2);
@@ -31,17 +33,6 @@ if (!dryRun) {
   await mkdir(installDir, { recursive: true });
 }
 
-for (const item of packages) {
-  const resolvedVersion = dryRun
-    ? resolveDryRunVersion(item)
-    : resolveNPMVersion(item);
-
-  metadata.packages[item.packageName] = {
-    requestedSpec: item.requestedSpec,
-    resolvedVersion,
-    raw: item.raw
-  };
-}
 
 if (!dryRun) {
   const install = spawnSync(
@@ -63,6 +54,18 @@ if (!dryRun) {
   }
 }
 
+for (const item of packages) {
+  const resolvedVersion = dryRun
+    ? resolveDryRunVersion(item)
+    : await resolveInstalledVersion(item);
+
+  metadata.packages[item.packageName] = {
+    requestedSpec: item.requestedSpec,
+    resolvedVersion,
+    raw: item.raw
+  };
+}
+
 await writeFile(output, `${JSON.stringify(metadata, null, 2)}\n`);
 process.stdout.write(`${JSON.stringify(metadata)}\n`);
 
@@ -70,19 +73,10 @@ function resolveDryRunVersion(item) {
   return item.requestedSpec === "latest" ? "dry-run-latest" : item.requestedSpec;
 }
 
-function resolveNPMVersion(item) {
-  const view = spawnSync(
-    "npm",
-    ["view", `${item.packageName}@${item.requestedSpec}`, "version", "--json"],
-    { encoding: "utf8" }
-  );
-  if (view.status !== 0) {
-    process.stderr.write(view.stderr || view.stdout);
-    process.exit(2);
-  }
-  const version = parseNpmView(view.stdout);
-  if (typeof version !== "string" || !version) throw Error("Expected one npm version observation");
-  return version;
+async function resolveInstalledVersion(item) {
+  const manifest = JSON.parse(await readFile(path.join(installDir, "node_modules", item.packageName, "package.json"), "utf8"));
+  if (manifest.name !== item.packageName || typeof manifest.version !== "string" || !manifest.version) throw Error(`Installed package identity is unavailable: ${item.packageName}`);
+  return manifest.version;
 }
 
 function parseArgs(argv) {

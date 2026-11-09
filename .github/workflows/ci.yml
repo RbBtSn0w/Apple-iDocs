@@ -39,6 +39,9 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
           echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
 
+      - name: Verify benchmark version metadata
+        run: node --test scripts/benchmark/tests/install-corrival-releases.test.mjs
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
