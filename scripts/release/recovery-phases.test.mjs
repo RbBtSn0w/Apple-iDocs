@@ -44,5 +44,10 @@ else{console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}
   const receipt=JSON.parse(readFileSync(join(root,'registries.json')));
   for(const [key,value]of Object.entries(facts))assert.equal(receipt.receipts.npm[key],value);
   assert.equal(JSON.parse(readFileSync(join(root,'remote.json'))).uploads,1);
+  for(const key of ['observed_at','channel_observed_at','remote_id','latest_version']){
+   const invalid=structuredClone(receipt);delete invalid.receipts.npm[key];writeFileSync(join(root,'registries.json'),JSON.stringify(invalid));
+   assert.throws(()=>run('finalize'),key);
+  }
+
  } finally {rmSync(root,{recursive:true,force:true});}
 });

@@ -11,7 +11,7 @@ import { generateNotes } from '../../.github/release-train/release-notes-generat
 import { analyzeCommits as validateSemantics } from '../../.github/release-train/commit-semantics.mjs';
 import configuration from './config.mjs';
 import {startRecoveryObservationBudget, recoveryObservationBudget} from '../../.github/release-train/npm-view.mjs';
-import {validateLatestVersion} from '../../.github/release-train/npm-channel.mjs';
+import {assertNpmReceiptConfirmed} from '../../.github/release-train/npm-channel.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
@@ -152,7 +152,7 @@ export async function recover(directory, {phase = process.env.RECOVERY_PHASE || 
       if (receipt.registries?.[name] !== 'verified' || value?.status !== 'completed' || value.bytes_verified !== true || value.channel_blocked !== false
           || value.candidate_sha !== plan.candidate || value.version !== plan.next.version || value.integrity !== integrity
           || !Number.isFinite(Date.parse(value.channel_observed_at))) throw Error(`Recovery target remains incomplete: ${name}`);
-      validateLatestVersion({version: plan.next.version}, value.latest_version);
+      assertNpmReceiptConfirmed({name:'@rbbtsn0w/idocs',candidate_sha:plan.candidate,version:plan.next.version,integrity},value);
     }
     if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(input,plan).files['idocs-darwin-arm64.tar.gz']}\n`, {flag: 'a'});
   }
