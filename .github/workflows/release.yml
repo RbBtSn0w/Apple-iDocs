@@ -99,7 +99,7 @@ jobs:
           rm -rf "$RUNNER_TEMP/idocs-wrapper/node_modules" "$RUNNER_TEMP/idocs-wrapper/dist"
           node -e 'const fs=require("fs"),p=process.env.RUNNER_TEMP+"/idocs-wrapper/package.json",v=process.env.RELEASE_VERSION,j=JSON.parse(fs.readFileSync(p));j.version=v;fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n")'
           npm pack "$RUNNER_TEMP/idocs-wrapper" --ignore-scripts --json --pack-destination "$PWD/release-input" > "$RUNNER_TEMP/idocs-pack.json"
-          node -e 'const fs=require("fs"),rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/idocs-pack.json"));if(rows.length!==1)throw Error("Expected one wrapper");fs.renameSync("release-input/"+rows[0].filename,"release-input/package.tgz")'
+          node .github/release-train/npm-pack.mjs "$RUNNER_TEMP/idocs-pack.json" "$RUNNER_TEMP/idocs-wrapper/package.json" release-input/package.tgz
           scripts/release/node_modules/.bin/publint release-input/package.tgz --strict
           node scripts/release/verify-package.mjs "$PWD/release-input/package.tgz" "$PWD/release-input/idocs-darwin-arm64.tar.gz" "$RELEASE_VERSION"
           node .github/release-train/cli.mjs seal --directory release-input

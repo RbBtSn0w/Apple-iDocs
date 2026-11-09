@@ -33,6 +33,9 @@ jobs:
         with:
           node-version: "22.22.2"
 
+      - name: Use npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
@@ -82,6 +85,9 @@ jobs:
           node-version: "22.22.2"
           cache: 'npm'
           cache-dependency-path: npm/package-lock.json
+
+      - name: Use npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
 
       - name: Install Node dependencies for npm wrapper
         run: npm --prefix npm ci --no-audit --no-fund

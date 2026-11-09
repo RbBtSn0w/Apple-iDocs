@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {parseNpmView} from "../../.github/release-train/npm-view.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -79,7 +80,9 @@ function resolveNPMVersion(item) {
     process.stderr.write(view.stderr || view.stdout);
     process.exit(2);
   }
-  return String(JSON.parse(view.stdout)).replace(/^"|"$/g, "");
+  const version = parseNpmView(view.stdout);
+  if (typeof version !== "string" || !version) throw Error("Expected one npm version observation");
+  return version;
 }
 
 function parseArgs(argv) {
