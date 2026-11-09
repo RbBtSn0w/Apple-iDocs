@@ -136,13 +136,25 @@ receipts. A structured E404 does not prove that no request was sent: accepted or
 uncertain requests are observed without uploading again. Missing original request
 evidence cannot authorize a recovery upload.
 
-The recovery workflow records an immutable Actions intent before invoking its
-trusted inspection/publishing code. This intentionally consumes an original
-`not-run` authorization once. A failure during inspection, authentication or a
-read before the actual upload can therefore leave a conservative intent behind.
-Later recoveries observe the original bytes but cannot consume that authorization
-again. A same-run job rerun can encounter the immutable artifact name; a new
-recover dispatch with the same original IDs still observes prior intents.
+Recovery first reconciles the original native release, then processes npm and
+GitHub Packages in that order. Each target has a read-only registry and intent
+preflight before its own immutable Actions request marker is uploaded. Invalid
+reads therefore leave explicit `not-run` request evidence intact and create no
+marker. The marker names are `release-recovery-intent-<source-run-id>-npm` and
+`release-recovery-intent-<source-run-id>-github-packages`. Earlier trusted recovery
+markers block retransmission only for their target; legacy global markers block
+both conservatively. Artifacts from ordinary PR workflows do not authorize or
+block recovery.
+
+Publication sets `unknown` and `request_started_at` immediately before invoking
+npm. Accepted requests retain both timestamps through later observations. A
+byte-verified package whose stable channel is unavailable may yield to the next
+target; an unverified package or uncertain request stops before the next target's
+marker. One monotonic fifteen-minute observation deadline spans all registry
+preflights and requests. The finalizer fails if either target remains incomplete,
+and Homebrew receives `released=true` only after both are verified. Recovery never
+rewrites `latest`. A new recover dispatch uses the same original release/artifact
+identity and observes any earlier uncertain requests without uploading again.
 
 If visibility never arrives and the request cannot be proven unsent, keep the
 target unconfirmed. Do not delete intent artifacts, force publication, change

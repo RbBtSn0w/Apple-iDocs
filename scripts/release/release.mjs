@@ -10,6 +10,8 @@ import { analyzeCommits } from '../../.github/release-train/release-commit-analy
 import { generateNotes } from '../../.github/release-train/release-notes-generator.mjs';
 import { analyzeCommits as validateSemantics } from '../../.github/release-train/commit-semantics.mjs';
 import configuration from './config.mjs';
+import {startRecoveryObservationBudget, recoveryObservationBudget} from '../../.github/release-train/npm-view.mjs';
+import {validateLatestVersion} from '../../.github/release-train/npm-channel.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
@@ -127,6 +129,35 @@ export async function publish(directory) {
   if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${result.nextRelease.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(directory,plan).files['idocs-darwin-arm64.tar.gz']}\n`, { flag: 'a' });
 }
 
+export async function recover(directory, {phase = process.env.RECOVERY_PHASE || 'all', target = process.env.RECOVERY_TARGET} = {}) {
+  checkEntrypoint(process.env.GITHUB_REF, process.env.GITHUB_EVENT_NAME);
+  if (process.env.RELEASE_ENABLED !== 'true') throw new Error('Release activation is disabled');
+  if (!['prepare', 'preflight', 'registry', 'finalize', 'all'].includes(phase)) throw Error('Invalid recovery phase');
+  if (['preflight', 'registry'].includes(phase) && !['npm', 'github-packages'].includes(target)) throw Error('Missing recovery target');
+  const input = resolve(directory);
+  const plan = recoveryPlan(input, process.env.RECOVERY_CANDIDATE);
+  if (['prepare', 'all'].includes(phase)) {
+    execFileSync('python3', [join(here, 'recovery.py'), '--directory', input], {stdio: 'inherit', timeout: 300000});
+    startRecoveryObservationBudget(process.env);
+  }
+  if (['preflight', 'registry', 'all'].includes(phase)) {
+    const {publishRegistries} = await import('./registries.mjs');
+    await publishRegistries(input, plan, {recovery: true, observationBudget: recoveryObservationBudget(process.env), target, preflight: phase === 'preflight'});
+  }
+  if (['finalize', 'all'].includes(phase)) {
+    const receipt = JSON.parse(readFileSync(join(input, 'registries.json')));
+    const integrity = `sha512-${createHash('sha512').update(readFileSync(join(input, 'package.tgz'))).digest('base64')}`;
+    for (const name of ['npm', 'github']) {
+      const value = receipt.receipts?.[name];
+      if (receipt.registries?.[name] !== 'verified' || value?.status !== 'completed' || value.bytes_verified !== true || value.channel_blocked !== false
+          || value.candidate_sha !== plan.candidate || value.version !== plan.next.version || value.integrity !== integrity
+          || !Number.isFinite(Date.parse(value.channel_observed_at))) throw Error(`Recovery target remains incomplete: ${name}`);
+      validateLatestVersion({version: plan.next.version}, value.latest_version);
+    }
+    if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(input,plan).files['idocs-darwin-arm64.tar.gz']}\n`, {flag: 'a'});
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command, directory] = process.argv.slice(2);
   try {
@@ -137,16 +168,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       writeFileSync(join(directory, 'plan.json'), JSON.stringify(plan, null, 2) + '\n');
       if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `needed=${Boolean(plan.next)}\nversion=${plan.next?.version ?? ''}\n`, { flag: 'a' });
     } else if (command === 'publish') await publish(resolve(directory));
-    else if (command === 'recover') {
-      checkEntrypoint(process.env.GITHUB_REF, process.env.GITHUB_EVENT_NAME);
-      if (process.env.RELEASE_ENABLED !== 'true') throw new Error('Release activation is disabled');
-      const input = resolve(directory);
-      const plan = recoveryPlan(input, process.env.RECOVERY_CANDIDATE);
-      execFileSync('python3', [join(here, 'recovery.py'), '--directory', input], {stdio: 'inherit', timeout: 300000});
-      const { publishRegistries } = await import('./registries.mjs');
-      await publishRegistries(input, plan, {recovery: true});
-      if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `version=${plan.next.version}\nreleased=true\nnative_sha256=${checkReleaseArtifacts(input,plan).files['idocs-darwin-arm64.tar.gz']}\n`, {flag: 'a'});
-    }
+    else if (command === 'recover') await recover(directory);
     else if (command === 'seal') {
       const plan = JSON.parse(readFileSync(join(directory, 'plan.json')));
       writeFileSync(join(directory, 'artifact.json'), JSON.stringify(inspectArtifact(directory, plan, ['plan.json', 'package.tgz', 'idocs-darwin-arm64.tar.gz', 'idocs-darwin-arm64.sha256']), null, 2) + '\n');

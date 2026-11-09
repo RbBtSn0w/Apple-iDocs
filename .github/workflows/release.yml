@@ -187,9 +187,9 @@ jobs:
       packages: write
       id-token: write
     outputs:
-      version: ${{ steps.publish.outputs.version }}
-      released: ${{ steps.publish.outputs.released }}
-      native_sha256: ${{ steps.publish.outputs.native_sha256 }}
+      version: ${{ steps.recovery_finalize.outputs.version || steps.publish.outputs.version }}
+      released: ${{ steps.recovery_finalize.outputs.released || steps.publish.outputs.released }}
+      native_sha256: ${{ steps.recovery_finalize.outputs.native_sha256 || steps.publish.outputs.native_sha256 }}
       source_sha: ${{ needs.recovery-input.outputs.source_sha || needs.verify.outputs.source_sha }}
       publication_artifact_id: ${{ steps.publication_artifact.outputs.artifact-id }}
     steps:
@@ -215,25 +215,9 @@ jobs:
           github-token: ${{ github.token }}
           path: release-input
           merge-multiple: true
-      - name: Record original recovery request intent
-        if: inputs.operation == 'recover'
-        env:
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-          ARTIFACT_ID: ${{ inputs.artifact_id }}
-        run: node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-recovery-intent.json",JSON.stringify({source_run_id:process.env.SOURCE_RUN_ID,artifact_id:process.env.ARTIFACT_ID,run_id:process.env.GITHUB_RUN_ID}))'
-      - name: Preserve immutable recovery request intent
-        id: recovery_intent
-        if: inputs.operation == 'recover'
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-recovery-intent-${{ inputs.source_run_id }}-${{ inputs.artifact_id }}
-          path: ${{ runner.temp }}/release-recovery-intent.json
-          retention-days: 90
-          if-no-files-found: error
       - name: Publish verified candidate
         id: publish
         env:
-          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent.outputs.artifact-id }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -246,11 +230,94 @@ jobs:
           # shellcheck disable=SC2016
           printf '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' > "$RUNNER_TEMP/idocs-publish.npmrc"
           export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/idocs-publish.npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$NPM_CONFIG_USERCONFIG" >> "$GITHUB_ENV"
           if [ "$OPERATION" = recover ]; then
-            node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+            RECOVERY_PHASE=prepare node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
           else
             node .github/release-train/cli.mjs publish --directory "$PWD/release-input"
           fi
+      - name: Preflight recovery npm
+        id: recovery_preflight_npm
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: preflight
+          RECOVERY_TARGET: npm
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preserve immutable npm request intent
+        id: recovery_intent_npm
+        if: inputs.operation == 'recover' && steps.recovery_preflight_npm.outputs.request_needed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-intent-${{ inputs.source_run_id }}-npm
+          path: release-input/plan.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish or observe recovery npm
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: registry
+          RECOVERY_TARGET: npm
+          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent_npm.outputs.artifact-id }}
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preflight recovery github-packages
+        id: recovery_preflight_github_packages
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: preflight
+          RECOVERY_TARGET: github-packages
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preserve immutable github-packages request intent
+        id: recovery_intent_github_packages
+        if: inputs.operation == 'recover' && steps.recovery_preflight_github_packages.outputs.request_needed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-intent-${{ inputs.source_run_id }}-github-packages
+          path: release-input/plan.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish or observe recovery github-packages
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: registry
+          RECOVERY_TARGET: github-packages
+          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent_github_packages.outputs.artifact-id }}
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Finalize verified recovery targets
+        id: recovery_finalize
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: finalize
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
       - name: Retain independent target receipts, including partial failures
         id: publication_artifact
         if: always()

@@ -18,7 +18,7 @@ test(`npm ${npmMajor}: registries publish identical bytes, recover only missing 
   writeFileSync(native, 'native archive'); writeFileSync(wrapper, 'wrapper');
   const integrity = 'sha512-' + createHash('sha512').update(readFileSync(wrapper)).digest('base64');
   writeFileSync(stateFile, '{}'); writeFileSync(logFile, '[]');
-  writeFileSync(join(tools, 'gh'), `#!${process.execPath}\nconst fs=require('fs');if(process.argv.some(a=>a.includes('/actions/artifacts?name=')))console.log(JSON.stringify([{artifacts:[{id:78,name:'release-recovery-intent-12-34',expired:false,workflow_run:{id:56}}]}]));else if(process.argv.includes('--jq'))process.stdout.write('42');else process.stdout.write(fs.readFileSync(process.env.NATIVE));\n`, { mode: 0o755 });
+  writeFileSync(join(tools, 'gh'), `#!${process.execPath}\nconst fs=require('fs');if(process.argv.some(a=>a.includes('/actions/artifacts?name=')))console.log(JSON.stringify([{artifacts:process.argv.some(a=>a.includes('name=release-recovery-intent-12-34&'))?[]:[{id:78,name:process.argv.find(a=>a.includes('/actions/artifacts?name=')).split('name=')[1].split('&')[0],expired:false,workflow_run:{id:56}}]}]));else if(process.argv.includes('--jq'))process.stdout.write('42');else process.stdout.write(fs.readFileSync(process.env.NATIVE));\n`, { mode: 0o755 });
   writeFileSync(join(tools, 'npm'), `#!${process.execPath}
 const log=console.log;console.log=value=>log(${npmMajor === '12'}?JSON.stringify([JSON.parse(value)]):value);
 const fs=require('fs'),a=process.argv.slice(2),s=JSON.parse(fs.readFileSync(process.env.STATE)),r=a[a.indexOf('--registry')+1];
@@ -61,7 +61,7 @@ else process.exit(99);
       if(latest===undefined||latest==='0.9.0')assert.throws(()=>run({RECOVERY:'true',LATEST_VERSION:latest}));
       else run({RECOVERY: 'true', LATEST_VERSION: latest});
       const recovered = JSON.parse(readFileSync(stateFile));
-      for (const registry of latest===undefined||latest==='0.9.0'?['https://registry.npmjs.org']:['https://registry.npmjs.org', 'https://npm.pkg.github.com']) {
+      for (const registry of ['https://registry.npmjs.org', 'https://npm.pkg.github.com']) {
         assert.equal(recovered['tags:'+registry].latest, latest);
         assert.ok(Object.keys(recovered['tags:'+registry]).some(tag=>tag.startsWith('idocs-recovery-')));
         if(latest!==undefined&&latest!=='0.9.0'){const evidence=JSON.parse(readFileSync(join(root,'registries.json'))).receipts[registry.includes('npmjs')?'npm':'github'];assert.equal(evidence.latest_version,latest);assert.ok(Number.isFinite(Date.parse(evidence.channel_observed_at)));}
