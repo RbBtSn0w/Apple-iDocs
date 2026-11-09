@@ -1,3 +1,4 @@
+import {registryState} from './registries.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -6,7 +7,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 
-test('registries publish identical bytes, recover only missing targets, and reject conflicts/read errors', () => {
+for (const npmMajor of ['11', '12']) {
+test(`npm ${npmMajor}: registries publish identical bytes, recover only missing targets, and reject conflicts/read errors`, () => {
   const root = mkdtempSync(join(tmpdir(), 'idocs-registry-test-'));
   const tools = join(root, 'bin'); mkdirSync(tools);
   const stateFile = join(root, 'state.json');
@@ -18,11 +20,12 @@ test('registries publish identical bytes, recover only missing targets, and reje
   writeFileSync(stateFile, '{}'); writeFileSync(logFile, '[]');
   writeFileSync(join(tools, 'gh'), `#!${process.execPath}\nconst fs=require('fs');if(process.argv.includes('--jq'))process.stdout.write('42');else process.stdout.write(fs.readFileSync(process.env.NATIVE));\n`, { mode: 0o755 });
   writeFileSync(join(tools, 'npm'), `#!${process.execPath}
+const log=console.log;console.log=value=>log(${npmMajor === '12'}?JSON.stringify([JSON.parse(value)]):value);
 const fs=require('fs'),a=process.argv.slice(2),s=JSON.parse(fs.readFileSync(process.env.STATE)),r=a[a.indexOf('--registry')+1];
 if(a[0]==='view'&&a[2]==='dist-tags'){if(process.env.READ_TAG_ERROR){console.error('ECONNRESET');process.exit(1)}console.log(JSON.stringify(s['tags:'+r]||{latest:process.env.LATEST_VERSION||'1.0.1'}));}
 else if(a[0]==='dist-tag'&&a[1]==='add'){const tags=s['tags:'+r]||{};tags[a[3]]=a[2].split('@').at(-1);s['tags:'+r]=tags;fs.writeFileSync(process.env.STATE,JSON.stringify(s));}
 else if(a[0]==='dist-tag'&&a[1]==='rm'){const tags=s['tags:'+r]||{};delete tags[a[3]];s['tags:'+r]=tags;fs.writeFileSync(process.env.STATE,JSON.stringify(s));}
-else if(a[0]==='view') {if(process.env.READ_ERROR){console.error('ECONNRESET');process.exit(1)} if(s[r])console.log(JSON.stringify(s[r]));else{console.error('E404');process.exit(1)}}
+else if(a[0]==='view') {if(process.env.READ_ERROR){console.error('ECONNRESET');process.exit(1)} if(s[r])console.log(JSON.stringify(s[r]));else{console.log(JSON.stringify({error:{code:'E404'}}));console.error('E404');process.exit(1)}}
 else if(a[0]==='publish') {const calls=JSON.parse(fs.readFileSync(process.env.CALLS));calls.push(r);fs.writeFileSync(process.env.CALLS,JSON.stringify(calls));if(r.includes('github')&&process.env.FAIL_GITHUB)process.exit(17);s[r]=process.env.INTEGRITY;const tags=s['tags:'+r]||{latest:process.env.LATEST_VERSION||'1.0.1'};tags[a[a.indexOf('--tag')+1]]='1.0.1';s['published:'+r]=a[a.indexOf('--tag')+1];s['tags:'+r]=tags;fs.writeFileSync(process.env.STATE,JSON.stringify(s));}
 else process.exit(99);
 `, { mode: 0o755 });
@@ -62,4 +65,19 @@ else process.exit(99);
     }
 
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+}
+
+
+test('npm error output must be one structured E404 observation before authorizing absent-package publication', () => {
+ const root=mkdtempSync(join(tmpdir(),'idocs-npm-error-')),bin=join(root,'bin');mkdirSync(bin);
+ writeFileSync(join(bin,'npm'),`#!${process.execPath}
+console.log(process.env.ERROR_JSON);console.error('npm error code E404');process.exit(1);
+`,{mode:0o755});
+ const state=value=>registryState('https://registry.npmjs.org','1.0.1',{...process.env,PATH:bin+':'+process.env.PATH,ERROR_JSON:JSON.stringify(value)});
+ try {
+  for(const value of [{error:{code:'E404'}},[{error:{code:'E404'}}]])assert.equal(state(value),null);
+  for(const value of [[],[[{error:{code:'E404'}}]],[{error:{code:'E404'}},{error:{code:'E401'}}],{error:{code:'E401'}}])assert.throws(()=>state(value),/Cannot inspect registry/);
+ } finally {rmSync(root,{recursive:true,force:true});}
 });
