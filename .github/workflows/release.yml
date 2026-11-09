@@ -210,10 +210,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Install frozen tools without lifecycle hooks
+      - name: Install release npm 12
+        shell: bash
         run: |
-          npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
-          npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install frozen tools without lifecycle hooks
+        run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
