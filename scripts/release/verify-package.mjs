@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join } from 'node:path';
 
@@ -45,18 +45,22 @@ export async function verifyPackage(tarball, nativeArchive, version) {
     for (const file of ['bin/idocs.js', 'scripts/postinstall.mjs', 'README.md']) assert.ok(lstatSync(join(packageRoot, file)).isFile());
     assert.deepEqual(readdirSync(packageRoot).sort(), ['README.md', 'bin', 'package.json', 'scripts']);
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const env = { ...process.env, IDOCS_RELEASE_BASE_URL: `http://127.0.0.1:${server.address().port}/v{version}`, IDOCS_NPM_STRICT_INSTALL: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', IDOCS_CACHE_PATH: join(temporary, 'cache'), IDOCS_USAGE_LOG_PATH: join(temporary, 'usage.jsonl') };
+    const consumer = join(temporary, 'consumer');
+    mkdirSync(consumer);
+    writeFileSync(join(consumer, 'package.json'), JSON.stringify({private: true, allowScripts: {[`file:${tarball}`]: true}}));
+    const env = { ...process.env, NPM_CONFIG_IGNORE_SCRIPTS: 'false', IDOCS_RELEASE_BASE_URL: `http://127.0.0.1:${server.address().port}/v{version}`, IDOCS_NPM_STRICT_INSTALL: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', IDOCS_CACHE_PATH: join(temporary, 'cache'), IDOCS_USAGE_LOG_PATH: join(temporary, 'usage.jsonl') };
     delete env.IDOCS_LOCAL_BINARY; delete env.IDOCS_CLI_VERSION;
     // Spawn asynchronously: the parent must serve the real installer's local HTTP request.
     const { spawn } = await import('node:child_process');
     await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [join(packageRoot, 'scripts/postinstall.mjs')], { env, cwd: temporary, stdio: 'inherit' });
+      const child = spawn('npm', ['install', '--no-audit', '--no-fund', '--foreground-scripts', tarball], { env, cwd: consumer, stdio: 'inherit' });
       child.on('error', reject); child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Wrapper installer failed: ${code}`)));
     });
-    const run = (...args) => execFileSync(process.execPath, [join(packageRoot, 'bin/idocs.js'), ...args], { env, cwd: temporary, encoding: 'utf8', timeout: 30000 });
+    const installedRoot = join(consumer, 'node_modules/@rbbtsn0w/idocs');
+    const run = (...args) => execFileSync(process.execPath, [join(installedRoot, 'bin/idocs.js'), ...args], { env, cwd: consumer, encoding: 'utf8', timeout: 30000 });
     assert.equal(run('--version').trim(), version);
     assert.match(run('--help'), /USAGE:/);
-    assert.equal(readFileSync(join(packageRoot, 'dist/idocs.version'), 'utf8').trim(), version);
+    assert.equal(readFileSync(join(installedRoot, 'dist/idocs.version'), 'utf8').trim(), version);
     assert.equal(createHash('sha256').update(readFileSync(tarball)).digest('hex'), before);
   } finally { await cleanupConsumer(server, temporary); }
 }

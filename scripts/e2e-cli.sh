@@ -145,7 +145,7 @@ assert_exit_zero "$RUN_CODE" "idocs --version (link flow)"
 assert_equals "$RUN_OUTPUT" "$PACKAGE_VERSION" "idocs --version (link flow)"
 
 echo "[E2E] Path A0: failed fetch-binary preserves existing linked binary"
-run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$ROOT_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm --prefix npm run fetch-binary"
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -c "cd \"$ROOT_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm --prefix npm run fetch-binary"
 assert_exit_nonzero "$RUN_CODE" "npm run fetch-binary should fail when release asset is unavailable"
 
 if [[ ! -x "$ROOT_DIR/npm/dist/idocs" ]]; then
@@ -222,14 +222,22 @@ if [[ -z "$TGZ_FILE" || ! -f "npm/$TGZ_FILE" ]]; then
 fi
 
 echo "[E2E] Path B0: npm install fails fast when release asset cannot be downloaded"
+initialize_npm_consumer() {
+  node --input-type=module - "$1" "$ROOT_DIR/npm/$TGZ_FILE" <<'NODE'
+import {writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+const [directory, archive] = process.argv.slice(2);
+writeFileSync(join(directory, 'package.json'), JSON.stringify({private: true, allowScripts: {[`file:${archive}`]: true}}));
+NODE
+}
 TMP_FAIL_ROOT="$(new_tmp_dir)"
 TMP_FAIL_APP_DIR="$TMP_FAIL_ROOT/app"
 mkdir -p "$TMP_FAIL_APP_DIR"
-(cd "$TMP_FAIL_APP_DIR" && npm init -y >/dev/null)
+initialize_npm_consumer "$TMP_FAIL_APP_DIR"
 
 # This negative-path install must not inherit the CI job's IDOCS_LOCAL_BINARY,
 # otherwise npm postinstall will skip the download and the assertion becomes invalid.
-run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -c "cd \"$TMP_FAIL_APP_DIR\" && IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
 assert_exit_nonzero "$RUN_CODE" "npm install should fail fast when release asset is unavailable"
 assert_contains "$RUN_OUTPUT" "Binary download failed. npm/dist/idocs was not refreshed from the release asset." "npm install fail-fast message"
 
@@ -237,8 +245,8 @@ echo "[E2E] Path B1: wrapper-only install prints end-user recovery guidance"
 TMP_WRAPPER_ROOT="$(new_tmp_dir)"
 TMP_WRAPPER_APP_DIR="$TMP_WRAPPER_ROOT/app"
 mkdir -p "$TMP_WRAPPER_APP_DIR"
-(cd "$TMP_WRAPPER_APP_DIR" && npm init -y >/dev/null)
-run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -lc "cd \"$TMP_WRAPPER_APP_DIR\" && IDOCS_NPM_STRICT_INSTALL=0 IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
+initialize_npm_consumer "$TMP_WRAPPER_APP_DIR"
+run_cmd_capture env -u IDOCS_LOCAL_BINARY bash -c "cd \"$TMP_WRAPPER_APP_DIR\" && IDOCS_NPM_STRICT_INSTALL=0 IDOCS_RELEASE_BASE_URL='https://127.0.0.1:9/v{version}' npm i \"$ROOT_DIR/npm/$TGZ_FILE\""
 assert_exit_zero "$RUN_CODE" "wrapper-only npm install should succeed when strict install is disabled"
 
 WRAPPER_BIN="$TMP_WRAPPER_APP_DIR/node_modules/.bin/idocs"
@@ -250,12 +258,13 @@ fi
 run_cmd_capture "$WRAPPER_BIN" --help
 assert_exit_nonzero "$RUN_CODE" "wrapper-only idocs --help should fail without downloaded binary"
 assert_contains "$RUN_OUTPUT" "Reinstall @rbbtsn0w/idocs so postinstall can download the matching release asset." "wrapper-only user recovery guidance"
+assert_contains "$RUN_OUTPUT" "--allow-scripts=@rbbtsn0w/idocs" "npm 12 package-scoped script guidance"
 assert_contains "$RUN_OUTPUT" "For local repository development only, run npm --prefix npm run link-local." "wrapper-only development guidance"
 
 TMP_INSTALL_ROOT="$(new_tmp_dir)"
 TMP_APP_DIR="$TMP_INSTALL_ROOT/app"
 mkdir -p "$TMP_APP_DIR"
-(cd "$TMP_APP_DIR" && npm init -y >/dev/null)
+initialize_npm_consumer "$TMP_APP_DIR"
 (cd "$TMP_APP_DIR" && IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" npm i "$ROOT_DIR/npm/$TGZ_FILE" >/dev/null)
 
 IDOCS_LOCAL_BINARY="$IDOCS_LOCAL_BINARY_DEFAULT" \

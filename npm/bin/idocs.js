@@ -12,6 +12,7 @@ const frameworksPath = resolve(here, "../dist/Frameworks");
 if (!existsSync(binaryPath)) {
   console.error("iDocs binary not found at npm/dist/idocs.");
   console.error("Reinstall @rbbtsn0w/idocs so postinstall can download the matching release asset.");
+  console.error("With npm 12, allow this package's install script: npm install -g @rbbtsn0w/idocs --allow-scripts=@rbbtsn0w/idocs");
   console.error("If reinstall still fails, review the npm install output for the underlying packaging error.");
   console.error("For local repository development only, run npm --prefix npm run link-local.");
   process.exit(1);
