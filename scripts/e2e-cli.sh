@@ -213,7 +213,9 @@ if [[ "$MODE" == "live" ]]; then
 fi
 
 echo "[E2E] Path B: npm pack + local install flow"
-TGZ_FILE="$(cd npm && npm pack --json | jq -r '.[0].filename')"
+PACK_JSON="$(new_tmp_dir)/npm-pack.json"
+(cd npm && npm pack --ignore-scripts --json) > "$PACK_JSON"
+TGZ_FILE="$(node --input-type=module -e 'import {readFileSync} from "node:fs";import {parseNpmPack} from "./.github/release-train/npm-pack.mjs";process.stdout.write(parseNpmPack(readFileSync(process.argv[1],"utf8"),"@rbbtsn0w/idocs").filename)' "$PACK_JSON")"
 if [[ -z "$TGZ_FILE" || ! -f "npm/$TGZ_FILE" ]]; then
   echo "[FAIL] npm pack did not produce expected tgz file" >&2
   exit 1

@@ -33,6 +33,15 @@ jobs:
         with:
           node-version: "22.22.2"
 
+      - name: Use npm 12
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Verify benchmark version metadata
+        run: node --test scripts/benchmark/tests/install-corrival-releases.test.mjs
+
       - name: Build CLI
         run: ./scripts/tuist-silent.sh build iDocs
 
@@ -82,6 +91,12 @@ jobs:
           node-version: "22.22.2"
           cache: 'npm'
           cache-dependency-path: npm/package-lock.json
+
+      - name: Use npm 12
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Install Node dependencies for npm wrapper
         run: npm --prefix npm ci --no-audit --no-fund
