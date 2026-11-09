@@ -62,6 +62,8 @@ jobs:
           node-version: '22.22.2'
       - name: Check synchronized release implementation
         run: node .github/release-train/sync.mjs check --consumer .
+      - name: Install release npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - name: Check release behavior
@@ -160,6 +162,8 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: verified
+      - name: Install release npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - name: Validate original sealed plan and existing tag
         id: plan
         env:
@@ -202,8 +206,8 @@ jobs:
           python-version: '3.13'
       - name: Install frozen tools without lifecycle hooks
         run: |
-          npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
           npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+          npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
