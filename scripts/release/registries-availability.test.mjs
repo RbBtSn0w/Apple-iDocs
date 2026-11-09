@@ -12,7 +12,7 @@ function fixture() {
   writeFileSync(join(root, 'package.tgz'), 'wrapper');
   writeFileSync(join(root, 'idocs-darwin-arm64.tar.gz'), 'native');
   const integrity = 'sha512-' + createHash('sha512').update('wrapper').digest('base64');
-  writeFileSync(join(bin, 'gh'), `#!${process.execPath}\nprocess.stdout.write(process.argv.includes('--jq')?'42':'native');`, {mode:0o755});
+  writeFileSync(join(bin, 'gh'), `#!${process.execPath}\nif(process.argv.some(a=>a.includes('/actions/artifacts?name=')))console.log(JSON.stringify([{artifacts:[{id:78,name:'release-recovery-intent-12-34',expired:false,workflow_run:{id:56}}]}]));else process.stdout.write(process.argv.includes('--jq')?'42':'native');`, {mode:0o755});
   writeFileSync(join(bin, 'npm'), `#!${process.execPath}
 const fs=require('fs'),p=require('path'),a=process.argv.slice(2),r=a[a.indexOf('--registry')+1],f=p.join(process.env.FIXTURE,'state.json');
 const s=fs.existsSync(f)?JSON.parse(fs.readFileSync(f)):{};
@@ -24,7 +24,7 @@ if(a[0]==='publish'){
  if(process.env.MODE==='upload-error')process.exit(17);
 }else if(a[2]==='dist-tags'){
  s['tags:'+r]=(s['tags:'+r]||0)+1;save();
- console.log(JSON.stringify({latest:s['tags:'+r]>8?'1.0.1':'0.9.0'}));
+ console.log(JSON.stringify({latest:process.env.MODE==='ready-channel'||s['tags:'+r]>8?'1.0.1':'0.9.0'}));
 }else{
  s['bytes:'+r]=(s['bytes:'+r]||0)+1;save();
  if(process.env.MODE==='malformed-bytes'){console.log('null');process.exit(0);}
@@ -35,7 +35,7 @@ if(a[0]==='publish'){
   const code = `import {publishRegistries} from ${JSON.stringify(new URL('./registries.mjs', import.meta.url).href)};
 let remaining=Number(process.env.STEPS||100);const observationBudget={remaining:()=>remaining*1000,assertRemaining(){if(remaining<=0)throw Error('budget exhausted');return remaining*1000;},async wait(read){while(true){this.assertRemaining();const value=await read(remaining*1000);remaining--;if(value!==null)return value;}}};
 await publishRegistries(${JSON.stringify(root)},{candidate:'original',next:{version:'1.0.1',gitTag:'v1.0.1'}},{observationBudget,recovery:process.env.RECOVERY==='true'});`;
-  return {root, run(extra={}) {return execFileSync(process.execPath, ['--input-type=module','-e',code], {env:{...process.env,PATH:bin+':'+process.env.PATH,FIXTURE:root,INTEGRITY:integrity,...extra},encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:15000});}, receipt(){return JSON.parse(readFileSync(join(root,'registries.json')));}, clean(){rmSync(root,{recursive:true,force:true});}};
+  return {root, integrity, run(extra={}) {return execFileSync(process.execPath, ['--input-type=module','-e',code], {env:{...process.env,PATH:bin+':'+process.env.PATH,FIXTURE:root,INTEGRITY:integrity,GITHUB_REPOSITORY:'owner/repo',GITHUB_RUN_ID:'56',SOURCE_RUN_ID:'12',ARTIFACT_ID:'34',RECOVERY_INTENT_ARTIFACT_ID:'78',...extra},encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:15000});}, receipt(){return JSON.parse(readFileSync(join(root,'registries.json')));}, clean(){rmSync(root,{recursive:true,force:true});}};
 }
 
 test('delayed package bytes and channel settle beyond six observations on both registries', () => {
@@ -45,7 +45,7 @@ test('failed upload retains the original unknown identity without accepted evide
  const f=fixture();try {assert.throws(()=>f.run({MODE:'upload-error'}));const r=f.receipt().receipts.npm;assert.equal(r.status,'unknown');assert.equal(r.candidate_sha,'original');assert.equal(r.version,'1.0.1');assert.notEqual(r.publication_accepted,true);assert.equal(r.accepted_at,undefined);assert.ok(Number.isFinite(Date.parse(r.request_started_at)));}finally{f.clean();}
 });
 test('one shared observation budget prevents a later registry upload after exhaustion', () => {
- const f=fixture();try {assert.throws(()=>f.run({STEPS:'16'}));const s=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(s['publish:https://npm.pkg.github.com'],undefined);assert.equal(f.receipt().receipts.npm.status,'completed');assert.equal(f.receipt().registries.github,'not-run');assert.equal(f.receipt().receipts.github,undefined);}finally{f.clean();}
+ const f=fixture();try {assert.throws(()=>f.run({STEPS:'16'}));const s=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(s['publish:https://npm.pkg.github.com'],undefined);assert.equal(f.receipt().receipts.npm.status,'completed');assert.equal(f.receipt().registries.github,'not-run');assert.equal(f.receipt().receipts.github.status,'not-run');}finally{f.clean();}
 });
 
 for (const mode of ['malformed-bytes', 'auth-error']) {
@@ -55,5 +55,26 @@ for (const mode of ['malformed-bytes', 'auth-error']) {
 }
 
 test('recovery observes a lagging channel once without retrying or rewriting latest', () => {
- const f=fixture();try {assert.throws(()=>f.run({RECOVERY:'true'}));const s=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(s['tags:https://registry.npmjs.org'],2);const r=f.receipt().receipts.npm;assert.equal(r.status,'unknown');assert.equal(r.bytes_verified,true);assert.equal(r.publication_accepted,true);}finally{f.clean();}
+ const f=fixture();try {writeFileSync(join(f.root,'registries.json'),JSON.stringify({receipts:Object.fromEntries(['npm','github'].map(name=>[name,{candidate_sha:'original',version:'1.0.1',integrity:f.integrity,status:'not-run'}]))}));assert.throws(()=>f.run({RECOVERY:'true'}));const s=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(s['tags:https://registry.npmjs.org'],2);const r=f.receipt().receipts.npm;assert.equal(r.status,'unknown');assert.equal(r.bytes_verified,true);assert.equal(r.publication_accepted,true);}finally{f.clean();}
+});
+
+
+test('original accepted or uncertain requests are observed through recovery without another upload', () => {
+ for(const accepted of [true,false]){
+  const f=fixture();try {
+   const identity={candidate_sha:'original',version:'1.0.1',integrity:f.integrity};
+   writeFileSync(join(f.root,'registries.json'),JSON.stringify({receipts:{npm:{...identity,status:'unknown',request_started_at:'2026-11-09T01:00:00Z',...(accepted?{publication_accepted:true,accepted_at:'2026-11-09T01:00:00Z'}:{})},github:{...identity,status:'not-run'}}}));
+   f.run({RECOVERY:'true',MODE:'ready-channel'});
+   const state=JSON.parse(readFileSync(join(f.root,'state.json')));
+   assert.equal(state['publish:https://registry.npmjs.org'],undefined);
+   assert.equal(state['publish:https://npm.pkg.github.com'],1);
+   const receipt=f.receipt().receipts.npm;assert.equal(receipt.status,'completed');assert.equal(receipt.request_started_at,'2026-11-09T01:00:00Z');assert.equal(receipt.publication_accepted,accepted?true:undefined);
+  }finally{f.clean();}
+ }
+});
+test('legacy recovery with no request evidence remains unknown without an upload', () => {
+ const f=fixture();try{
+  assert.throws(()=>f.run({RECOVERY:'true'}),/original request evidence/);
+  const state=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(state['publish:https://registry.npmjs.org'],undefined);assert.equal(f.receipt().receipts.npm.status,'unknown');
+ }finally{f.clean();}
 });

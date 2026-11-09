@@ -1,7 +1,7 @@
-import {createNpmObservationBudget, parseNpmView} from '../../.github/release-train/npm-view.mjs';
+import {createNpmObservationBudget, parseNpmView, npmRequestState, allowRecoveryRequest} from '../../.github/release-train/npm-view.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateLatestVersion } from '../../.github/release-train/npm-channel.mjs';
 
@@ -18,7 +18,7 @@ export function registryState(registry, version, environment = process.env, time
     return integrity;
   } catch (error) {
     if (missingPackage(error)) return null;
-    throw new Error(`Cannot inspect registry ${registry}; publication stopped`);
+    throw new Error(`Cannot inspect registry ${registry}; publication stopped: ${error.message}`,{cause:error});
   }
 }
 
@@ -29,7 +29,7 @@ function readTags(registry, env, timeoutMs) {
     return tags;
   } catch (error) {
     if (missingPackage(error)) return {};
-    throw new Error('Cannot verify registry channel; refusing tag changes');
+    throw new Error(`Cannot verify registry channel; refusing tag changes: ${error.message}`,{cause:error});
   }
 }
 
@@ -60,11 +60,20 @@ export async function publishRegistries(directory, plan, {recovery = false, obse
   const downloaded = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/assets/${remote}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024, timeout: Math.min(60000, observationBudget.assertRemaining()) });
   const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
   if (sha256(downloaded) !== sha256(readFileSync(join(directory, 'idocs-darwin-arm64.tar.gz')))) throw new Error('Published native asset differs from verified archive');
-  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {npm: 'not-run', github: 'not-run'}, receipts: {} };
+  const priorPath=join(directory,'registries.json');
+  const prior=existsSync(priorPath)?JSON.parse(readFileSync(priorPath,'utf8')):undefined;
+  const metadata={candidate_sha:plan.candidate,version:plan.next.version,integrity};
+  const originalReceipts=prior?.receipts||{};
+  for(const value of Object.values(originalReceipts))npmRequestState(metadata,value);
+  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {npm: 'not-run', github: 'not-run'}, receipts: {...originalReceipts} };
   const persist = () => writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
+  if(!recovery)for(const name of ['npm','github'])if(!receipt.receipts[name])receipt.receipts[name]={...metadata,status:'not-run',bytes_verified:false};
+  persist();
   for (const [name, registry] of Object.entries({ npm: 'https://registry.npmjs.org', github: 'https://npm.pkg.github.com' })) {
     observationBudget.assertRemaining();
-    receipt.receipts[name] = {status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
+    const original=originalReceipts[name];
+    const requestState=npmRequestState(metadata,original);
+    receipt.receipts[name] = {...original,status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
       integrity, observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`};
     persist();
     try {
@@ -76,7 +85,9 @@ export async function publishRegistries(directory, plan, {recovery = false, obse
       if (!recovery && tags.latest !== undefined && compareStable(tags.latest, plan.next.version) > 0) throw Error('Normal publication would downgrade stable registry channel');
       const before = registryState(registry, plan.next.version, env, observationBudget.assertRemaining());
       if (before !== null && before !== integrity) throw new Error(`${name} already contains different bytes`);
-      if (before === null) {
+      if(before===null&&recovery&&requestState==='unconfirmed')throw Object.assign(Error(`${name}: original request evidence is missing; cannot authorize retransmission`),{code:'NPM_REQUEST_UNCONFIRMED'});
+      const canSend=before===null&&requestState!=='observe'&&(!recovery||allowRecoveryRequest({timeout:observationBudget.assertRemaining()}));
+      if (before === null && canSend) {
         const timeoutMs = Math.min(120000, observationBudget.assertRemaining());
         receipt.receipts[name].request_started_at = new Date().toISOString();
         persist();
@@ -84,6 +95,7 @@ export async function publishRegistries(directory, plan, {recovery = false, obse
         Object.assign(receipt.receipts[name], {publication_accepted: true, accepted_at: new Date().toISOString()});
         persist();
       }
+      if(before===null&&!canSend){receipt.receipts[name].reason='A prior request may already be in progress; observing without another upload';persist();}
       await observationBudget.wait((timeoutMs) => {
         const after = registryState(registry, plan.next.version, env, timeoutMs);
         if (after !== null && after !== integrity) throw new Error(`${name} publication integrity not confirmed`);

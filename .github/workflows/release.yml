@@ -152,7 +152,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/source-artifact.json"
           node .github/release-train/recovery-source.mjs --run "$RUNNER_TEMP/source-run.json" --artifact "$RUNNER_TEMP/source-artifact.json" --repository "$GITHUB_REPOSITORY" --source-run-id "$SOURCE_RUN_ID" --artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/recovery-source.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/source-artifact.zip"
-          node --input-type=module -e 'import {readFileSync} from "node:fs";import {createHash} from "node:crypto";const p=process.env.RUNNER_TEMP,m=JSON.parse(readFileSync(p+"/source-artifact.json"));if(!m.name.startsWith("verified-idocs-")||m.digest!=="sha256:"+createHash("sha256").update(readFileSync(p+"/source-artifact.zip")).digest("hex"))throw Error("Original verified artifact name/digest mismatch")'
+          node --input-type=module -e 'import {readFileSync} from "node:fs";import {createHash} from "node:crypto";const p=process.env.RUNNER_TEMP,m=JSON.parse(readFileSync(p+"/source-artifact.json"));if(!new RegExp("^(verified-idocs|idocs-publication)-"+JSON.parse(readFileSync(p+"/source-run.json")).head_sha+"-[1-9][0-9]*$").test(m.name)||m.digest!=="sha256:"+createHash("sha256").update(readFileSync(p+"/source-artifact.zip")).digest("hex"))throw Error("Original verified artifact name/digest mismatch")'
           python3 scripts/release/check_artifact_zip.py "$RUNNER_TEMP/source-artifact.zip"
           node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/recovery-source.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,"candidate_sha="+s.candidate_sha+"\n")'
       - uses: actions/download-artifact@v4
@@ -178,7 +178,7 @@ jobs:
     needs: [verify, recovery-input]
     if: always() && vars.RELEASE_ENABLED == 'true' && ((needs.verify.result == 'success' && needs.verify.outputs.needed == 'true') || needs.recovery-input.result == 'success')
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: write
@@ -215,13 +215,31 @@ jobs:
           github-token: ${{ github.token }}
           path: release-input
           merge-multiple: true
+      - name: Record original recovery request intent
+        if: inputs.operation == 'recover'
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+        run: node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-recovery-intent.json",JSON.stringify({source_run_id:process.env.SOURCE_RUN_ID,artifact_id:process.env.ARTIFACT_ID,run_id:process.env.GITHUB_RUN_ID}))'
+      - name: Preserve immutable recovery request intent
+        id: recovery_intent
+        if: inputs.operation == 'recover'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-intent-${{ inputs.source_run_id }}-${{ inputs.artifact_id }}
+          path: ${{ runner.temp }}/release-recovery-intent.json
+          retention-days: 90
+          if-no-files-found: error
       - name: Publish verified candidate
         id: publish
         env:
+          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent.outputs.artifact-id }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
           OPERATION: ${{ inputs.operation }}
           RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
         run: |
@@ -350,7 +368,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
           ORIGINAL_RUN_ID: ${{ inputs.operation == 'recover' && inputs.source_run_id || github.run_id }}
-          RECOVERY_ARTIFACT_ID: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
+          RECOVERY_ARTIFACT_ID: ${{ needs.recovery-input.outputs.artifact_id || needs.release.outputs.publication_artifact_id }}
         run: node scripts/release/observe-platforms.mjs
       - name: Record independent verification and publication results
         if: always()
