@@ -22,7 +22,7 @@ export function observePlatforms({cwd=process.cwd(),env=process.env,read=path=>J
    try{
     const run=read(`repos/${env.GITHUB_REPOSITORY}/actions/runs/${env.ORIGINAL_RUN_ID}`);
     const artifact=read(`repos/${env.GITHUB_REPOSITORY}/actions/artifacts/${env.RECOVERY_ARTIFACT_ID}`);
-    recovery=recoveryFromArtifact({plan,repository:env.GITHUB_REPOSITORY,sourceRunId:env.ORIGINAL_RUN_ID,artifactId:env.RECOVERY_ARTIFACT_ID,run,artifact,tagVerified:observation.targets.stable_tag.status==='completed',publicationObservation:observation,allowCurrentRunId:env.GITHUB_RUN_ID,recoveryArtifactPrefix:`verified-idocs-${plan.candidate_sha}`});
+    recovery=recoveryFromArtifact({plan,repository:env.GITHUB_REPOSITORY,sourceRunId:env.ORIGINAL_RUN_ID,artifactId:env.RECOVERY_ARTIFACT_ID,run,artifact,tagVerified:observation.targets.stable_tag.status==='completed',publicationObservation:observation,allowCurrentRunId:env.GITHUB_RUN_ID,recoveryArtifactPrefix:`idocs-publication-${plan.candidate_sha}`});
    }catch(error){recovery={available:false,blocked_reason:error.message};}
   }
  }

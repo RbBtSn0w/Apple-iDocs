@@ -127,3 +127,41 @@ verified tag alone cannot authorize a recovery command: conflicting or unreadabl
 publication evidence blocks it. A matching draft or missing asset remains
 repairable. Recovery checks every existing asset before uploading any missing
 asset, so a later conflict cannot leave an earlier partial upload.
+
+
+### Recovery request evidence and one-shot intents
+
+Use the original publication artifact containing the sealed bytes and request
+receipts. A structured E404 does not prove that no request was sent: accepted or
+uncertain requests are observed without uploading again. Missing original request
+evidence cannot authorize a recovery upload.
+
+Recovery first reconciles the original native release, then processes npm and
+GitHub Packages in that order. Each target has a read-only registry and intent
+preflight before its own immutable Actions request marker is uploaded. Invalid
+reads therefore leave explicit `not-run` request evidence intact and create no
+marker. The marker names are `release-recovery-intent-<source-run-id>-npm` and
+`release-recovery-intent-<source-run-id>-github-packages`. Earlier trusted recovery
+markers block retransmission only for their target; legacy global markers block
+both conservatively. Artifacts from ordinary PR workflows do not authorize or
+block recovery.
+
+Publication sets `unknown` and `request_started_at` immediately before invoking
+npm. Accepted requests retain both timestamps through later observations. A
+byte-verified package whose stable channel is unavailable may yield to the next
+target; an unverified package or uncertain request stops before the next target's
+marker. One monotonic fifteen-minute observation deadline spans all registry
+preflights and requests. The finalizer fails if either target remains incomplete,
+and Homebrew receives `released=true` only after both are verified. Recovery never
+rewrites `latest`. A new recover dispatch uses the same original release/artifact
+identity and observes any earlier uncertain requests without uploading again.
+
+If visibility never arrives and the request cannot be proven unsent, keep the
+target unconfirmed. Do not delete intent artifacts, force publication, change
+latest or overwrite a version to bypass this condition. Diagnose the original
+run and retain its evidence; use a genuine forward fix through the normal verified
+main/semantic-release path when the old delivery cannot be safely completed.
+Normal scheduled publication retains its automated path; this restriction applies
+to uncertain recovery, not a recurring approval.
+
+For iDocs, copy the original `idocs-publication-<sha>-<attempt>` artifact ID, which contains request receipts. A legacy `verified-idocs` artifact remains readable but cannot establish that an absent registry version was never requested.

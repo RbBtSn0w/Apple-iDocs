@@ -62,6 +62,8 @@ jobs:
           node-version: '22.22.2'
       - name: Check synchronized release implementation
         run: node .github/release-train/sync.mjs check --consumer .
+      - name: Install release npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - name: Check release behavior
@@ -150,7 +152,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/source-artifact.json"
           node .github/release-train/recovery-source.mjs --run "$RUNNER_TEMP/source-run.json" --artifact "$RUNNER_TEMP/source-artifact.json" --repository "$GITHUB_REPOSITORY" --source-run-id "$SOURCE_RUN_ID" --artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/recovery-source.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/source-artifact.zip"
-          node --input-type=module -e 'import {readFileSync} from "node:fs";import {createHash} from "node:crypto";const p=process.env.RUNNER_TEMP,m=JSON.parse(readFileSync(p+"/source-artifact.json"));if(!m.name.startsWith("verified-idocs-")||m.digest!=="sha256:"+createHash("sha256").update(readFileSync(p+"/source-artifact.zip")).digest("hex"))throw Error("Original verified artifact name/digest mismatch")'
+          node --input-type=module -e 'import {readFileSync} from "node:fs";import {createHash} from "node:crypto";const p=process.env.RUNNER_TEMP,m=JSON.parse(readFileSync(p+"/source-artifact.json"));if(!new RegExp("^(verified-idocs|idocs-publication)-"+JSON.parse(readFileSync(p+"/source-run.json")).head_sha+"-[1-9][0-9]*$").test(m.name)||m.digest!=="sha256:"+createHash("sha256").update(readFileSync(p+"/source-artifact.zip")).digest("hex"))throw Error("Original verified artifact name/digest mismatch")'
           python3 scripts/release/check_artifact_zip.py "$RUNNER_TEMP/source-artifact.zip"
           node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/recovery-source.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,"candidate_sha="+s.candidate_sha+"\n")'
       - uses: actions/download-artifact@v4
@@ -160,6 +162,8 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: verified
+      - name: Install release npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - name: Validate original sealed plan and existing tag
         id: plan
         env:
@@ -174,7 +178,7 @@ jobs:
     needs: [verify, recovery-input]
     if: always() && vars.RELEASE_ENABLED == 'true' && ((needs.verify.result == 'success' && needs.verify.outputs.needed == 'true') || needs.recovery-input.result == 'success')
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: write
@@ -183,9 +187,9 @@ jobs:
       packages: write
       id-token: write
     outputs:
-      version: ${{ steps.publish.outputs.version }}
-      released: ${{ steps.publish.outputs.released }}
-      native_sha256: ${{ steps.publish.outputs.native_sha256 }}
+      version: ${{ steps.recovery_finalize.outputs.version || steps.publish.outputs.version }}
+      released: ${{ steps.recovery_finalize.outputs.released || steps.publish.outputs.released }}
+      native_sha256: ${{ steps.recovery_finalize.outputs.native_sha256 || steps.publish.outputs.native_sha256 }}
       source_sha: ${{ needs.recovery-input.outputs.source_sha || needs.verify.outputs.source_sha }}
       publication_artifact_id: ${{ steps.publication_artifact.outputs.artifact-id }}
     steps:
@@ -202,8 +206,8 @@ jobs:
           python-version: '3.13'
       - name: Install frozen tools without lifecycle hooks
         run: |
-          npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
           npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
+          npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
@@ -218,17 +222,102 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
           OPERATION: ${{ inputs.operation }}
           RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
         run: |
           # shellcheck disable=SC2016
           printf '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' > "$RUNNER_TEMP/idocs-publish.npmrc"
           export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/idocs-publish.npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$NPM_CONFIG_USERCONFIG" >> "$GITHUB_ENV"
           if [ "$OPERATION" = recover ]; then
-            node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+            RECOVERY_PHASE=prepare node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
           else
             node .github/release-train/cli.mjs publish --directory "$PWD/release-input"
           fi
+      - name: Preflight recovery npm
+        id: recovery_preflight_npm
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: preflight
+          RECOVERY_TARGET: npm
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preserve immutable npm request intent
+        id: recovery_intent_npm
+        if: inputs.operation == 'recover' && steps.recovery_preflight_npm.outputs.request_needed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-intent-${{ inputs.source_run_id }}-npm
+          path: release-input/plan.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish or observe recovery npm
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: registry
+          RECOVERY_TARGET: npm
+          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent_npm.outputs.artifact-id }}
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preflight recovery github-packages
+        id: recovery_preflight_github_packages
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: preflight
+          RECOVERY_TARGET: github-packages
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Preserve immutable github-packages request intent
+        id: recovery_intent_github_packages
+        if: inputs.operation == 'recover' && steps.recovery_preflight_github_packages.outputs.request_needed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-intent-${{ inputs.source_run_id }}-github-packages
+          path: release-input/plan.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish or observe recovery github-packages
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: registry
+          RECOVERY_TARGET: github-packages
+          RECOVERY_INTENT_ARTIFACT_ID: ${{ steps.recovery_intent_github_packages.outputs.artifact-id }}
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
+      - name: Finalize verified recovery targets
+        id: recovery_finalize
+        if: inputs.operation == 'recover'
+        env:
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          RECOVERY_CANDIDATE: ${{ needs.recovery-input.outputs.source_sha }}
+          RECOVERY_PHASE: finalize
+        run: node .github/release-train/cli.mjs recover --directory "$PWD/release-input"
       - name: Retain independent target receipts, including partial failures
         id: publication_artifact
         if: always()
@@ -346,7 +435,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
           ORIGINAL_RUN_ID: ${{ inputs.operation == 'recover' && inputs.source_run_id || github.run_id }}
-          RECOVERY_ARTIFACT_ID: ${{ needs.recovery-input.outputs.artifact_id || needs.verify.outputs.artifact_id }}
+          RECOVERY_ARTIFACT_ID: ${{ needs.recovery-input.outputs.artifact_id || needs.release.outputs.publication_artifact_id }}
         run: node scripts/release/observe-platforms.mjs
       - name: Record independent verification and publication results
         if: always()

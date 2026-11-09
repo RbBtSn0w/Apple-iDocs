@@ -1,32 +1,35 @@
-import {parseNpmView} from '../../.github/release-train/npm-view.mjs';
+import {createNpmObservationBudget, parseNpmView, npmRequestState, npmRequestFacts, allowRecoveryRequest} from '../../.github/release-train/npm-view.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateLatestVersion } from '../../.github/release-train/npm-channel.mjs';
 
 function missingPackage(error) {
+  if (error.signal || error.code === 'ETIMEDOUT') return false;
   try { return parseNpmView(String(error.stdout)).error?.code === 'E404'; }
   catch { return false; }
 }
 
-export function registryState(registry, version, environment = process.env) {
+export function registryState(registry, version, environment = process.env, timeoutMs = 60000) {
   try {
-    return parseNpmView(execFileSync('npm', ['view', `@rbbtsn0w/idocs@${version}`, 'dist.integrity', '--registry', registry, '--json'], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }));
+    const integrity = parseNpmView(execFileSync('npm', ['view', `@rbbtsn0w/idocs@${version}`, 'dist.integrity', '--registry', registry, '--json'], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: Math.min(60000, timeoutMs) }));
+    if (typeof integrity !== 'string' || !integrity) throw Error('Malformed registry integrity');
+    return integrity;
   } catch (error) {
     if (missingPackage(error)) return null;
-    throw new Error(`Cannot inspect registry ${registry}; publication stopped`);
+    throw new Error(`Cannot inspect registry ${registry}; publication stopped: ${error.message}`,{cause:error});
   }
 }
 
-function readTags(registry, env) {
+function readTags(registry, env, timeoutMs) {
   try {
-    const tags = parseNpmView(execFileSync('npm', ['view', '@rbbtsn0w/idocs', 'dist-tags', '--registry', registry, '--json'], {env, encoding: 'utf8', timeout: 60000}));
-    if (!tags || typeof tags !== 'object' || Array.isArray(tags)) throw Error('Malformed registry tags');
+    const tags = parseNpmView(execFileSync('npm', ['view', '@rbbtsn0w/idocs', 'dist-tags', '--registry', registry, '--json'], {env, encoding: 'utf8', timeout: Math.min(60000, timeoutMs)}));
+    if (!tags || typeof tags !== 'object' || Array.isArray(tags) || Object.values(tags).some(value => typeof value !== 'string')) throw Error('Malformed registry tags');
     return tags;
   } catch (error) {
     if (missingPackage(error)) return {};
-    throw new Error('Cannot verify registry channel; refusing tag changes');
+    throw new Error(`Cannot verify registry channel; refusing tag changes: ${error.message}`,{cause:error});
   }
 }
 
@@ -38,58 +41,117 @@ function compareStable(left, right) {
   return index < 0 ? 0 : a[index] > b[index] ? 1 : -1;
 }
 
-function observeChannel(registry, plan, env) {
-  const latest = readTags(registry, env).latest;
+function observeChannel(registry, plan, env, timeoutMs) {
+  const latest = readTags(registry, env, timeoutMs).latest;
+  // Missing or older stable channels may still be propagating. Invalid values
+  // cannot establish a legal channel and must fail without retrying.
+  if (latest === undefined) return null;
+  if (compareStable(latest, plan.next.version) < 0) return null;
   validateLatestVersion({version: plan.next.version}, latest);
   return {latest_version: latest, channel_observed_at: new Date().toISOString()};
 }
 
-export async function publishRegistries(directory, plan, {recovery = false} = {}) {
+export async function publishRegistries(directory, plan, {recovery = false, observationBudget = createNpmObservationBudget(), target, preflight = false} = {}) {
   const archive = join(directory, 'package.tgz');
   const integrity = `sha512-${createHash('sha512').update(readFileSync(archive)).digest('base64')}`;
-  // Ensure the native asset that the wrapper downloads is already available with these bytes.
-  const remote = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/tags/${plan.next.gitTag}`, '--jq', '.assets[] | select(.name == "idocs-darwin-arm64.tar.gz") | .id'], { encoding: 'utf8', timeout: 30000 }).trim();
-  if (!/^\d+$/.test(remote)) throw new Error('Native release asset is unavailable');
-  const downloaded = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/assets/${remote}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024, timeout: 60000 });
-  const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-  if (sha256(downloaded) !== sha256(readFileSync(join(directory, 'idocs-darwin-arm64.tar.gz')))) throw new Error('Published native asset differs from verified archive');
-  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {npm: 'not-run', github: 'not-run'}, receipts: {} };
+  const priorPath=join(directory,'registries.json');
+  const prior=existsSync(priorPath)?JSON.parse(readFileSync(priorPath,'utf8')):undefined;
+  const metadata={candidate_sha:plan.candidate,version:plan.next.version,integrity};
+  const originalReceipts=prior?.receipts||{};
+  for(const value of Object.values(originalReceipts))npmRequestState(metadata,value);
+  const receipt = { candidate: plan.candidate, version: plan.next.version, integrity, registries: {...{npm: 'not-run', github: 'not-run'}, ...prior?.registries}, receipts: {...originalReceipts} };
+  const persist = () => writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
+  if(!recovery)for(const name of ['npm','github'])if(!receipt.receipts[name])receipt.receipts[name]={...metadata,status:'not-run',bytes_verified:false};
+  if (!preflight) persist();
+  let incomplete = false;
+  let nativeVerified = false;
+  if (target && !['npm', 'github-packages'].includes(target)) throw Error('Invalid recovery registry target');
   for (const [name, registry] of Object.entries({ npm: 'https://registry.npmjs.org', github: 'https://npm.pkg.github.com' })) {
+    if (target && target !== (name === 'github' ? 'github-packages' : name)) continue;
+    const original=originalReceipts[name];
+    const requestState=npmRequestState(metadata,original);
+    // Current readback must establish completion again. Keep durable request
+    // facts, but never expose a historical completed observation after failure.
+    if (requestState === 'observe') {
+      receipt.receipts[name] = {...metadata, ...npmRequestFacts(metadata, original), status: 'unknown', bytes_verified: false};
+      receipt.registries[name] = 'unknown';
+      persist();
+    }
+    let bytesVerified = false;
     try {
+      observationBudget.assertRemaining();
+      if (!nativeVerified) {
+        // Ensure the native asset that the wrapper downloads is already available with these bytes.
+        const remote = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/tags/${plan.next.gitTag}`, '--jq', '.assets[] | select(.name == "idocs-darwin-arm64.tar.gz") | .id'], { encoding: 'utf8', timeout: Math.min(30000, observationBudget.assertRemaining()) }).trim();
+        if (!/^\d+$/.test(remote)) throw new Error('Native release asset is unavailable');
+        const downloaded = execFileSync('gh', ['api', `repos/RbBtSn0w/Apple-iDocs/releases/assets/${remote}`, '-H', 'Accept: application/octet-stream'], { maxBuffer: 256 * 1024 * 1024, timeout: Math.min(60000, observationBudget.assertRemaining()) });
+        const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+        if (sha256(downloaded) !== sha256(readFileSync(join(directory, 'idocs-darwin-arm64.tar.gz')))) throw new Error('Published native asset differs from verified archive');
+        nativeVerified = true;
+      }
       const env = { ...process.env, NPM_CONFIG_IGNORE_SCRIPTS: 'true' };
       const recoveryTag = recovery ? `idocs-recovery-${plan.next.version}-${plan.candidate.slice(0, 12)}` : null;
-      const tags = readTags(registry, env);
+      const tags = readTags(registry, env, observationBudget.assertRemaining());
       if (recoveryTag && tags[recoveryTag] !== undefined && tags[recoveryTag] !== plan.next.version) throw Error('Recovery tag ownership conflict');
-      if (!recovery && tags.latest && compareStable(tags.latest, plan.next.version) > 0) throw Error('Normal publication would downgrade stable registry channel');
-      const before = registryState(registry, plan.next.version, env);
+      if (tags.latest !== undefined) compareStable(tags.latest, plan.next.version);
+      if (!recovery && tags.latest !== undefined && compareStable(tags.latest, plan.next.version) > 0) throw Error('Normal publication would downgrade stable registry channel');
+      const before = registryState(registry, plan.next.version, env, observationBudget.assertRemaining());
       if (before !== null && before !== integrity) throw new Error(`${name} already contains different bytes`);
-      if (before === null) {
-        execFileSync('npm', ['publish', archive, '--registry', registry, '--tag', recoveryTag || 'latest', '--access', 'public', '--ignore-scripts', `--provenance=${name === 'npm'}`], { env, stdio: 'inherit', timeout: 120000 });
+      if(before===null&&recovery&&requestState==='unconfirmed')throw Object.assign(Error(`${name}: original request evidence is missing; cannot authorize retransmission`),{code:'NPM_REQUEST_UNCONFIRMED'});
+      const intentTarget = name === 'github' ? 'github-packages' : name;
+      if (preflight) {
+        if(before!==null){
+          receipt.receipts[name]={...metadata,...npmRequestFacts(metadata,original),status:'unknown',bytes_verified:true,observed_at:new Date().toISOString(),remote_id:`@rbbtsn0w/idocs@${plan.next.version}`,reason:'Original bytes observed during this recovery; subsequent absence permits observation only'};
+          receipt.registries[name]='unknown';persist();
+        }
+        const requestNeeded = before === null && requestState !== 'observe' && allowRecoveryRequest({target: intentTarget, preflight: true, timeout: observationBudget.assertRemaining()});
+        if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `request_needed=${requestNeeded}\n`, {flag: 'a'});
+        return {requestNeeded};
       }
-      let after;
-      for (let attempt = 0; attempt < 6; attempt++) {
-        after = registryState(registry, plan.next.version, env);
-        if (after !== null) break;
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+      const canSend=before===null&&requestState!=='observe'&&(!recovery||allowRecoveryRequest({target: intentTarget, timeout:observationBudget.assertRemaining()}));
+      receipt.receipts[name] = {...npmRequestFacts(metadata,original), status: requestState === 'unsent' && (canSend || before !== null) ? 'not-run' : 'unknown', ...metadata, bytes_verified: false,
+        observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`};
+      persist();
+      if (before === null && canSend) {
+        const timeoutMs = Math.min(120000, observationBudget.assertRemaining());
+        receipt.receipts[name].status = 'unknown';
+        receipt.receipts[name].request_started_at = new Date().toISOString();
+        persist();
+        execFileSync('npm', ['publish', archive, '--registry', registry, '--tag', recoveryTag || 'latest', '--access', 'public', '--ignore-scripts', `--provenance=${name === 'npm'}`], { env, stdio: 'inherit', timeout: timeoutMs });
+        Object.assign(receipt.receipts[name], {publication_accepted: true, accepted_at: new Date().toISOString()});
+        persist();
       }
-      if (after !== integrity) throw new Error(`${name} publication integrity not confirmed`);
-      let channel;
-      try {channel = observeChannel(registry, plan, env);}
-      catch (error) {
-        receipt.receipts[name] = {status: 'unknown', candidate_sha: plan.candidate, version: plan.next.version,
-          integrity, observed_at: new Date().toISOString(), bytes_verified: true, channel_blocked: true,
-          reason: error.message, remote_id: `@rbbtsn0w/idocs@${plan.next.version}`};
-        throw error;
-      }
+      if(before===null&&!canSend){receipt.receipts[name].reason='A prior request may already be in progress; observing without another upload';persist();}
+      await observationBudget.wait((timeoutMs) => {
+        const after = registryState(registry, plan.next.version, env, timeoutMs);
+        if (after !== null && after !== integrity) throw new Error(`${name} publication integrity not confirmed`);
+        return after;
+      });
+      bytesVerified = true;
+      Object.assign(receipt.receipts[name], {status: 'unknown', bytes_verified: true, channel_blocked: true});
+      persist();
+      const channel = recovery
+        ? observeChannel(registry, plan, env, observationBudget.assertRemaining())
+        : await observationBudget.wait((timeoutMs) => observeChannel(registry, plan, env, timeoutMs));
+      if (channel === null) throw Error('Recovery channel availability is not confirmed; preserve the original receipt and artifact');
       receipt.registries[name] = 'verified';
-      receipt.receipts[name] = {status: 'completed', candidate_sha: plan.candidate, version: plan.next.version,
+      receipt.receipts[name] = {...receipt.receipts[name], status: 'completed', channel_blocked: false, candidate_sha: plan.candidate, version: plan.next.version,
         integrity, ...channel, ...(recoveryTag ? {recovery_tag: recoveryTag} : {}), observed_at: new Date().toISOString(), remote_id: `@rbbtsn0w/idocs@${plan.next.version}`,
         url: name === 'npm' ? `https://www.npmjs.com/package/@rbbtsn0w/idocs/v/${plan.next.version}` : `https://github.com/${process.env.GITHUB_REPOSITORY || 'RbBtSn0w/Apple-iDocs'}/pkgs/npm/idocs`};
-      writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
+      persist();
     } catch (error) {
-      receipt.registries[name] = 'unknown';
-      writeFileSync(join(directory, 'registries.json'), JSON.stringify(receipt, null, 2) + '\n');
-      throw error;
+      if (!preflight && (receipt.receipts[name]?.status !== 'not-run' || requestState === 'observe' || requestState === 'unconfirmed' && recovery)) {
+        if (!receipt.receipts[name] || receipt.receipts[name] === original) receipt.receipts[name] = {...metadata, ...npmRequestFacts(metadata, original), status: 'unknown', bytes_verified: false};
+        receipt.registries[name] = 'unknown';
+        receipt.receipts[name].reason = error.message;
+        persist();
+      }
+      // Only verified bytes with an unavailable channel can safely yield to the
+      // next target. Request uncertainty and failed preflights stop immediately.
+      if (!preflight && recovery && bytesVerified) incomplete = true;
+      else throw error;
     }
   }
+  if (incomplete && !target) throw Error('Registry channel availability remains incomplete');
+  return {incomplete};
 }
