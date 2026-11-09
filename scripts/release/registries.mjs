@@ -100,6 +100,10 @@ export async function publishRegistries(directory, plan, {recovery = false, obse
       if(before===null&&recovery&&requestState==='unconfirmed')throw Object.assign(Error(`${name}: original request evidence is missing; cannot authorize retransmission`),{code:'NPM_REQUEST_UNCONFIRMED'});
       const intentTarget = name === 'github' ? 'github-packages' : name;
       if (preflight) {
+        if(before!==null){
+          receipt.receipts[name]={...metadata,...npmRequestFacts(metadata,original),status:'unknown',bytes_verified:true,observed_at:new Date().toISOString(),remote_id:`@rbbtsn0w/idocs@${plan.next.version}`,reason:'Original bytes observed during this recovery; subsequent absence permits observation only'};
+          receipt.registries[name]='unknown';persist();
+        }
         const requestNeeded = before === null && requestState !== 'observe' && allowRecoveryRequest({target: intentTarget, preflight: true, timeout: observationBudget.assertRemaining()});
         if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `request_needed=${requestNeeded}\n`, {flag: 'a'});
         return {requestNeeded};

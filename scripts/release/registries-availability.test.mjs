@@ -29,7 +29,7 @@ if(a[0]==='publish'){
  s['bytes:'+r]=(s['bytes:'+r]||0)+1;save();
  if(process.env.MODE==='malformed-bytes'){console.log('null');process.exit(0);}
  if(process.env.MODE==='auth-error'){console.log(JSON.stringify({error:{code:'E401'}}));process.exit(1);}
- if(s['bytes:'+r]>8)console.log(JSON.stringify(process.env.INTEGRITY));
+ if((process.env.MODE==='visible-preflight'&&s['bytes:'+r]===1)||s['bytes:'+r]>8)console.log(JSON.stringify(process.env.INTEGRITY));
  else {console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}
 }`, {mode:0o755});
   const code = `import {publishRegistries} from ${JSON.stringify(new URL('./registries.mjs', import.meta.url).href)};
@@ -158,5 +158,17 @@ test('failed recovery preflight invalidates completed observation while preservi
   assert.deepEqual(receipt.receipts.npm,{...metadata,...facts,status:'unknown',bytes_verified:false});
   assert.deepEqual(receipt.receipts.github,github);
   assert.equal(JSON.parse(readFileSync(join(f.root,'state.json')))['publish:https://registry.npmjs.org'],undefined);
+ }finally{f.clean();}
+});
+
+
+test('matching preflight bytes survive a temporary E404 without a recovery intent or upload',()=>{
+ const f=fixture();try{
+  const identity={candidate_sha:'original',version:'1.0.1',integrity:f.integrity};
+  writeFileSync(join(f.root,'registries.json'),JSON.stringify({receipts:{npm:{...identity,status:'not-run'}}}));
+  f.run({RECOVERY:'true',PREFLIGHT:'true',TARGET:'npm',MODE:'visible-preflight',RECOVERY_INTENT_ARTIFACT_ID:''});
+  assert.equal(f.receipt().receipts.npm.status,'unknown');assert.equal(f.receipt().receipts.npm.bytes_verified,true);
+  f.run({RECOVERY:'true',TARGET:'npm',MODE:'ready-channel',RECOVERY_INTENT_ARTIFACT_ID:''});
+  const state=JSON.parse(readFileSync(join(f.root,'state.json')));assert.equal(state['publish:https://registry.npmjs.org'],undefined);assert.equal(f.receipt().receipts.npm.status,'completed');
  }finally{f.clean();}
 });
