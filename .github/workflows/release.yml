@@ -69,7 +69,13 @@ jobs:
           echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
+      - name: Install the cadence parser
+        env:
+          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
+        run: npm install --prefix "$RELEASE_TOOLS" --ignore-scripts --no-audit --no-fund --save-exact yaml@2.9.1
       - name: Check release behavior
+        env:
+          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
         run: |
           node --test scripts/release/*.test.mjs
           python3 -m unittest discover -s scripts/release -p 'test_*.py'
@@ -77,7 +83,6 @@ jobs:
         env:
           RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
         run: |
-          npm install --prefix "$RELEASE_TOOLS" --ignore-scripts --no-audit --no-fund --save-exact yaml@2.9.1
           node .github/release-train/pipeline-contract.mjs check
           node .github/release-train/cadence.mjs check
 
@@ -91,6 +96,7 @@ jobs:
       - name: Build and test exact candidate
         if: steps.plan.outputs.needed == 'true'
         env:
+          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
           IDOCS_DERIVED_DATA_PATH: ${{ runner.temp }}/idocs-verification
         run: |
           ./scripts/tuist-silent.sh build iDocs
@@ -152,6 +158,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Check synchronized recovery implementation
+        run: node .github/release-train/sync.mjs check --consumer .
       - name: Bind original run and immutable artifact
         id: source
         env:
