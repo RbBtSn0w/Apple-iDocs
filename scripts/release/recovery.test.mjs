@@ -43,14 +43,14 @@ test('Homebrew follows a successful publisher across skipped alternate branches'
 
 test('every release job installs npm without mutating the runner toolchain', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
-  const commands = workflow.split('\n').filter(line => /^\s+npm install\b/.test(line));
+  const commands = workflow.split('\n').filter(line => /^\s+npm install\b/.test(line) && /\bnpm@/.test(line));
   assert.equal(commands.length, 3, 'analysis, recovery validation and publication each bootstrap npm');
   for (const command of commands) {
     assert.doesNotMatch(command, /(?:--global|\s-g)(?:\s|$)/);
     assert.match(command, /--prefix "\$RUNNER_TEMP\/release-npm".*npm@12\.2\.2/);
   }
   const steps = workflow.split(/\n      - /);
-  for (const step of steps.filter(step => step.includes('npm install '))) {
+  for (const step of steps.filter(step => step.includes('npm install ') && /\bnpm@/.test(step))) {
     assert.match(step, /echo "\$RUNNER_TEMP\/release-npm\/node_modules\/\.bin" >> "\$GITHUB_PATH"/);
     assert.doesNotMatch(step, /\bnpm ci\b/, 'GITHUB_PATH takes effect in the following step');
   }

@@ -3,14 +3,17 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {writeResult} from '../../.github/release-train/release-result.mjs';
 import {validateLatestVersion} from '../../.github/release-train/npm-channel.mjs';
+import {validateOriginalPlan} from '../../.github/release-train/release-entrypoint.mjs';
 const read = name => {try {return JSON.parse(readFileSync(name));} catch {return null;}};
 const needs = JSON.parse(process.env.RELEASE_NEEDS);
 const mapping = JSON.parse(process.env.RELEASE_TARGETS);
-const intended = JSON.parse(readFileSync(new URL('../../.github/release-train.json', import.meta.url))).intended_targets;
+const config = JSON.parse(readFileSync(new URL('../../.github/release-train.json', import.meta.url)));
 const original = process.env.RELEASE_OPERATION === 'recover';
 const source = original ? needs['recovery-input'] : needs.verify;
 const outputs = source?.outputs ?? {};
 const plan = read('result-input/plan.json');
+validateOriginalPlan(plan);
+const intended = plan?.pipeline?.pipeline?.goals?.map(goal=>goal.id)??config.intended_targets;
 const candidate = outputs.source_sha || plan?.candidate || process.env.GITHUB_SHA;
 const version = outputs.version || plan?.next?.version || null;
 const active = process.env.RELEASE_ENABLED === 'true';
@@ -54,4 +57,4 @@ writeResult('release-result.json', {
   failure_stage: downloadFailure ? 'report-input' : failed?.[0] ?? null,
   recovery,
   errors: [...(failed ? [`${failed[0]} ${failed[1].result}; inspect its named step and channel evidence.`] : []), ...(downloadFailure ? ['An immutable report input could not be downloaded; completion is not confirmed.'] : [])],
-});
+}, {config,plan});

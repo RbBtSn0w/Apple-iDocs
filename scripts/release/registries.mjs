@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateLatestVersion } from '../../.github/release-train/npm-channel.mjs';
+import {validateOriginalPlan} from '../../.github/release-train/release-entrypoint.mjs';
 
 function missingPackage(error) {
   if (error.signal || error.code === 'ETIMEDOUT') return false;
@@ -52,6 +53,7 @@ function observeChannel(registry, plan, env, timeoutMs) {
 }
 
 export async function publishRegistries(directory, plan, {recovery = false, observationBudget = createNpmObservationBudget(), target, preflight = false} = {}) {
+  validateOriginalPlan(plan);
   const archive = join(directory, 'package.tgz');
   const integrity = `sha512-${createHash('sha512').update(readFileSync(archive)).digest('base64')}`;
   const priorPath=join(directory,'registries.json');
