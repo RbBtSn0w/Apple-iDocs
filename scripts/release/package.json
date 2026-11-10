@@ -9,7 +9,8 @@
     "@commitlint/lint": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
     "conventional-changelog-conventionalcommits": "9.3.0",
-    "publint": "0.3.25"
+    "publint": "0.3.25",
+    "yaml": "2.9.1"
   },
   "overrides": {
     "handlebars": "^4.7.10",

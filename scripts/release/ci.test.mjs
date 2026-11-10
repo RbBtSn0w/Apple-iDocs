@@ -29,7 +29,8 @@ test('every release regression caller receives the parser after it is provisione
     const workflow = yaml.parse(readFileSync(join(root, '.github/workflows', file), 'utf8'));
     const steps = workflow.jobs[file === 'ci.yml' ? 'build-and-test' : 'verify'].steps;
     const parser = steps.find(step => step.run?.includes('cadence.mjs check'));
-    const provision = steps.findIndex(step => step.run?.includes('yaml@2.9.1'));
+    const provision = steps.findIndex(step => step.run?.includes('npm ci --prefix scripts/release'));
+    assert.equal(JSON.parse(readFileSync(new URL('./package.json', import.meta.url))).dependencies.yaml, '2.9.1');
     assert.ok(parser.env.RELEASE_TOOLS);
     const callers = steps.filter(step => /test-release-config\.sh|scripts\/release\/\*\.test\.mjs/.test(step.run || ''));
     assert.ok(callers.length > 0);

@@ -45,13 +45,10 @@ jobs:
       - name: Install frozen release tools
         run: npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund
 
-      - name: Install the cadence parser
-        run: npm install --prefix "$RUNNER_TEMP/release-cadence" --ignore-scripts --no-audit --no-fund --save-exact yaml@2.9.1
-
       - name: Check the actual release contract
         id: release_contracts
         env:
-          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
+          RELEASE_TOOLS: ${{ github.workspace }}/scripts/release
         run: |
           node --version
           npm --version
@@ -61,7 +58,7 @@ jobs:
 
       - name: Verify release configuration
         env:
-          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
+          RELEASE_TOOLS: ${{ github.workspace }}/scripts/release
         run: bash ./scripts/test-release-config.sh
 
       - name: Build CLI
