@@ -165,3 +165,34 @@ Normal scheduled publication retains its automated path; this restriction applie
 to uncertain recovery, not a recurring approval.
 
 For iDocs, copy the original `idocs-publication-<sha>-<attempt>` artifact ID, which contains request receipts. A legacy `verified-idocs` artifact remains readable but cannot establish that an absent registry version was never requested.
+
+## Versioned shared pipeline contract
+
+The existing custom adapter declares pipeline protocol 1 and exposes `release-input/plan.json` (or the explicit `--directory` path) plus the engine's candidate, version, tag, notes and baseline. Shared analysis captures these facts and the configured goals in the immutable `plan.pipeline` envelope after the existing semantic-release analysis. The adapter never selects another version or tag.
+
+Artifact sealing/consumption, original recovery and registry publication validate a present envelope before effects. A mismatching digest or engine identity fails closed; absent envelopes retain the existing legacy plan contract. Reporting passes the complete original plan to the common writer, so advancing configuration cannot remove an original required goal. The report adapter returns the parsed result to the shared exit policy: incomplete evidence remains a nonzero report even when the observation subprocess itself successfully wrote its result.
+
+Native archive → wrapper → verified dual registries → Homebrew ordering and the existing phased recovery remain unchanged. No new publication credential, activation rule, platform adapter or remote scheduler is introduced. Local synthetic pipeline and existing release tests establish local integration only; remote publication remains separately authorized and evidenced.
+
+## Pipeline capability configuration
+
+`.github/release-train.json` owns configuration schema v2 / pipeline protocol v1,
+required goals, existing execution bindings and cadence. The current explicit
+schedule preserves Friday 15:00 Asia/Singapore (07:00 UTC). A new explicit empty
+cadence uses Friday 15:00 Asia/Shanghai; changing cadence is a normal configuration
+change, not a release approval. Runtime dispatch inputs do not change the schedule.
+
+With isolated `yaml@2.9.1` provisioned in `RELEASE_TOOLS`, run the read-only checks:
+
+```bash
+node .github/release-train/pipeline-contract.mjs check
+node .github/release-train/cadence.mjs check
+```
+
+An explicit maintenance `cadence.mjs update` changes only the native schedule
+projection; review that diff. Original plans retain exact identity, notes and goals.
+Reports/recovery use those original goals after configuration or main advances; old
+plans remain compatible and never acquire invented receipts. Public capability
+coordination stays separate from product/platform implementations and existing CI
+job permissions. Activation, credentials and existing delivery destinations are
+unchanged by configuration migration.

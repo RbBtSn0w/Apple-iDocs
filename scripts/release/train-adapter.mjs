@@ -4,6 +4,10 @@ import {join} from 'node:path';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const directory = args => {const at = args.indexOf('--directory'); return at < 0 ? 'release-input' : args[at + 1];};
+export const pipelineProtocolVersion = 1;
+export const analysisFile = ({args=[]}) => join(directory(args), 'plan.json');
+export const planIdentity = plan => ({candidate_sha:plan.candidate,version:plan.next?.version??null,
+  tag:plan.next?.gitTag,notes:plan.notes,baseline_tag:plan.baseline?.gitTag??null});
 function product(mode, {cwd, env, args}) {
   return execFileSync(process.execPath, [join(cwd, 'scripts/release/release.mjs'), mode, directory(args)], {cwd, env, stdio: 'inherit'});
 }
@@ -17,5 +21,5 @@ export const recover = context => product('recover', context);
 export function report({cwd,env}) {
   execFileSync(process.execPath, [fileURLToPath(new URL('./observe.mjs',import.meta.url))], {cwd,env,stdio:'inherit'});
   const result = JSON.parse(readFileSync(join(cwd,'release-result.json')));
-  if (result.verification === 'failed' || result.failure_stage || result.publication === 'failed' || (result.publication === 'partial' && !result.asynchronous)) throw Error('Release outcome is incomplete; inspect the retained result and channel evidence.');
+  return result;
 }

@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import test from 'node:test';
 import {report} from './train-adapter.mjs';
+import {reportExitCode} from '../../.github/release-train/release-result.mjs';
 
 const script = resolve('scripts/release/observe.mjs');
 const candidate = 'a'.repeat(40);
@@ -49,7 +50,7 @@ test('report download failure writes its receipt before failing the native job',
   const cwd=mkdtempSync(join(tmpdir(),'idocs-report-failure-'));
   try {
     const env={...process.env,GITHUB_STEP_SUMMARY:join(cwd,'summary.md'),GITHUB_SHA:candidate,RELEASE_ENABLED:'true',RELEASE_TARGETS:'{"github":"release"}',RELEASE_NEEDS:JSON.stringify({verify:{result:'success',outputs:{source_sha:candidate,version:'1.2.3'}},release:{result:'success'}}),REPORT_DOWNLOADS:'{"analysis":"failure"}'};
-    assert.throws(()=>report({cwd,env}),/Release outcome is incomplete/);
+    assert.equal(reportExitCode(report({cwd,env})),1);
     const result=JSON.parse(readFileSync(join(cwd,'release-result.json')));
     assert.equal(result.failure_stage,'report-input');
     assert.notEqual(result.publication,'completed');

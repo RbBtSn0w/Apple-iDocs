@@ -12,6 +12,7 @@ import { analyzeCommits as validateSemantics } from '../../.github/release-train
 import configuration from './config.mjs';
 import {startRecoveryObservationBudget, recoveryObservationBudget} from '../../.github/release-train/npm-view.mjs';
 import {assertNpmReceiptConfirmed} from '../../.github/release-train/npm-channel.mjs';
+import {validateOriginalPlan} from '../../.github/release-train/release-entrypoint.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
@@ -32,6 +33,7 @@ export function checkPlan(expected, actual) {
 }
 
 export function inspectArtifact(directory, plan, files) {
+  validateOriginalPlan(plan);
   const receipt = files ? { candidate: plan.candidate, files: {} } : JSON.parse(readFileSync(join(directory, 'artifact.json')));
   if (receipt.candidate !== plan.candidate) throw new Error('Artifact candidate mismatch');
   const names = files ?? Object.keys(receipt.files);
@@ -48,6 +50,7 @@ export function inspectArtifact(directory, plan, files) {
 }
 
 export function checkReleaseArtifacts(directory, plan) {
+  validateOriginalPlan(plan);
   const receipt = inspectArtifact(directory, plan);
   for (const name of ['plan.json', 'package.tgz', 'idocs-darwin-arm64.tar.gz', 'idocs-darwin-arm64.sha256']) {
     if (!receipt.files[name]) throw new Error(`Missing required artifact: ${name}`);
@@ -94,6 +97,7 @@ export async function runAnalysis(source = root) {
 // version or configuration. Provenance is validated by the read-only input job.
 export function recoveryPlan(directory, candidate) {
   const plan = JSON.parse(readFileSync(join(directory, 'plan.json')));
+  validateOriginalPlan(plan);
   if (!/^[a-f0-9]{40}$/.test(candidate || '') || plan.candidate !== candidate
       || !plan.next || !/^\d+\.\d+\.\d+$/.test(plan.next.version)
       || plan.next.gitTag !== `v${plan.next.version}`) throw new Error('Invalid original recovery candidate');

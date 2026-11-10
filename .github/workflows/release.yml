@@ -4,8 +4,8 @@ run-name: >-
 
 on:
   schedule:
-    # Friday 15:00 Asia/Singapore (UTC+8).
-    - cron: '0 7 * * 5'
+    - cron: "0 15 * * 5"
+      timezone: "Asia/Singapore"
   workflow_dispatch:
     inputs:
       operation:
@@ -73,6 +73,14 @@ jobs:
         run: |
           node --test scripts/release/*.test.mjs
           python3 -m unittest discover -s scripts/release -p 'test_*.py'
+      - name: Check release pipeline and configured schedule
+        env:
+          RELEASE_TOOLS: ${{ runner.temp }}/release-cadence
+        run: |
+          npm install --prefix "$RELEASE_TOOLS" --ignore-scripts --no-audit --no-fund --save-exact yaml@2.9.1
+          node .github/release-train/pipeline-contract.mjs check
+          node .github/release-train/cadence.mjs check
+
       - name: Analyze candidate with upstream engine, without service credentials
         id: plan
         run: |
