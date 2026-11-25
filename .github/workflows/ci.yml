@@ -138,6 +138,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
           echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install and test frozen preview tooling
+        run: |
+          npm ci --prefix .github/pr-preview --ignore-scripts --no-audit --no-fund
+          node --test .github/pr-preview/telemetry.test.mjs
       - name: Build the exact PR head and install its preview archive
         id: pack
         env:
@@ -159,6 +163,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Summarize the verified preview
+        shell: bash
         env:
           RECEIPT: ${{ steps.pack.outputs.receipt }}
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
@@ -167,7 +172,7 @@ jobs:
             import {renderCard} from "./.github/pr-preview/github.mjs";
             const {GITHUB_REPOSITORY: repository, GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
             console.log(renderCard({repository, server, receipt: JSON.parse(RECEIPT), artifact}));
-          ' >> "$GITHUB_STEP_SUMMARY"
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
 
   pr-preview-comment:
     name: Announce iDocs PR preview
@@ -193,12 +198,11 @@ jobs:
           ARTIFACT_ID: ${{ needs.pr-preview.outputs.artifact }}
         with:
           script: |
-            const {renderCard, updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
-            const {GITHUB_REPOSITORY: repository, GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
+            const {updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
+            const {GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
             const receipt = JSON.parse(RECEIPT);
             const {number: pr, head} = context.payload.pull_request;
             if (String(pr) !== receipt.pr || head.sha !== receipt.head || String(context.runId) !== receipt.run || !/^[1-9]\d*$/.test(artifact)) {
               throw new Error('The preview artifact does not belong to this pull request and run.');
             }
-            const body = renderCard({repository, server, receipt, artifact});
-            core.notice(await updateCard(github, {...context.repo, pr, head: head.sha, body}));
+            core.notice(await updateCard(github, {...context.repo, receipt, artifact, server}));

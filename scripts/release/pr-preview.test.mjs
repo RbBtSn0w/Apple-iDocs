@@ -16,15 +16,17 @@ const owner = 'RbBtSn0w';
 const repo = 'Apple-iDocs';
 const repository = `${owner}/${repo}`;
 const head = '0123456789'.repeat(4);
-const receipt = { pr: '42', head, run: '123', attempt: '1', version: `1.11.1-dev.pr42.g${head}`, baseline: '1.11.0', sha256: 'a'.repeat(64) };
+const receipt = { pr: '42', head, run: '123', attempt: '1', version: `1.11.1-dev.pr42.g${head}.r123.a1`, baseline: '1.11.0', sha256: 'a'.repeat(64) };
 const prInfo = { state: 'open', base: { ref: 'main', repo: { full_name: repository } }, head: { sha: head, repo: { full_name: repository } } };
 
 test('versions follow the current stable registry and accept all-numeric commits', () => {
-  assert.equal(previewVersion('1.10.0', '1.11.0', '42', head), receipt.version);
-  assert.equal(previewVersion('2.0.0', '1.11.0', '42', head), `2.0.0-dev.pr42.g${head}`);
-  assert.equal(previewVersion('1.10.0', null, '42', head), `1.10.1-dev.pr42.g${head}`);
-  assert.throws(() => previewVersion('1.10.0', '1.11.9-dev', '42', head), /stable SemVer/);
-  assert.throws(() => previewVersion('1.10.0', '1.11.9', '42', 'deadbee'), /full head SHA/);
+  assert.equal(previewVersion('1.10.0', '1.11.0', receipt), receipt.version);
+  assert.equal(previewVersion('2.0.0', '1.11.0', receipt), `2.0.0-dev.pr42.g${head}.r123.a1`);
+  assert.equal(previewVersion('1.10.0', null, receipt), `1.10.1-dev.pr42.g${head}.r123.a1`);
+  assert.equal(previewVersion('1.10.0', '1.11.0', { ...receipt, attempt: '2' }), `1.11.1-dev.pr42.g${head}.r123.a2`);
+  assert.equal(previewVersion('1.10.0', '1.11.0', { ...receipt, run: '124' }), `1.11.1-dev.pr42.g${head}.r124.a1`);
+  assert.throws(() => previewVersion('1.10.0', '1.11.9-dev', receipt), /stable SemVer/);
+  assert.throws(() => previewVersion('1.10.0', '1.11.9', { ...receipt, head: 'deadbee' }), /full head SHA/);
   assert.throws(() => requireNewerPreview(receipt.version, '1.11.1'), /must be newer/);
 });
 
@@ -57,7 +59,7 @@ test('package the native archive once and reject invalid receipts, wrapper metad
       smoke: (archive, version) => {
         smokes++;
         assert.equal(archive, join(directory, tarballName));
-        assert.equal(version, `1.10.1-dev.pr42.g${sha}`);
+        assert.equal(version, `1.10.1-dev.pr42.g${sha}.r123.a2`);
       } });
     assert.equal(smokes, 1);
     assert.equal(made.baseline, null);
@@ -65,6 +67,8 @@ test('package the native archive once and reject invalid receipts, wrapper metad
     assert.throws(() => verifyArtifact(directory, { ...env, PR_HEAD: head }), /Wrong preview head/);
     assert.throws(() => verifyArtifact(directory, { ...env, SOURCE_ATTEMPT: '3' }), /Wrong preview attempt/);
     for (const [field, value, error] of [['name', 'wrong', /package name/], ['version', '1.0.0', /version identity/],
+      ['version', made.version.replace('-dev', '-other-dev'), /version identity/],
+      ['version', made.version.replace('.a2', '.a3'), /version identity/],
       ['nativeSha256', 'wrong', /native archive checksum/], ['integrity', 'wrong', /package integrity/]]) {
       writeFileSync(join(directory, 'receipt.json'), JSON.stringify({ ...made, [field]: value }));
       assert.throws(() => verifyArtifact(directory, env), error);
@@ -135,14 +139,20 @@ test('the card validates head, preserves registry evidence and avoids duplicate 
     createComment: async ({ body }) => { comments.push({ id: 2, user: { login: 'github-actions[bot]' }, body }); writes.push('create'); },
     updateComment: async ({ comment_id, body }) => { assert.equal(comment_id, 2); comments[1].body = body; writes.push('update'); },
   } } };
-  const announce = (body, published = false) => updateCard(github, { owner, repo, pr: '42', head, body, published });
-  assert.equal(await announce('artifact'), 'created');
-  assert.equal(await announce('artifact'), 'unchanged');
-  assert.equal(await announce('registry', true), 'updated');
-  assert.equal(await announce('artifact'), 'preserved');
+  const announce = (registry, data = receipt, artifact = '456') => updateCard(github, { owner, repo, receipt: data, artifact, registry });
+  assert.equal(await announce(), 'created');
+  assert.equal(await announce(), 'unchanged');
+  assert.equal(await announce({ npmjs: { available: true, next: true } }), 'updated');
+  assert.equal(await announce(), 'preserved');
+  assert.equal(await announce({ 'github-packages': { available: true, next: true } }), 'updated');
+  assert.match(comments[1].body, /#### npmjs[\s\S]*An earlier dispatch verified these bytes/);
+  assert.match(comments[1].body, /#### GitHub Packages[\s\S]*Registry readback observed `next`/);
+  assert.equal(await announce({ 'github-packages': { available: true, next: true } }), 'unchanged');
+  assert.equal(await announce({ 'github-packages': { available: true, next: true } }, { ...receipt, sha256: '0'.repeat(64) }, '457'), 'updated');
+  assert.doesNotMatch(comments[1].body, /#### npmjs/);
   current = { ...prInfo, head: { ...prInfo.head, sha: 'b'.repeat(40) } };
-  assert.equal(await announce('old artifact'), 'stale');
-  assert.deepEqual(writes, ['create', 'update']);
+  assert.equal(await announce(), 'stale');
+  assert.deepEqual(writes, ['create', 'update', 'update', 'update']);
 });
 
 test('registry readback is bounded and never overwrites mismatched or stale previews', async () => {

@@ -1,8 +1,8 @@
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseNpmView } from '../release-train/npm-view.mjs';
+import { spawnPreview } from './telemetry.mjs';
 
 export const packageName = '@rbbtsn0w/idocs';
 export const npmRegistry = 'https://registry.npmjs.org';
@@ -21,13 +21,19 @@ function compare(a, b) {
   return difference === -1 ? 0 : a[difference] > b[difference] ? 1 : -1;
 }
 
-export function previewVersion(manifest, latest, pr, head) {
-  if (!positiveId.test(pr) || !fullSha.test(head)) throw new Error('Invalid PR or full head SHA');
+export function previewSuffix({ pr, head, run, attempt }) {
+  if (![pr, run, attempt].every(value => typeof value === 'string' && positiveId.test(value)) || !fullSha.test(head)) {
+    throw new Error('Invalid PR, full head SHA, run or packaging attempt');
+  }
+  return `dev.pr${pr}.g${head}.r${run}.a${attempt}`;
+}
+
+export function previewVersion(manifest, latest, binding) {
   const base = stableCore(manifest);
   const minimum = stableCore(latest ?? manifest);
   minimum[2] += 1n;
   const core = compare(base, minimum) < 0 ? minimum : base;
-  return `${core.join('.')}-dev.pr${pr}.g${head}`;
+  return `${core.join('.')}-${previewSuffix(binding)}`;
 }
 
 export function requireNewerPreview(version, baseline) {
@@ -38,7 +44,7 @@ export function requireNewerPreview(version, baseline) {
 }
 
 export function npmView(registry, spec, field, { cwd, env = process.env, timeout = 12000, config } = {}) {
-  return spawnSync('npm', ['view', spec, field, '--json', '--prefer-online', '--registry', registry,
+  return spawnPreview('npm', ['view', spec, field, '--json', '--prefer-online', '--registry', registry,
     '--fetch-retries=0', '--fetch-timeout=10000', ...(config ?? [])], { cwd, env, encoding: 'utf8', timeout });
 }
 

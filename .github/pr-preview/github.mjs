@@ -3,6 +3,8 @@ import { fullSha, packageName, positiveId } from './version.mjs';
 
 export const marker = '<!-- idocs-pr-preview -->';
 const verifiedMarker = head => `<!-- idocs-verified-registry:${head} -->`;
+const evidenceMarker = /^<!-- idocs-registry-evidence:(.+) -->$/m;
+const registryNames = ['npmjs', 'github-packages'];
 const same = (a, b) => a?.toLowerCase() === b.toLowerCase();
 export const artifactName = ({ pr, head, attempt }) => `idocs-pr-${pr}-${head}-attempt-${attempt}`;
 
@@ -70,7 +72,8 @@ export function renderCard({ repository, receipt, artifact, registry = {}, serve
       `${prefix}npm exec --yes ${flags} --package=${exact} -- idocs --version`, '```', '',
       'Install or switch to this exact global version:', '', '```sh',
       `${prefix}npm install --global ${flags} ${exact} && idocs --version`, '```', '',
-      status.next ? 'Registry readback observed `next` pointing to this version.' : 'The registry did not confirm `next` pointing to this version.',
+      status.previous ? 'An earlier dispatch verified these bytes. This dispatch did not confirm where `next` points.' :
+        status.next ? 'Registry readback observed `next` pointing to this version.' : 'The registry did not confirm `next` pointing to this version.',
       '`next` is a moving tag. Follow it to try whichever preview it points to:', '',
       `\`${prefix}npm exec --yes ${flags} --package=${packageName}@next -- idocs --version\``, '');
     if (mirror) lines.push('Remove the temporary config after use with `rm "$preview_config"`.', '');
@@ -89,15 +92,40 @@ export function renderCard({ repository, receipt, artifact, registry = {}, serve
   return lines.join('\n');
 }
 
-export async function updateCard(github, { owner, repo, pr, head, body, published = false }) {
+function previousRegistryEvidence(existing, receipt, artifact) {
+  const encoded = existing?.body.match(evidenceMarker)?.[1];
+  if (!encoded) return [];
+  try {
+    const prior = JSON.parse(encoded);
+    if (prior.artifact === artifact && prior.sha256 === receipt.sha256 && Array.isArray(prior.registries)) {
+      return prior.registries;
+    }
+  } catch {
+    // A damaged or older card has no usable per-registry receipt.
+  }
+  return [];
+}
+
+export async function updateCard(github, { owner, repo, receipt, artifact, server, registry = {} }) {
+  const { pr, head } = receipt;
   const repository = `${owner}/${repo}`;
   const issue_number = Number(pr);
   const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
   const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
   const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
   if (!isCurrent(current, head, repository)) return 'stale';
+  const published = registryNames.some(target => registry[target]?.available === true);
   if (!published && existing?.body.includes(verifiedMarker(head))) return 'preserved';
-  const message = [marker, published && verifiedMarker(head), body].filter(Boolean).join('\n');
+  const previous = published ? previousRegistryEvidence(existing, receipt, artifact) : [];
+  const merged = {};
+  for (const target of registryNames) {
+    if (registry[target]?.available === true) merged[target] = registry[target];
+    else if (previous.includes(target)) merged[target] = { available: true, next: false, previous: true };
+  }
+  const evidence = { artifact, sha256: receipt.sha256, registries: Object.keys(merged) };
+  const body = renderCard({ repository, receipt, artifact, server, registry: merged });
+  const message = [marker, published && verifiedMarker(head),
+    published && `<!-- idocs-registry-evidence:${JSON.stringify(evidence)} -->`, body].filter(Boolean).join('\n');
   if (existing?.body === message) return 'unchanged';
   if (existing) {
     await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: message });

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -6,6 +5,7 @@ import { createNpmObservationBudget, parseNpmIntegrity } from '../release-train/
 import { tarballName, verifyArtifact } from './artifact.mjs';
 import { isCurrent } from './github.mjs';
 import { githubRegistry, npmRegistry, npmView, packageName, readStableLatest, readTags, requireNewerPreview } from './version.mjs';
+import { execPreview, withPreviewTrace } from './telemetry.mjs';
 
 export async function publishPreview({ receipt, readExact, readNext, readLatest, checkHead, send,
   newBudget = () => createNpmObservationBudget({ timeoutMs: 120000, intervalMs: 5000 }) }) {
@@ -69,10 +69,10 @@ async function observeTarget(target, receipt, archive) {
       readLatest: readStableLatest,
       checkHead: () => {
         const { GITHUB_REPOSITORY: repository } = env;
-        const current = JSON.parse(execFileSync('gh', ['api', `repos/${repository}/pulls/${receipt.pr}`], { env, encoding: 'utf8', timeout: 12000 }));
+        const current = JSON.parse(execPreview('gh', ['api', `repos/${repository}/pulls/${receipt.pr}`], { env, encoding: 'utf8', timeout: 12000 }));
         if (!isCurrent(current, receipt.head, repository)) throw new Error('PR head changed before registry publication');
       },
-      send: () => execFileSync('npm', ['publish', archive, '--ignore-scripts', '--access', 'public', '--tag', 'next',
+      send: () => execPreview('npm', ['publish', archive, '--ignore-scripts', '--access', 'public', '--tag', 'next',
         '--registry', registry, `--provenance=${!mirror}`, ...options.config], { cwd, env, stdio: 'inherit', timeout: 120000 }),
     });
     return result;
@@ -81,8 +81,7 @@ async function observeTarget(target, receipt, archive) {
   }
 }
 
-if (import.meta.main) {
-  const [, , target, input] = process.argv;
+async function main(target, input) {
   if (!['npmjs', 'github-packages'].includes(target)) throw new Error('Invalid preview registry');
   const directory = resolve(input);
   const receipt = verifyArtifact(directory, process.env);
@@ -90,3 +89,5 @@ if (import.meta.main) {
   appendFileSync(process.env.GITHUB_OUTPUT, `status=${JSON.stringify(result)}\n`);
   if (!result.available) throw new Error(`Could not verify ${target} preview bytes (${result.request}, ${result.observation})`);
 }
+
+if (import.meta.main) await withPreviewTrace('idocs-pr-preview-publish', () => main(...process.argv.slice(2)));

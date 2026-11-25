@@ -64,6 +64,8 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
           echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install frozen preview tooling
+        run: npm ci --prefix .github/pr-preview --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           artifact-ids: ${{ steps.source.outputs.artifact }}
@@ -143,4 +145,4 @@ jobs:
             if (!Object.values(registry).some(result => result.available)) throw new Error('No registry verification to announce');
             const body = renderCard({repository, server, receipt, artifact, registry});
             await core.summary.addRaw(body).write();
-            core.notice(await updateCard(github, {...context.repo, pr: receipt.pr, head: receipt.head, body, published: true}));
+            core.notice(await updateCard(github, {...context.repo, receipt, artifact, server, registry}));

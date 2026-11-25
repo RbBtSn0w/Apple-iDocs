@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, copyFileSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseNpmPack } from '../release-train/npm-pack.mjs';
-import { fullSha, packageName, positiveId, previewVersion, readStableLatest, requireNewerPreview, stableCore } from './version.mjs';
+import { packageName, previewSuffix, previewVersion, readStableLatest, requireNewerPreview, stableCore } from './version.mjs';
+import { execPreview, withPreviewTrace } from './telemetry.mjs';
 
 export const tarballName = 'idocs-pr-preview.tgz';
 const nativeName = 'idocs-darwin-arm64.tar.gz';
@@ -16,18 +16,16 @@ const json = path => JSON.parse(readFileSync(path, 'utf8'));
 
 function identity(env) {
   const { PR_NUMBER: pr, PR_HEAD: head, SOURCE_RUN_ID: run, SOURCE_ATTEMPT: attempt } = env;
-  if (![pr, run, attempt].every(value => typeof value === 'string' && positiveId.test(value)) || !fullSha.test(head)) {
-    throw new Error('Invalid PR, head, run, or packaging attempt');
-  }
   return { pr, head, run, attempt };
 }
 
 function tarEntry(archive, file, maxBuffer = 1024 * 1024) {
-  return execFileSync('tar', ['-xOzf', archive, file], { maxBuffer, timeout: 60000 });
+  return execPreview('tar', ['-xOzf', archive, file], { maxBuffer, timeout: 60000 });
 }
 
 export function verifyArtifact(directory, env) {
   const expected = identity(env);
+  const suffix = previewSuffix(expected);
   const archive = join(directory, tarballName);
   const fileLimits = { [tarballName]: 128 * 1024 * 1024, 'receipt.json': 8192, SHA256SUMS: 256 };
   for (const [name, maxBytes] of Object.entries(fileLimits)) {
@@ -38,8 +36,10 @@ export function verifyArtifact(directory, env) {
   for (const [field, value] of Object.entries(expected)) assert.equal(receipt[field], value, `Wrong preview ${field}`);
   assert.equal(receipt.name, packageName, 'Wrong preview package name');
   const { version, baseline } = receipt;
-  assert.ok(typeof version === 'string' && version.endsWith(`-dev.pr${expected.pr}.g${expected.head}`), 'Wrong preview version identity');
-  stableCore(version.split('-', 1)[0]);
+  assert.equal(typeof version, 'string', 'Expected a preview version string');
+  const core = version.split('-', 1)[0];
+  assert.equal(version, `${core}-${suffix}`, 'Wrong preview version identity');
+  stableCore(core);
   if (baseline !== null) requireNewerPreview(version, baseline);
 
   const bytes = readFileSync(archive);
@@ -62,7 +62,7 @@ export function verifyArtifact(directory, env) {
 
 export function makePreview({ source, directory, env = process.env, lookupLatest = readStableLatest, smoke = smokeInstall }) {
   const binding = identity(env);
-  assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).trim(), binding.head, 'Checkout is not the PR head');
+  assert.equal(execPreview('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).trim(), binding.head, 'Checkout is not the PR head');
   const manifest = json(join(source, 'npm/package.json'));
   assert.equal(manifest.name, packageName);
   let baseline = null;
@@ -73,14 +73,14 @@ export function makePreview({ source, directory, env = process.env, lookupLatest
   } catch (error) {
     console.warn(`::warning::${error.message}. This preview is available as an artifact only.`);
   }
-  const version = previewVersion(manifest.version, baseline, binding.pr, binding.head);
+  const version = previewVersion(manifest.version, baseline, binding);
   const temporary = mkdtempSync(join(tmpdir(), 'idocs-preview-pack-'));
   try {
     const native = join(temporary, 'native');
     const staging = join(temporary, 'wrapper');
     const bundled = join(staging, 'preview');
     mkdirSync(bundled, { recursive: true });
-    execFileSync('bash', [join(source, 'scripts/release-package.sh'), version, native], { cwd: source, env, stdio: 'inherit' });
+    execPreview('bash', [join(source, 'scripts/release-package.sh'), version, native], { cwd: source, env, stdio: 'inherit' });
     const nativeArchive = join(native, nativeName);
     copyFileSync(nativeArchive, join(bundled, nativeName));
     copyFileSync(new URL('./install.mjs', import.meta.url), join(bundled, 'install.mjs'));
@@ -89,7 +89,7 @@ export function makePreview({ source, directory, env = process.env, lookupLatest
     const { devDependencies, overrides, ...wrapper } = manifest;
     writeFileSync(join(staging, 'package.json'), JSON.stringify({ ...wrapper, version,
       scripts: { postinstall: installScript }, files: ['bin', 'preview', 'README.md'] }, null, 2) + '\n');
-    const packed = parseNpmPack(execFileSync('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary, '--cache', join(temporary, 'cache')],
+    const packed = parseNpmPack(execPreview('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary, '--cache', join(temporary, 'cache')],
       { cwd: staging, encoding: 'utf8' }), packageName);
     assert.equal(packed.version, version);
     mkdirSync(directory);
@@ -117,9 +117,9 @@ export function smokeInstall(archive, version) {
       IDOCS_CACHE_PATH: join(cwd, 'idocs-cache'), IDOCS_USAGE_LOG_PATH: join(cwd, 'usage.jsonl') };
     for (const key of ['IDOCS_LOCAL_BINARY', 'IDOCS_CLI_VERSION', 'IDOCS_RELEASE_BASE_URL', 'DYLD_FRAMEWORK_PATH']) delete env[key];
     writeFileSync(join(cwd, 'package.json'), JSON.stringify({ private: true, allowScripts: { [`file:${archive}`]: true } }));
-    execFileSync('npm', ['install', '--offline', '--no-audit', '--no-fund', '--foreground-scripts', archive], { cwd, env, stdio: 'inherit', timeout: 60000 });
+    execPreview('npm', ['install', '--offline', '--no-audit', '--no-fund', '--foreground-scripts', archive], { cwd, env, stdio: 'inherit', timeout: 60000 });
     const idocs = join(cwd, 'node_modules/.bin/idocs');
-    const run = (...args) => execFileSync(idocs, args, { cwd, env, encoding: 'utf8', timeout: 30000 });
+    const run = (...args) => execPreview(idocs, args, { cwd, env, encoding: 'utf8', timeout: 30000 });
     assert.equal(run('--version').trim(), version);
     assert.match(run('--help'), /USAGE: idocs/);
     assert.match(run('resolve', '--help'), /--framework/);
@@ -129,8 +129,7 @@ export function smokeInstall(archive, version) {
   }
 }
 
-if (import.meta.main) {
-  const [command, path, source = '.'] = process.argv.slice(2);
+function main(command, path, source = '.') {
   const directory = resolve(path);
   if (command === 'build') {
     const receipt = makePreview({ source: resolve(source), directory });
@@ -143,4 +142,10 @@ if (import.meta.main) {
   } else {
     throw new Error('Expected build, verify, or smoke');
   }
+}
+
+if (import.meta.main) {
+  const [command, ...args] = process.argv.slice(2);
+  const name = ['build', 'verify', 'smoke'].includes(command) ? `idocs-pr-preview-${command}` : 'idocs-pr-preview';
+  await withPreviewTrace(name, () => main(command, ...args));
 }
