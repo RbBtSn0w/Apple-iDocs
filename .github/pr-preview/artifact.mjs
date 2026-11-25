@@ -23,9 +23,20 @@ function tarEntry(archive, file, maxBuffer = 1024 * 1024) {
   return execPreview('tar', ['-xOzf', archive, file], { maxBuffer, timeout: 60000 });
 }
 
+export function validatePreviewReceipt(receipt) {
+  const suffix = previewSuffix(receipt);
+  assert.equal(receipt.name, packageName, 'Wrong preview package name');
+  const { version, baseline, sha256: checksum } = receipt;
+  assert.equal(typeof version, 'string', 'Expected a preview version string');
+  const core = version.split('-', 1)[0];
+  assert.equal(version, `${core}-${suffix}`, 'Wrong preview version identity');
+  stableCore(core);
+  if (baseline !== null) requireNewerPreview(version, baseline);
+  assert.match(checksum, /^[0-9a-f]{64}$/, 'Wrong preview checksum format');
+}
+
 export function verifyArtifact(directory, env) {
   const expected = identity(env);
-  const suffix = previewSuffix(expected);
   const archive = join(directory, tarballName);
   const fileLimits = { [tarballName]: 128 * 1024 * 1024, 'receipt.json': 8192, SHA256SUMS: 256 };
   for (const [name, maxBytes] of Object.entries(fileLimits)) {
@@ -34,13 +45,8 @@ export function verifyArtifact(directory, env) {
   }
   const receipt = json(join(directory, 'receipt.json'));
   for (const [field, value] of Object.entries(expected)) assert.equal(receipt[field], value, `Wrong preview ${field}`);
-  assert.equal(receipt.name, packageName, 'Wrong preview package name');
-  const { version, baseline } = receipt;
-  assert.equal(typeof version, 'string', 'Expected a preview version string');
-  const core = version.split('-', 1)[0];
-  assert.equal(version, `${core}-${suffix}`, 'Wrong preview version identity');
-  stableCore(core);
-  if (baseline !== null) requireNewerPreview(version, baseline);
+  validatePreviewReceipt(receipt);
+  const { version } = receipt;
 
   const bytes = readFileSync(archive);
   assert.equal(receipt.sha256, sha256(bytes), 'Wrong package checksum');

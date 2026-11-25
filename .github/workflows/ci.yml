@@ -184,6 +184,7 @@ jobs:
       group: idocs-pr-preview-card-${{ github.event.pull_request.number }}
       queue: max
     permissions:
+      actions: read
       contents: read
       pull-requests: write
     steps:
@@ -198,11 +199,12 @@ jobs:
           ARTIFACT_ID: ${{ needs.pr-preview.outputs.artifact }}
         with:
           script: |
-            const {updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
+            const {checkCardArtifact, updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
             const {GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
             const receipt = JSON.parse(RECEIPT);
             const {number: pr, head} = context.payload.pull_request;
             if (String(pr) !== receipt.pr || head.sha !== receipt.head || String(context.runId) !== receipt.run || !/^[1-9]\d*$/.test(artifact)) {
               throw new Error('The preview artifact does not belong to this pull request and run.');
             }
+            await checkCardArtifact(github, {...context.repo, receipt, artifact});
             core.notice(await updateCard(github, {...context.repo, receipt, artifact, server}));

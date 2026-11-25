@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import YAML from 'yaml';
 import { makePreview, tarballName, verifyArtifact } from '../../.github/pr-preview/artifact.mjs';
-import { artifactName, marker, renderCard, selectArtifact, updateCard } from '../../.github/pr-preview/github.mjs';
+import { artifactName, checkCardArtifact, marker, renderCard, selectArtifact, updateCard } from '../../.github/pr-preview/github.mjs';
 import { publishPreview } from '../../.github/pr-preview/publish.mjs';
 import { previewVersion, requireNewerPreview } from '../../.github/pr-preview/version.mjs';
 import { createNpmObservationBudget } from '../../.github/release-train/npm-view.mjs';
@@ -16,7 +16,8 @@ const owner = 'RbBtSn0w';
 const repo = 'Apple-iDocs';
 const repository = `${owner}/${repo}`;
 const head = '0123456789'.repeat(4);
-const receipt = { pr: '42', head, run: '123', attempt: '1', version: `1.11.1-dev.pr42.g${head}.r123.a1`, baseline: '1.11.0', sha256: 'a'.repeat(64) };
+const receipt = { name: '@rbbtsn0w/idocs', pr: '42', head, run: '123', attempt: '1',
+  version: `1.11.1-dev.pr42.g${head}.r123.a1`, baseline: '1.11.0', sha256: 'a'.repeat(64) };
 const prInfo = { state: 'open', base: { ref: 'main', repo: { full_name: repository } }, head: { sha: head, repo: { full_name: repository } } };
 
 test('versions follow the current stable registry and accept all-numeric commits', () => {
@@ -155,6 +156,20 @@ test('the card validates head, preserves registry evidence and avoids duplicate 
   assert.deepEqual(writes, ['create', 'update', 'update', 'update']);
 });
 
+test('the card rejects malformed receipts and checks the actual upload after a comment-only rerun', async () => {
+  const params = { owner, repo, receipt, artifact: '456' };
+  const metadata = { id: 456, name: artifactName(receipt), expired: false, workflow_run: { id: 123, head_sha: head, run_attempt: 2 } };
+  const github = data => ({ rest: { actions: { getArtifact: async () => ({ data }) } } });
+  await checkCardArtifact(github(metadata), params);
+  await assert.rejects(checkCardArtifact(github({ ...metadata, name: artifactName({ ...receipt, attempt: '2' }) }), params), /does not match/);
+  await assert.rejects(checkCardArtifact(github({ ...metadata, expired: true }), params), /does not match/);
+  await assert.rejects(checkCardArtifact(github({ ...metadata, workflow_run: { id: 124, head_sha: head } }), params), /does not match/);
+  for (const invalid of [{ attempt: 'bad' }, { sha256: 'no' }, { baseline: '1.11.0-pre' }, { version: `1.11.1-other-dev.pr42.g${head}.r123.a1` }]) {
+    assert.throws(() => renderCard({ repository, receipt: { ...receipt, ...invalid }, artifact: '456' }));
+  }
+  assert.throws(() => renderCard({ repository, receipt, artifact: '9007199254740992' }), /artifact ID/);
+});
+
 test('registry readback is bounded and never overwrites mismatched or stale previews', async () => {
   let elapsed = 0;
   let requests = 0;
@@ -187,6 +202,7 @@ test('workflows isolate publishing and the two writers use the same non-replacin
   assert.equal(ci.jobs['pr-preview'].permissions, undefined);
   assert.equal(ci.jobs['pr-preview'].steps[0].with.ref, '${{ github.event.pull_request.head.sha }}');
   assert.match(ci.jobs['pr-preview-comment'].if, /head\.repo\.full_name == github\.repository/);
+  assert.equal(ci.jobs['pr-preview-comment'].permissions.actions, 'read');
   assert.equal(ci.jobs['pr-preview-comment'].concurrency.queue, 'max');
   assert.equal(dispatch.jobs.announce.concurrency.queue, 'max');
   assert.match(ci.jobs['pr-preview-comment'].concurrency.group, /^idocs-pr-preview-card-/);

@@ -1,4 +1,4 @@
-import { tarballName } from './artifact.mjs';
+import { tarballName, validatePreviewReceipt } from './artifact.mjs';
 import { fullSha, packageName, positiveId } from './version.mjs';
 
 export const marker = '<!-- idocs-pr-preview -->';
@@ -7,6 +7,12 @@ const evidenceMarker = /^<!-- idocs-registry-evidence:(.+) -->$/m;
 const registryNames = ['npmjs', 'github-packages'];
 const same = (a, b) => a?.toLowerCase() === b.toLowerCase();
 export const artifactName = ({ pr, head, attempt }) => `idocs-pr-${pr}-${head}-attempt-${attempt}`;
+
+function numericId(value) {
+  const number = Number(value);
+  if (typeof value !== 'string' || !positiveId.test(value) || !Number.isSafeInteger(number)) throw new Error('Invalid preview artifact ID');
+  return number;
+}
 
 export function isCurrent(pr, head, repository) {
   return pr.state === 'open' && pr.base.ref === 'main' && pr.head.sha === head &&
@@ -49,6 +55,8 @@ export async function selectArtifact(github, { owner, repo, sourceRun }) {
 }
 
 export function renderCard({ repository, receipt, artifact, registry = {}, server = 'https://github.com' }) {
+  validatePreviewReceipt(receipt);
+  numericId(artifact);
   const root = `${server}/${repository}`;
   const { pr, head, run, attempt, sha256, version, baseline } = receipt;
   const runURL = `${root}/actions/runs/${run}`;
@@ -90,6 +98,16 @@ export function renderCard({ repository, receipt, artifact, registry = {}, serve
     `gh run download ${run} --repo ${repository} --name ${artifactName({ pr, head, attempt })} --dir "$preview_dir" &&`,
     '  cd "$preview_dir" && shasum -a 256 -c SHA256SUMS', '```', '', `SHA-256 \`${sha256}\``, '', '</details>', '');
   return lines.join('\n');
+}
+
+export async function checkCardArtifact(github, { owner, repo, artifact, receipt }) {
+  validatePreviewReceipt(receipt);
+  const artifact_id = numericId(artifact);
+  const { data } = await github.rest.actions.getArtifact({ owner, repo, artifact_id });
+  if (data.id !== artifact_id || data.name !== artifactName(receipt) || data.expired !== false ||
+      String(data.workflow_run?.id) !== receipt.run || data.workflow_run?.head_sha !== receipt.head) {
+    throw new Error('The preview artifact does not match the current CI run and packaging receipt');
+  }
 }
 
 function previousRegistryEvidence(existing, receipt, artifact) {
