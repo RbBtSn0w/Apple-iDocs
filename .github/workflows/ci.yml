@@ -114,3 +114,97 @@ jobs:
 
       - name: Run iDocs CLI E2E (offline deterministic gate)
         run: IDOCS_NPM_STRICT_INSTALL=1 ./scripts/e2e-cli.sh offline
+
+  pr-preview:
+    name: iDocs PR preview package
+    if: github.event_name == 'pull_request'
+    needs: [build-and-test, e2e-cli-offline]
+    runs-on: macos-26
+    timeout-minutes: 35
+    outputs:
+      receipt: ${{ steps.pack.outputs.receipt }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tuist
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.22.2'
+          package-manager-cache: false
+      - name: Use npm 12
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install and test frozen preview tooling
+        run: |
+          npm ci --prefix .github/pr-preview --ignore-scripts --no-audit --no-fund
+          node --test .github/pr-preview/telemetry.test.mjs
+      - name: Build the exact PR head and install its preview archive
+        id: pack
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          IDOCS_RELEASE_DERIVED_DATA: ${{ runner.temp }}/idocs-preview-derived
+          IDOCS_RELEASE_BUILD_LOG: ${{ runner.temp }}/idocs-preview-build.log
+        run: |
+          test "$(uname -m)" = arm64
+          node .github/pr-preview/artifact.mjs build "$RUNNER_TEMP/idocs-preview"
+      - name: Upload verified preview
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: idocs-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/idocs-preview/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Summarize the verified preview
+        shell: bash
+        env:
+          RECEIPT: ${{ steps.pack.outputs.receipt }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          node --input-type=module -e '
+            import {renderCard} from "./.github/pr-preview/github.mjs";
+            const {GITHUB_REPOSITORY: repository, GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
+            console.log(renderCard({repository, server, receipt: JSON.parse(RECEIPT), artifact}));
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+
+  pr-preview-comment:
+    name: Announce iDocs PR preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: pr-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: idocs-pr-preview-card-${{ github.event.pull_request.number }}
+      queue: max
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RECEIPT: ${{ needs.pr-preview.outputs.receipt }}
+          ARTIFACT_ID: ${{ needs.pr-preview.outputs.artifact }}
+        with:
+          script: |
+            const {checkCardArtifact, updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
+            const {GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact} = process.env;
+            const receipt = JSON.parse(RECEIPT);
+            const {number: pr, head} = context.payload.pull_request;
+            if (String(pr) !== receipt.pr || head.sha !== receipt.head || String(context.runId) !== receipt.run || !/^[1-9]\d*$/.test(artifact)) {
+              throw new Error('The preview artifact does not belong to this pull request and run.');
+            }
+            await checkCardArtifact(github, {...context.repo, receipt, artifact});
+            core.notice(await updateCard(github, {...context.repo, receipt, artifact, server}));

@@ -1,0 +1,148 @@
+name: Publish iDocs PR preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful iDocs CI run for an open PR at its current head
+        required: true
+        type: string
+      registry:
+        description: Authorized preview destination
+        type: choice
+        options: [npmjs, github-packages, both]
+        default: npmjs
+
+permissions: {}
+
+jobs:
+  publish:
+    name: Publish the verified preview archive
+    if: github.ref == 'refs/heads/main' && vars.PR_PREVIEW_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: idocs-pr-preview-registry
+      queue: max
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      id-token: write
+      packages: write
+    outputs:
+      pr: ${{ steps.source.outputs.pr }}
+      artifact: ${{ steps.source.outputs.artifact }}
+      receipt: ${{ steps.verify.outputs.receipt }}
+      npmjs: ${{ steps.npmjs.outputs.status }}
+      github-packages: ${{ steps.mirror.outputs.status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - name: Resolve the successful packaging upload for the current PR head
+        id: source
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        with:
+          script: |
+            const {selectArtifact} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
+            const selected = await selectArtifact(github, {...context.repo, sourceRun: process.env.SOURCE_RUN_ID});
+            for (const [key, value] of Object.entries(selected)) core.setOutput(key, value);
+            core.exportVariable('PR_NUMBER', selected.pr);
+            core.exportVariable('PR_HEAD', selected.head);
+            core.exportVariable('SOURCE_RUN_ID', selected.run);
+            core.exportVariable('SOURCE_ATTEMPT', selected.attempt);
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.22.2'
+          package-manager-cache: false
+      - name: Use npm 12
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-npm" --ignore-scripts --no-audit --no-fund npm@12.2.2
+          echo "$RUNNER_TEMP/release-npm/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install frozen preview tooling
+        run: npm ci --prefix .github/pr-preview --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.run }}
+          path: ${{ runner.temp }}/idocs-preview
+          merge-multiple: true
+      - name: Verify package, archive checksums, and upload receipt
+        id: verify
+        run: |
+          receipt=$(node .github/pr-preview/artifact.mjs verify "$RUNNER_TEMP/idocs-preview")
+          printf 'receipt=%s\n' "$receipt" >> "$GITHUB_OUTPUT"
+      - name: Publish and verify npmjs
+        id: npmjs
+        if: inputs.registry == 'npmjs' || inputs.registry == 'both'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/pr-preview/publish.mjs npmjs "$RUNNER_TEMP/idocs-preview"
+      - name: Publish and verify GitHub Packages
+        id: mirror
+        if: inputs.registry == 'github-packages' || inputs.registry == 'both'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/pr-preview/publish.mjs github-packages "$RUNNER_TEMP/idocs-preview"
+      - name: Report independent registry observations
+        if: always() && steps.verify.outcome == 'success'
+        env:
+          TARGET: ${{ inputs.registry }}
+          NPMJS: ${{ steps.npmjs.outputs.status }}
+          MIRROR: ${{ steps.mirror.outputs.status }}
+        run: |
+          node -e '
+            const {TARGET, NPMJS, MIRROR} = process.env;
+            const records = Object.entries({npmjs: NPMJS, "github-packages": MIRROR})
+              .filter(([target]) => TARGET === "both" || target === TARGET);
+            console.log("### iDocs preview registry readback\n");
+            console.log("| Registry | Request | Exact archive verified | next observed here | Result |\n| --- | --- | --- | --- | --- |");
+            for (const [target, result] of records) {
+              const {request="unconfirmed", available=false, next=false, observation="unverified; inspect the publish step"} = JSON.parse(result || "{}");
+              console.log("| " + [target, request, available, next, observation].join(" | ") + " |");
+            }
+            if (!records.some(([, result]) => JSON.parse(result || "{}").available)) process.exitCode = 1;
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+  announce:
+    name: Announce verified iDocs registry preview
+    needs: publish
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: idocs-pr-preview-card-${{ needs.publish.outputs.pr }}
+      queue: max
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RECEIPT: ${{ needs.publish.outputs.receipt }}
+          ARTIFACT_ID: ${{ needs.publish.outputs.artifact }}
+          NPMJS: ${{ needs.publish.outputs.npmjs }}
+          MIRROR: ${{ needs.publish.outputs.github-packages }}
+        with:
+          script: |
+            const {renderCard, updateCard} = await import(`${process.env.GITHUB_WORKSPACE}/.github/pr-preview/github.mjs`);
+            const {GITHUB_REPOSITORY: repository, GITHUB_SERVER_URL: server, RECEIPT, ARTIFACT_ID: artifact, NPMJS, MIRROR} = process.env;
+            const receipt = JSON.parse(RECEIPT);
+            const registry = {npmjs: JSON.parse(NPMJS || '{}'), 'github-packages': JSON.parse(MIRROR || '{}')};
+            if (!Object.values(registry).some(result => result.available)) throw new Error('No registry verification to announce');
+            const body = renderCard({repository, server, receipt, artifact, registry});
+            await core.summary.addRaw(body).write();
+            core.notice(await updateCard(github, {...context.repo, receipt, artifact, server, registry}));
