@@ -403,25 +403,33 @@ struct ResolveDocsToolTests {
         #expect(result.resolveDiagnostics.contains { $0.reason == "canonical_path_mismatch" } == !matchingMember)
     }
 
-    @Test("ResolveDocsTool matches a fetched Objective-C selector as a method", arguments: ["method", "property"])
-    func fallbackMatchesObjectiveCSelector(memberKind: String) async throws {
-        let path = "/documentation/foundation/nsurl/setproperty:forkey:"
-        let title = "setProperty:forKey:"
+    @Test("ResolveDocsTool matches a fetched Objective-C selector as a method", arguments: ["method", "property"], [
+        (title: "setProperty:forKey:", suffix: ""),
+        (title: "setProperty:forKey:", suffix: "-c.method"),
+        (title: "setProperty:forKey:", suffix: "-c.type.method"),
+        (title: "setProperty:forKey:", suffix: "-occ.method"),
+        (title: "setProperty:forKey:", suffix: "-occ.type.method"),
+        (title: "cancel", suffix: "-c.method")
+    ])
+    func fallbackMatchesObjectiveCSelector(memberKind: String, fixture: (title: String, suffix: String)) async throws {
+        let path = "/documentation/foundation/nsurl/\(fixture.title.lowercased())"
+        let canonicalPath = path + fixture.suffix
+        let searchPath = fixture.title.hasSuffix(":") ? path : canonicalPath
         let tool = ResolveDocsTool(
             fetch: { requestedPath in
-                guard requestedPath == path else { throw MockError.invalidResponse }
-                return FetchDocResult(markdown: "# \(title)", source: .apple, canonicalPath: path)
+                guard requestedPath == searchPath else { throw MockError.invalidResponse }
+                return FetchDocResult(markdown: "# \(fixture.title)", source: .apple, canonicalPath: canonicalPath)
             },
             search: { _ in
-                [SearchResult(title: title, abstract: nil, path: path, kind: .instanceMethod, source: .apple)]
+                [SearchResult(title: fixture.title, abstract: nil, path: searchPath, kind: .instanceMethod, source: .apple)]
             }
         )
         let result = try await tool.run(intent: ResolveDocsIntent(
-            framework: "Foundation", type: "NSURL", member: title, memberKind: memberKind
+            framework: "Foundation", type: "NSURL", member: fixture.title, memberKind: memberKind
         ))
 
         let isMethod = memberKind == "method"
-        #expect(result.canonicalPath == (isMethod ? path : nil))
+        #expect(result.canonicalPath == (isMethod ? canonicalPath : nil))
         #expect(result.verifiedByFetch == isMethod)
         #expect(result.confidence == (isMethod ? .medium : .unresolved))
         #expect(result.candidates.last?.source == .searchFallback)

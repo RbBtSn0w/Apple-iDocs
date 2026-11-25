@@ -628,8 +628,12 @@ public struct ResolveDocsTool {
         }
 
         let combined = "\(evidence.path) \(evidence.title)".lowercased()
-        let isObjectiveCSelector = evidence.path.hasSuffix(":")
-        let looksCallable = isObjectiveCSelector || combined.contains("(")
+        let memberPath = evidence.path.split(separator: "/").last?.lowercased() ?? ""
+        let memberParts = memberPath.split(separator: "-", maxSplits: 2)
+        let isObjectiveCSelector = memberParts.first?.hasSuffix(":") == true
+        let kind = memberParts.dropFirst().first ?? ""
+        let isObjectiveCMethod = ["c.method", "c.type.method", "occ.method", "occ.type.method"].contains(kind)
+        let looksCallable = isObjectiveCSelector || isObjectiveCMethod || combined.contains("(")
             || combined.contains("-swift.method") || combined.contains("-swift.type.method")
         let looksProperty = combined.contains("-swift.property") || combined.contains("-swift.type.property")
         switch memberKind {
