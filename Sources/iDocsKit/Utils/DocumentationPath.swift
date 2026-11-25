@@ -33,4 +33,13 @@ public enum DocumentationPath {
         let normalized = URLHelpers.normalizePath(path).lowercased()
         return normalized.hasPrefix(prefix) || normalized == root
     }
+
+    static func canonicalPagePath(from urlPath: String) -> String? {
+        let path = urlPath.lowercased()
+        guard path.hasPrefix(prefix) else { return nil }
+
+        let segments = path.dropFirst(prefix.count).split(separator: "/")
+        guard !segments.isEmpty, segments.allSatisfy({ $0 != "." && $0 != ".." }) else { return nil }
+        return prefix + segments.joined(separator: "/")
+    }
 }
