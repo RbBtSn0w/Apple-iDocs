@@ -34,55 +34,55 @@ target_block() {
   ' Project.swift
 }
 
-# SC-005: iDocsKit must not depend on Application/Adapter targets or MCP runtime dependencies.
+# iDocsKit must not depend on Application/Adapter targets or MCP runtime dependencies.
 kit_block="$(target_block "iDocsKit")"
 if grep -Eq '\.target\(name: "iDocs"\)|\.target\(name: "iDocsAdapter"\)|\.external\(name: "MCP"\)|\.external\(name: "ServiceLifecycle"\)' <<< "$kit_block"; then
-  fail "SC-005 Target Dependency Gate: iDocsKit contains forbidden dependencies"
+  fail "Target Dependency Gate: iDocsKit contains forbidden dependencies"
 else
-  pass "SC-005 Target Dependency Gate"
+  pass "Target Dependency Gate"
 fi
 
-# SC-006: App layer should not instantiate Common tools directly for search/fetch/list pathways.
-if search 'SearchDocsTool\(|FetchDocTool\(|BrowseTechnologiesTool\(' Sources/iDocsApp Sources/iDocsCLI >/dev/null 2>&1; then
-  fail "SC-006 Access Gate: CLI targets directly instantiate Common tool types"
+# CLI and App must route documentation commands through DocumentationService.
+if search '(ResolveDocsTool|SearchDocsTool|FetchDocTool|BrowseTechnologiesTool)[[:space:]]*\(' Sources/iDocsApp Sources/iDocsCLI >/dev/null 2>&1; then
+  fail "Adapter Access Gate: CLI targets directly instantiate iDocsKit tools"
 else
-  pass "SC-006 Access Gate"
+  pass "Adapter Access Gate"
 fi
 
-# SC-007: Adapter APIs are async-only (no completion handlers).
+# Adapter APIs are async-only (no completion handlers).
 if search 'completion\s*:' Sources/iDocsAdapter >/dev/null 2>&1; then
-  fail "SC-007 Concurrency Gate: completion handlers detected in Adapter"
+  fail "Concurrency Gate: completion handlers detected in Adapter"
 elif search 'func\s+(search|fetch|listTechnologies)\(' Sources/iDocsAdapter/Protocols/DocumentationService.swift | grep -vq 'async throws'; then
-  fail "SC-007 Concurrency Gate: service methods are not async throws"
+  fail "Concurrency Gate: service methods are not async throws"
 else
-  pass "SC-007 Concurrency Gate"
+  pass "Concurrency Gate"
 fi
 
-# SC-008: App readiness via injected cache path and no hardcoded global writes in adapter path.
+# App readiness via injected cache path and no hardcoded global writes in adapter path.
 if ! search 'cachePath' Sources/iDocsAdapter/Models/DocumentationConfig.swift >/dev/null 2>&1; then
-  fail "SC-008 App Readiness Gate: DocumentationConfig.cachePath missing"
+  fail "App Readiness Gate: DocumentationConfig.cachePath missing"
 elif ! search 'DiskCache\(' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
-  fail "SC-008 App Readiness Gate: Adapter does not inject cache directory into DiskCache"
+  fail "App Readiness Gate: Adapter does not inject cache directory into DiskCache"
 elif ! search 'enableFileLocking:\s*config\.enableFileLocking' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
-  fail "SC-008 App Readiness Gate: Adapter does not forward file-locking config"
+  fail "App Readiness Gate: Adapter does not forward file-locking config"
 else
-  pass "SC-008 App Readiness Gate"
+  pass "App Readiness Gate"
 fi
 
-# SC-009: Version gate enforcement in adapter startup.
+# Version gate enforcement in adapter startup.
 if ! search 'validateVersionCompatibility' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
-  fail "SC-009 Version Gate: compatibility validator missing"
+  fail "Version Gate: compatibility validator missing"
 elif ! search 'validateVersionCompatibility\(adapterVersion: adapterVersion, core: coreVersion\)' Sources/iDocsAdapter/Adapters/DefaultDocumentationAdapter.swift >/dev/null 2>&1; then
-  fail "SC-009 Version Gate: init does not enforce version check"
+  fail "Version Gate: init does not enforce version check"
 else
-  pass "SC-009 Version Gate"
+  pass "Version Gate"
 fi
 
-# T017 support: public adapter/common interfaces should avoid platform UI types.
+# Public Adapter and Core interfaces should avoid platform UI types.
 if search 'NSView|UIView|NSColor|UIColor|import AppKit|import UIKit' Sources/iDocsAdapter Sources/iDocsKit >/dev/null 2>&1; then
-  fail "T017 Cross-platform Interface Audit: platform-specific UI types detected"
+  fail "Cross-platform Interface Audit: platform-specific UI types detected"
 else
-  pass "T017 Cross-platform Interface Audit"
+  pass "Cross-platform Interface Audit"
 fi
 
 # Capability guard: source observability for search/fetch.
@@ -101,16 +101,9 @@ else
   pass "Capability Gate: sosumi datasource present"
 fi
 
-# Requirement/Success-Criteria traceability matrix gate.
-if ./scripts/spec-trace-gate.sh >/dev/null 2>&1; then
-  pass "Traceability Gate: FR/SC mapped to automated checks"
-else
-  fail "Traceability Gate: FR/SC mapping is incomplete or invalid"
-fi
-
 if [[ "$failures" -gt 0 ]]; then
-  echo "\nArchitecture gate failed with $failures issue(s)."
+  printf '\nArchitecture gate failed with %s issue(s).\n' "$failures"
   exit 1
 fi
 
-echo "\nArchitecture gate passed."
+printf '\nArchitecture gate passed.\n'

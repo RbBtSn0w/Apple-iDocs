@@ -898,40 +898,28 @@ struct CLICommandTests {
         #expect(capture.stderr.joined(separator: "\n").contains("Error [NETWORK]"))
     }
 
-    @Test("CLI contract docs include search and fetch commands")
-    func contractDocsContainCommands() throws {
-        let fm = FileManager.default
-        let env = ProcessInfo.processInfo.environment
-        var sourceRoot = URL(fileURLWithPath: #filePath)
-        sourceRoot.deleteLastPathComponent() // iDocsTests
-        sourceRoot.deleteLastPathComponent() // Tests
-        sourceRoot.deleteLastPathComponent() // repo root
+    @Test("Documentation subcommands accept JSON output and caller context")
+    func documentationCommandArguments() throws {
+        let sharedOptions = ["--json", "--caller", "test-agent"]
+        let search = try #require(iDocsCLI.parseAsRoot(["search", "SwiftUI"] + sharedOptions) as? SearchCommand)
+        let fetch = try #require(iDocsCLI.parseAsRoot(["fetch", "/documentation/swiftui/view"] + sharedOptions) as? FetchCommand)
+        let list = try #require(iDocsCLI.parseAsRoot(["list", "--category", "UI"] + sharedOptions) as? ListCommand)
+        let resolve = try #require(iDocsCLI.parseAsRoot([
+            "resolve", "--framework", "AppKit", "--type", "NSWindow",
+            "--member", "toolbarStyle", "--member-kind", "property",
+            "--source-family", "documentation"
+        ] + sharedOptions) as? ResolveCommand)
 
-        let candidateRoots: [URL] = [
-            sourceRoot,
-            URL(fileURLWithPath: env["SRCROOT"] ?? "", isDirectory: true),
-            URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
-        ].filter { !$0.path.isEmpty }
-
-        guard let contract = candidateRoots
-            .map({ root in
-                root.appendingPathComponent("specs")
-                    .appendingPathComponent("006-cli-multisource-docs")
-                    .appendingPathComponent("contracts")
-                    .appendingPathComponent("cli-interface.md")
-            })
-            .first(where: { fm.isReadableFile(atPath: $0.path) }) else {
-            // In sandboxed test runs, repo docs may be inaccessible.
-            return
-        }
-
-        let content = try String(contentsOf: contract)
-
-        #expect(content.contains("`idocs search <query>`"))
-        #expect(content.contains("`idocs fetch <id>`"))
-        #expect(content.contains("`idocs list"))
-        #expect(content.contains("`--json`"))
-        #expect(content.contains("`--caller <opaque-id>`"))
+        #expect(search.query == "SwiftUI")
+        #expect(fetch.id == "/documentation/swiftui/view")
+        #expect(list.category == "UI")
+        #expect(resolve.framework == "AppKit")
+        #expect(resolve.type == "NSWindow")
+        #expect(resolve.member == "toolbarStyle")
+        #expect(resolve.memberKind == "property")
+        #expect(resolve.sourceFamily == "documentation")
+        #expect(search.json && fetch.json && list.json && resolve.json)
+        #expect([search.caller, fetch.caller, list.caller, resolve.caller] == Array(repeating: "test-agent", count: 4))
     }
 }
 

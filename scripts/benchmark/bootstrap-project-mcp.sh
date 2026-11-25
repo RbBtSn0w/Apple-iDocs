@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 source scripts/benchmark/common.sh
 
-TARGETS_FILE="specs/008-mcp-service-benchmark/fixtures/targets.json"
+TARGETS_FILE="${BENCHMARK_ROOT}/fixtures/targets.json"
 OUTPUT_FILE=".cursor/mcp.json"
 
 ensure_dir ".cursor"

@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 source scripts/benchmark/common.sh
 
 RUN_ID="${1:-run-$(date +%Y%m%d-%H%M%S)}"
-EVIDENCE_DIR="specs/008-mcp-service-benchmark/artifacts/evidence/${RUN_ID}"
+EVIDENCE_DIR="${BENCHMARK_ROOT}/artifacts/evidence/${RUN_ID}"
 ensure_dir "$EVIDENCE_DIR"
 
 for target in idocs apple-docs-mcp apple-doc-mcp sosumi-ai; do

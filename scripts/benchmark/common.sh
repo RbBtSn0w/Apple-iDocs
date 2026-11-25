@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BENCHMARK_ROOT="specs/008-mcp-service-benchmark"
+BENCHMARK_ROOT="scripts/benchmark"
 
 log() {
   printf '[benchmark] %s\n' "$*"

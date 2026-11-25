@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 source scripts/benchmark/common.sh
 
 TARGET_ID="${1:-all}"
-CACHE_DIR="${2:-specs/008-mcp-service-benchmark/artifacts/cache}"
+CACHE_DIR="${2:-${BENCHMARK_ROOT}/artifacts/cache}"
 
 log "reset target state: ${TARGET_ID}"
 ensure_dir "$CACHE_DIR"

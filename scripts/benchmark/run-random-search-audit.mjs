@@ -27,7 +27,7 @@ if (args.has("mock-infra-failure")) {
 
 const seed = Number(args.get("seed") ?? 1);
 const sampleSize = Number(args.get("sample-size") ?? 40);
-const poolPath = args.get("pool") ?? "specs/008-mcp-service-benchmark/fixtures/search-audit-pool.json";
+const poolPath = args.get("pool") ?? "scripts/benchmark/fixtures/search-audit-pool.json";
 const outputDir = args.get("output-dir") ?? "artifacts/search-quality-race";
 const mockTargetsPath = args.get("mock-targets");
 const mockFailure = args.has("mock-failure") || args.get("mock-failure") === "true";

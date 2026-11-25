@@ -84,10 +84,7 @@ build/
 # --- Local agent/runtime artifacts ---
 .codex/
 
-# --- 008 Benchmark Runtime Artifacts (generated outputs) ---
-specs/008-mcp-service-benchmark/artifacts/results/
-specs/008-mcp-service-benchmark/artifacts/evidence/
-specs/008-mcp-service-benchmark/artifacts/normalized/
-specs/008-mcp-service-benchmark/artifacts/assertions/
-specs/008-mcp-service-benchmark/artifacts/cache/
-!specs/008-mcp-service-benchmark/artifacts/multi-agent-runbook.md
+# --- Benchmark runtime artifacts ---
+/scripts/benchmark/artifacts/
+# Existing checkouts can still contain ignored runs from before the migration.
+/specs/008-mcp-service-benchmark/artifacts/

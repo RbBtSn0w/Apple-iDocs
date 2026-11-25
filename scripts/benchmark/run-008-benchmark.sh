@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 source scripts/benchmark/common.sh
 
 RUN_ID="${1:-run-$(date +%Y%m%d-%H%M%S)}"
-RESULT_DIR="specs/008-mcp-service-benchmark/artifacts/results/${RUN_ID}"
+RESULT_DIR="${BENCHMARK_ROOT}/artifacts/results/${RUN_ID}"
 COLD_SAMPLES="${COLD_SAMPLES:-1}"
 WARM_SAMPLES="${WARM_SAMPLES:-9}"
 ensure_dir "$RESULT_DIR"
