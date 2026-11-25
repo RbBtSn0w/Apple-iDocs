@@ -80,6 +80,70 @@ struct ResolveDocsToolTests {
         #expect(result.fetchDiagnostics?.map(\.reason) == ["http_404", nil])
     }
 
+    @Test("ResolveDocsTool uses the Apple source path from Sosumi and cached Markdown", arguments: [false, true])
+    func sosumiCanonicalMemberPath(warmCache: Bool) async throws {
+        let shortPath = "/documentation/uikit/uiviewcontroller/present"
+        let canonicalPath = "/documentation/uikit/uiviewcontroller/present(_:animated:completion:)"
+        let markdown = """
+        ---
+        title: present(_:animated:completion:)
+        source: https://developer.apple.com\(canonicalPath)
+        ---
+
+        # present(_:animated:completion:)
+
+        Presents a view controller.
+        """
+        let fileSystem = MockFileSystem()
+        let cache = DiskCache(name: "resolve-member-canonical-path", fileManager: fileSystem)
+        if warmCache {
+            try await cache.set(shortPath, value: Data(markdown.utf8), ttl: 3600)
+        }
+
+        let appleURL = try #require(URLHelpers.dataURL(for: shortPath))
+        let appleSession = MockNetworkSession()
+        appleSession.setResponse(for: appleURL, data: Data(), response: MockPayloads.httpResponse(url: appleURL, statusCode: 404))
+        let sosumiURL = try #require(URLHelpers.sosumiFetchURL(for: shortPath))
+        let sosumiSession = MockNetworkSession()
+        sosumiSession.setResponse(for: sosumiURL, data: Data(markdown.utf8), response: MockPayloads.httpResponse(url: sosumiURL))
+
+        let fetch = FetchDocTool(
+            api: AppleJSONAPI(session: appleSession),
+            sosumiAPI: SosumiAPI(session: sosumiSession),
+            xcodeDocs: XcodeLocalDocs(fileManager: fileSystem, searchProvider: MockSearchProvider()),
+            diskCache: cache
+        )
+        let result = try await ResolveDocsTool(fetchTool: fetch).run(intent: ResolveDocsIntent(
+            framework: "UIKit", type: "UIViewController", member: "present", memberKind: "method"
+        ))
+
+        #expect(result.canonicalPath == canonicalPath)
+        #expect(result.evidence?.path == canonicalPath)
+        #expect(result.candidates.first?.path == canonicalPath)
+        #expect(result.verifiedByFetch)
+        #expect(result.confidence == .high)
+        #expect(result.evidence?.source == (warmCache ? .cache : .sosumi))
+        #expect(result.resolveDiagnostics.first?.pathAttempt == shortPath)
+        #expect(warmCache || result.fetchDiagnostics?.contains { $0.source == .apple && $0.statusCode == 404 } == true)
+    }
+
+    @Test("ResolveDocsTool accepts DocC symbol kind and overload suffixes", arguments: [
+        (symbol: "Result", reportedSlug: "result-swift.enum", title: "Result", matches: true),
+        (symbol: "transform", reportedSlug: "transform(_:)-abc123", title: "transform(_:)", matches: true),
+        (symbol: "transform", reportedSlug: "transform-setup", title: "Transform Setup", matches: false)
+    ])
+    func doccCanonicalSymbolPath(fixture: (symbol: String, reportedSlug: String, title: String, matches: Bool)) async throws {
+        let canonicalPath = DocumentationPath.make("example", fixture.reportedSlug)
+        let tool = ResolveDocsTool(fetch: { _ in
+            FetchDocResult(markdown: "# \(fixture.title)", source: .apple, canonicalPath: canonicalPath)
+        })
+
+        let result = try await tool.run(intent: ResolveDocsIntent(framework: "Example", symbol: fixture.symbol))
+
+        #expect(result.canonicalPath == (fixture.matches ? canonicalPath : nil))
+        #expect(result.verifiedByFetch == fixture.matches)
+    }
+
     @Test("ResolveDocsTool recovers SwiftUI modifier signature path without a hardcoded alias")
     func methodSignatureGuessRecoversModifierPath() async throws {
         // Regression for issue #21: `View navigationTitle` resolve must reach
@@ -301,6 +365,67 @@ struct ResolveDocsToolTests {
 
         #expect(result.canonicalPath == "/documentation/swiftui/navigationsplitview")
         #expect(result.fetchDiagnostics?.map(\.reason) == ["http_404", nil])
+    }
+
+    @Test("ResolveDocsTool validates the fetched identity of search candidates", arguments: [false, true], [false, true])
+    func fallbackUsesReportedIdentity(matchingMember: Bool, encodedCandidate: Bool) async throws {
+        let shortPath = "/documentation/uikit/uiviewcontroller/present"
+        let canonicalPath = "/documentation/uikit/uiviewcontroller/present(_:animated:completion:)"
+        let unrelatedPath = "/documentation/uikit/uiviewcontroller/dismiss(animated:completion:)"
+        let searchPath = encodedCandidate
+            ? "/documentation/uikit/uiviewcontroller/present%28_%3Aanimated%3Acompletion%3A%29"
+            : shortPath
+        let attempts = PathAttemptCounter()
+        let tool = ResolveDocsTool(
+            fetch: { path in
+                let attempt = await attempts.count(for: path)
+                guard path == searchPath, encodedCandidate || attempt > 1 else {
+                    throw MockError.invalidResponse
+                }
+                return FetchDocResult(
+                    markdown: "# present(_:animated:completion:)\n\nPresents a view controller.",
+                    source: .sosumi,
+                    canonicalPath: matchingMember ? canonicalPath : unrelatedPath
+                )
+            },
+            search: { _ in
+                [SearchResult(title: "present", abstract: nil, path: searchPath, kind: .instanceMethod, source: .apple)]
+            }
+        )
+        let result = try await tool.run(intent: ResolveDocsIntent(
+            framework: "UIKit", type: "UIViewController", member: "present", memberKind: "method"
+        ))
+
+        #expect(result.canonicalPath == (matchingMember ? canonicalPath : nil))
+        #expect(result.evidence?.path == (matchingMember ? canonicalPath : nil))
+        #expect(result.verifiedByFetch == matchingMember)
+        #expect(result.candidates.last?.matchQuality == (matchingMember ? .exact : .mismatch))
+        #expect(result.resolveDiagnostics.contains { $0.reason == "canonical_path_mismatch" } == !matchingMember)
+    }
+
+    @Test("ResolveDocsTool matches a fetched Objective-C selector as a method", arguments: ["method", "property"])
+    func fallbackMatchesObjectiveCSelector(memberKind: String) async throws {
+        let path = "/documentation/foundation/nsurl/setproperty:forkey:"
+        let title = "setProperty:forKey:"
+        let tool = ResolveDocsTool(
+            fetch: { requestedPath in
+                guard requestedPath == path else { throw MockError.invalidResponse }
+                return FetchDocResult(markdown: "# \(title)", source: .apple, canonicalPath: path)
+            },
+            search: { _ in
+                [SearchResult(title: title, abstract: nil, path: path, kind: .instanceMethod, source: .apple)]
+            }
+        )
+        let result = try await tool.run(intent: ResolveDocsIntent(
+            framework: "Foundation", type: "NSURL", member: title, memberKind: memberKind
+        ))
+
+        let isMethod = memberKind == "method"
+        #expect(result.canonicalPath == (isMethod ? path : nil))
+        #expect(result.verifiedByFetch == isMethod)
+        #expect(result.confidence == (isMethod ? .medium : .unresolved))
+        #expect(result.candidates.last?.source == .searchFallback)
+        #expect(result.resolveDiagnostics.contains { $0.reason == "member_kind_mismatch" } == !isMethod)
     }
 
     @Test("ResolveDocsTool rejects member without type")

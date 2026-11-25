@@ -736,6 +736,7 @@ public enum iDocsTelemetry {
     private static let allowedReasonCodes: Set<String> = [
         "cache_miss",
         "candidate_recovery",
+        "canonical_path_mismatch",
         "corrupt_cache_entry",
         "empty_body",
         "fetch_failed",

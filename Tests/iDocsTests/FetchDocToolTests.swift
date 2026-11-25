@@ -109,9 +109,14 @@ struct FetchDocToolTests {
         let output = try await tool.runDetailed(path: path)
 
         #expect(output.source == .apple)
+        #expect(output.canonicalPath == path)
         #expect(output.markdown.contains("# NavigationSplitView"))
         #expect(output.sourceAttempts.map(\.source) == [.cache, .local, .apple])
         #expect(!output.sourceAttempts.map(\.source).contains(.sosumi))
+
+        let cached = try await tool.runDetailed(path: path)
+        #expect(cached.source == .cache)
+        #expect(cached.canonicalPath == path)
     }
 
     @Test("FetchDocTool uses Apple source for partial DocC payload with diagnostics")

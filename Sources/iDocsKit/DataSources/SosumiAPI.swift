@@ -83,6 +83,22 @@ public actor SosumiAPI {
         return markdown
     }
 
+    static func canonicalDocumentationPath(in markdown: String) -> String? {
+        // The source URL is provider metadata only when it appears in the opening front matter.
+        guard markdown.hasPrefix("---") else { return nil }
+        let lines = markdown.prefix(8_192).split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        guard lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---") else { return nil }
+
+        let sources = lines[1..<end].filter { $0.hasPrefix("source:") }
+        guard sources.count == 1, let source = sources.first else { return nil }
+        let value = source.dropFirst("source:".count).trimmingCharacters(in: .whitespaces)
+        guard let url = URLComponents(string: value),
+              url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == URLHelpers.appleDocBaseURL.host,
+              url.user == nil, url.password == nil, url.port == nil else { return nil }
+        return DocumentationPath.canonicalPagePath(from: url.path)
+    }
+
     private func normalizePath(_ rawURL: String) -> String {
         if rawURL.hasPrefix("/") {
             return rawURL

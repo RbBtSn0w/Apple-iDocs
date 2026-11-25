@@ -34,6 +34,23 @@ struct DocumentationPathTests {
         #expect(!DocumentationPath.isWithinNamespace("help/xcode"))
     }
 
+    @Test("Sosumi accepts the Apple URL declared in its front matter")
+    func sosumiSourcePath() {
+        let markdown = "---\r\nsource: https://developer.apple.com/documentation/SwiftUI/View/onAppear%28perform%3A%29\r\n---\r\n# onAppear(perform:)"
+        #expect(SosumiAPI.canonicalDocumentationPath(in: markdown) == "/documentation/swiftui/view/onappear(perform:)")
+    }
+
+    @Test("Sosumi ignores untrusted or missing documentation identity", arguments: [
+        "---\nsource: https://example.com/documentation/swiftui/view\n---",
+        "---\nsource: https://developer.apple.com/help/app-store-connect/\n---",
+        "---\nsource: https://developer.apple.com/documentation/swiftui/view",
+        "# View\n\nsource: https://developer.apple.com/documentation/swiftui/view",
+        "---\nsource: https://developer.apple.com/documentation/swiftui/view\nsource: https://developer.apple.com/documentation/swiftui/list\n---"
+    ])
+    func untrustedSosumiSourcePath(markdown: String) {
+        #expect(SosumiAPI.canonicalDocumentationPath(in: markdown) == nil)
+    }
+
     @Test("member aliases expose curated labeled-argument slugs and miss otherwise")
     func memberAliases() {
         #expect(

@@ -39,14 +39,17 @@ public struct FetchDocTool {
                     attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
                     recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
-                    return FetchDocResult(markdown: try renderer.render(content), source: .cache, sourceAttempts: attempts)
+                    return try render(content, source: .cache, attempts: attempts)
                 }
                 if let markdown = String(data: cachedData, encoding: .utf8), !markdown.isEmpty {
                     logger.info("Disk cache markdown hit for: \(path)")
                     attempts.append(FetchSourceAttempt(source: .cache, status: .hit))
                     recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("cache")])
-                    return FetchDocResult(markdown: markdown, source: .cache, sourceAttempts: attempts)
+                    return FetchDocResult(
+                        markdown: markdown, source: .cache, sourceAttempts: attempts,
+                        canonicalPath: SosumiAPI.canonicalDocumentationPath(in: markdown)
+                    )
                 }
                 try? await diskCache.remove(path)
                 attempts.append(FetchSourceAttempt(source: .cache, status: .error, reason: "corrupt_cache_entry"))
@@ -64,7 +67,7 @@ public struct FetchDocTool {
                     attempts.append(FetchSourceAttempt(source: .local, status: .hit))
                     recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("local")])
-                    return FetchDocResult(markdown: try renderer.render(localContent), source: .local, sourceAttempts: attempts)
+                    return try render(localContent, source: .local, attempts: attempts)
                 }
                 attempts.append(FetchSourceAttempt(source: .local, status: .miss, reason: "local_no_results"))
             } catch {
@@ -111,7 +114,7 @@ public struct FetchDocTool {
                     attempts.append(appleHitAttempt(for: result.diagnostics))
                     recordAttemptEvents(attempts)
                     iDocsTelemetry.setAttributes(["idocs.source": .string("apple")])
-                    return FetchDocResult(markdown: try renderer.render(content), source: .apple, sourceAttempts: attempts)
+                    return try render(content, source: .apple, attempts: attempts)
                 } catch {
                     attempts.append(FetchSourceAttempt(source: .apple, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
                     logger.warning("Apple remote fetch failed: \(error.localizedDescription). Trying sosumi fallback.")
@@ -127,13 +130,26 @@ public struct FetchDocTool {
                 attempts.append(FetchSourceAttempt(source: .sosumi, status: .hit))
                 recordAttemptEvents(attempts)
                 iDocsTelemetry.setAttributes(["idocs.source": .string("sosumi")])
-                return FetchDocResult(markdown: markdown, source: .sosumi, sourceAttempts: attempts)
+                return FetchDocResult(
+                    markdown: markdown, source: .sosumi, sourceAttempts: attempts,
+                    canonicalPath: SosumiAPI.canonicalDocumentationPath(in: markdown)
+                )
             } catch {
                 attempts.append(FetchSourceAttempt(source: .sosumi, status: .error, reason: fetchFailureReason(for: error), statusCode: httpStatusCode(from: error)))
                 recordAttemptEvents(attempts)
                 throw iDocsError.aggregateFetchFailure(path: path, attempts: attempts)
             }
         }
+    }
+
+    private func render(_ content: DocCContent, source: DataSource, attempts: [FetchSourceAttempt]) throws -> FetchDocResult {
+        let identifier = URLComponents(string: content.identifier)
+        let canonicalPath = identifier.flatMap { url in
+            url.scheme == "doc" ? DocumentationPath.canonicalPagePath(from: url.path) : nil
+        }
+        return FetchDocResult(
+            markdown: try renderer.render(content), source: source, sourceAttempts: attempts, canonicalPath: canonicalPath
+        )
     }
 
     private func fetchFailureReason(for error: Error) -> String {
@@ -204,10 +220,12 @@ public struct FetchDocResult: Sendable {
     public let markdown: String
     public let source: DataSource
     public let sourceAttempts: [FetchSourceAttempt]
+    public let canonicalPath: String?
 
-    public init(markdown: String, source: DataSource, sourceAttempts: [FetchSourceAttempt] = []) {
+    public init(markdown: String, source: DataSource, sourceAttempts: [FetchSourceAttempt] = [], canonicalPath: String? = nil) {
         self.markdown = markdown
         self.source = source
         self.sourceAttempts = sourceAttempts
+        self.canonicalPath = canonicalPath
     }
 }

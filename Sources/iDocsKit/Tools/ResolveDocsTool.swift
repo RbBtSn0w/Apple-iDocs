@@ -278,11 +278,11 @@ public struct ResolveDocsTool {
                 let output = try await fetch(path)
                 let evidence = evidenceFromFetch(output, path: path, sourceFamily: intent.sourceFamily)
                 let allFetchDiagnostics = accumulator.fetchDiagnostics + output.sourceAttempts
-                guard memberKindMatches(evidence: evidence, path: path, intent: intent) else {
+                if let mismatch = fetchMismatch(evidence, attemptedPath: path, intent: intent, checkMemberKind: true) {
                     accumulator.fetchDiagnostics = allFetchDiagnostics
                     accumulator.candidates.append(
                         ResolveDocsCandidate(
-                            path: path,
+                            path: evidence.path,
                             title: evidence.title,
                             source: .direct,
                             matchQuality: .mismatch,
@@ -294,8 +294,10 @@ public struct ResolveDocsTool {
                         ResolveDocsDiagnostic(
                             stage: "direct_path",
                             status: "miss",
-                            reason: "member_kind_mismatch",
-                            hint: "Fetched evidence did not match the requested member kind.",
+                            reason: mismatch,
+                            hint: mismatch == "member_kind_mismatch"
+                                ? "Fetched evidence did not match the requested member kind."
+                                : "Fetched evidence identified a different documentation path.",
                             pathAttempt: path
                         )
                     )
@@ -303,7 +305,7 @@ public struct ResolveDocsTool {
                 }
                 accumulator.candidates.append(
                     ResolveDocsCandidate(
-                        path: path,
+                        path: evidence.path,
                         title: evidence.title,
                         source: .direct,
                         matchQuality: .exact,
@@ -320,7 +322,6 @@ public struct ResolveDocsTool {
                     )
                 )
                 return makeResolvedResult(
-                    path: path,
                     confidence: .high,
                     evidence: evidence,
                     accumulator: accumulator,
@@ -374,30 +375,44 @@ public struct ResolveDocsTool {
             )
 
             for result in results where result.fetchSupported {
-                let quality = matchQuality(for: result, intent: intent)
-                guard quality != .mismatch else { continue }
+                let searchQuality = matchQuality(path: result.path, title: result.title, intent: intent)
+                guard searchQuality != .mismatch else { continue }
 
                 do {
                     let output = try await fetch(result.path)
                     let evidence = evidenceFromFetch(output, path: result.path, sourceFamily: intent.sourceFamily)
                     let allFetchDiagnostics = accumulator.fetchDiagnostics + output.sourceAttempts
+                    let mismatch = fetchMismatch(
+                        evidence, attemptedPath: result.path, intent: intent, checkMemberKind: output.canonicalPath != nil
+                    )
+                    let quality = if mismatch != nil {
+                        ResolveDocsMatchQuality.mismatch
+                    } else if output.canonicalPath != nil {
+                        matchQuality(path: evidence.path, title: evidence.title, intent: intent)
+                    } else {
+                        searchQuality
+                    }
                     let confidence: ResolveDocsConfidence = quality == .exact ? .medium : .low
                     accumulator.candidates.append(
                         ResolveDocsCandidate(
-                            path: result.path,
-                            title: result.title,
+                            path: evidence.path,
+                            title: output.canonicalPath == nil ? result.title : evidence.title,
                             source: .searchFallback,
                             matchQuality: quality,
                             verifiedByFetch: true,
                             confidence: confidence
                         )
                     )
-                    if requiresExactFallback(for: intent) && quality != .exact {
+                    if let mismatch {
+                        accumulator.resolveDiagnostics.append(ResolveDocsDiagnostic(
+                            stage: "search_fallback", status: "miss", reason: mismatch, pathAttempt: result.path
+                        ))
+                    }
+                    if quality == .mismatch || (requiresExactFallback(for: intent) && quality != .exact) {
                         accumulator.fetchDiagnostics = allFetchDiagnostics
                         continue
                     }
                     return makeResolvedResult(
-                        path: result.path,
                         confidence: confidence,
                         evidence: evidence,
                         accumulator: accumulator,
@@ -413,7 +428,7 @@ public struct ResolveDocsTool {
                             path: result.path,
                             title: result.title,
                             source: .searchFallback,
-                            matchQuality: quality,
+                            matchQuality: searchQuality,
                             verifiedByFetch: false,
                             confidence: .low
                         )
@@ -435,14 +450,13 @@ public struct ResolveDocsTool {
 
     /// Builds a fetch-verified resolved result from the accumulated evidence.
     private func makeResolvedResult(
-        path: String,
         confidence: ResolveDocsConfidence,
         evidence: ResolveDocsEvidence,
         accumulator: Accumulator,
         fetchDiagnostics: [FetchSourceAttempt]
     ) -> ResolveDocsResult {
         ResolveDocsResult(
-            canonicalPath: path,
+            canonicalPath: evidence.path,
             confidence: confidence,
             verifiedByFetch: true,
             evidence: evidence,
@@ -539,8 +553,8 @@ public struct ResolveDocsTool {
             .joined(separator: " ")
     }
 
-    private func matchQuality(for result: SearchResult, intent: ResolveDocsIntent) -> ResolveDocsMatchQuality {
-        let candidate = compact("\(result.path) \(result.title)")
+    private func matchQuality(path: String, title: String, intent: ResolveDocsIntent) -> ResolveDocsMatchQuality {
+        let candidate = compact("\(path) \(title)")
         guard let framework = intent.framework, candidate.contains(compact(framework)) else {
             return .mismatch
         }
@@ -564,14 +578,59 @@ public struct ResolveDocsTool {
         intent.symbol != nil || intent.member != nil
     }
 
-    private func memberKindMatches(evidence: ResolveDocsEvidence, path: String, intent: ResolveDocsIntent) -> Bool {
+    private func fetchMismatch(
+        _ evidence: ResolveDocsEvidence, attemptedPath: String, intent: ResolveDocsIntent, checkMemberKind: Bool
+    ) -> String? {
+        guard matchesAttemptedPath(evidence, attemptedPath: attemptedPath) else {
+            return "canonical_path_mismatch"
+        }
+        if checkMemberKind && !memberKindMatches(evidence: evidence, intent: intent) {
+            return "member_kind_mismatch"
+        }
+        return nil
+    }
+
+    private func matchesAttemptedPath(_ evidence: ResolveDocsEvidence, attemptedPath: String) -> Bool {
+        if evidence.path == attemptedPath { return true }
+
+        let decodedAttempt = attemptedPath.removingPercentEncoding ?? attemptedPath
+        let attempted = DocumentationPath.canonicalPagePath(from: decodedAttempt) ?? decodedAttempt.lowercased()
+        let reported = evidence.path.lowercased()
+        guard reported.hasPrefix(attempted) else { return false }
+
+        // A short slug can acquire a signature or disambiguation suffix for the same symbol.
+        let suffix = reported.dropFirst(attempted.count)
+        guard !suffix.contains("/") else { return false }
+        let disambiguation: Substring
+        if suffix.first == "(" {
+            guard let signatureEnd = suffix.lastIndex(of: ")") else { return false }
+            disambiguation = suffix[suffix.index(after: signatureEnd)...]
+        } else {
+            disambiguation = suffix
+        }
+
+        if disambiguation.isEmpty { return true }
+        let token = disambiguation.dropFirst()
+        guard disambiguation.first == "-", !token.isEmpty,
+              token.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") })
+        else { return false }
+
+        if token.hasPrefix("swift.") || token.hasPrefix("occ.") { return true }
+        // An unqualified suffix can also be part of an article slug. Require the symbol title to match.
+        guard let attemptedSlug = attempted.split(separator: "/").last else { return false }
+        return slug(evidence.title) == slug(String(attemptedSlug))
+    }
+
+    private func memberKindMatches(evidence: ResolveDocsEvidence, intent: ResolveDocsIntent) -> Bool {
         guard let memberKind = intent.memberKind?.lowercased(),
               intent.member != nil else {
             return true
         }
 
-        let combined = "\(path) \(evidence.title)".lowercased()
-        let looksCallable = combined.contains("(") || combined.contains("-swift.method") || combined.contains("-swift.type.method")
+        let combined = "\(evidence.path) \(evidence.title)".lowercased()
+        let isObjectiveCSelector = evidence.path.hasSuffix(":")
+        let looksCallable = isObjectiveCSelector || combined.contains("(")
+            || combined.contains("-swift.method") || combined.contains("-swift.type.method")
         let looksProperty = combined.contains("-swift.property") || combined.contains("-swift.type.property")
         switch memberKind {
         case "method", "function", "initializer", "type_method", "typemethod":
@@ -591,7 +650,7 @@ public struct ResolveDocsTool {
         ResolveDocsEvidence(
             sourceFamily: sourceFamily,
             source: output.source,
-            path: path,
+            path: output.canonicalPath ?? path,
             title: MarkdownSummary.title(from: output.markdown, fallback: path),
             summary: MarkdownSummary.summary(from: output.markdown)
         )
