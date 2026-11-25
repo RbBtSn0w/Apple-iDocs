@@ -102,7 +102,7 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             sources: ["Tests/iDocsTests/**"],
             resources: [
-                "specs/008-mcp-service-benchmark/fixtures/**"
+                "scripts/benchmark/fixtures/**"
             ],
             copyFiles: [
                 .resources(

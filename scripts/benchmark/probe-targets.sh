@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 source scripts/benchmark/common.sh
 
-PROBES_FILE="specs/008-mcp-service-benchmark/fixtures/minimum-probes.json"
-OUTPUT_DIR="specs/008-mcp-service-benchmark/artifacts/results"
+PROBES_FILE="${BENCHMARK_ROOT}/fixtures/minimum-probes.json"
+OUTPUT_DIR="${BENCHMARK_ROOT}/artifacts/results"
 OUTPUT_FILE="${OUTPUT_DIR}/target-probes.json"
 ensure_dir "$OUTPUT_DIR"
 

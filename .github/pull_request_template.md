@@ -17,9 +17,8 @@
 
 - [ ] `./scripts/tuist-silent.sh test`
 - [ ] `./scripts/arch-gate.sh`
-- [ ] `./scripts/spec-trace-gate.sh`
 - [ ] `./scripts/coverage-gate.sh 60`
-- [ ] `./scripts/e2e-cli.sh`
+- [ ] `./scripts/e2e-cli.sh offline`
 
 ## Checklist
 

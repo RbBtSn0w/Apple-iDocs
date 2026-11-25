@@ -5,7 +5,7 @@ import Testing
 struct BenchmarkGoldenDatasetTests {
     @Test("Golden dataset should include frozen atomic claims and required slots")
     func validateGoldenDataset() throws {
-        let json = try BenchmarkFixtures.fixtureJSON("specs/008-mcp-service-benchmark/fixtures/golden-dataset.json")
+        let json = try BenchmarkFixtures.fixtureJSON("scripts/benchmark/fixtures/golden-dataset.json")
         let dict = try #require(json as? [String: Any])
         let scenarios = try #require(dict["scenarios"] as? [[String: Any]])
         #expect(!scenarios.isEmpty)
@@ -20,7 +20,7 @@ struct BenchmarkGoldenDatasetTests {
 
     @Test("Tokenizer spec should pin cl100k_base")
     func validateTokenizerSpec() throws {
-        let json = try BenchmarkFixtures.fixtureJSON("specs/008-mcp-service-benchmark/fixtures/tokenizer-spec.json")
+        let json = try BenchmarkFixtures.fixtureJSON("scripts/benchmark/fixtures/tokenizer-spec.json")
         let dict = try #require(json as? [String: Any])
         #expect(dict["tokenizerSpec"] as? String == "cl100k_base")
     }

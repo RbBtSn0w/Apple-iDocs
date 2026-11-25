@@ -1,79 +1,25 @@
-> **Note:** For project-specific architectural rules, design patterns, and coding standards, refer to `.specify/memory/constitution.md`.
-
 # iDocs Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-05-19
+## Architecture and retrieval
 
-## Active Technologies
-- Swift 6.0 project settings plus Node.js ES modules for benchmark scripts + Tuist, swift-argument-parser, swift-log, Foundation, existing iDocsKit data sources/tools, Node.js built-in test runner (013-agent-resolve-entry)
-- Existing disk cache for fetch; benchmark fixture JSON under `specs/008-mcp-service-benchmark/fixtures/`; no new persistent service storage (013-agent-resolve-entry)
-- Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack (014-fix-docc-identifier)
-- Existing fetch disk cache only; no cache format migration because encoded `DocCContent.identifier` remains a string (014-fix-docc-identifier)
-- Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack (015-resilient-docc-ingestion)
-- Existing fetch disk cache only; normalized successful Apple content encodes to stable `DocCContent` shape (015-resilient-docc-ingestion)
+- Keep the shipped product a Swift-native, stateless macOS CLI. Each call supplies its own inputs. Keep MCP transports, servers, and session state out of the product. Node.js, Python, and MCP benchmark tooling stay outside the native runtime. Fetch and cache large documentation assets on demand.
+- Keep the dependency direction `iDocsCLI → iDocsApp → iDocsAdapter → iDocsKit`. Route `resolve`, `fetch`, `search`, and `list` through the async `DocumentationService` boundary. Preserve injected cache paths, file-locking configuration, and Adapter/Core version checks. Keep Core and Adapter interfaces free of UI types.
+- Prefer `idocs resolve` for structured Apple API evidence. Accept the complete intent in one invocation, including framework, symbol or type, optional member and kind, source family, and caller context. Build the canonical path deterministically and verify it through `fetch`. Use `search` to recover candidates only after a direct miss, failure, or ambiguity. High confidence requires successful fetch verification. Keep `fetch` authoritative for known paths, `search` for candidate discovery, and `list` for catalog discovery with explicit sources and stable output.
+- Preserve deterministic source precedence. Fetch checks disk cache, local Xcode documents, Apple, then Sosumi. Search checks memory cache, local Xcode documents, Apple, then Sosumi. Keep source eligibility and fallback decisions visible in diagnostics.
+- Use typed Swift models for DocC and resolver intents, results, evidence, diagnostics, and confidence (`high`, `medium`, `low`, `unresolved`). Normalize remote Apple JSON at ingestion before rendering or caching. Preserve existing encoded shapes and semantic errors. Use Foundation, Xcode, and Spotlight for platform work and `async/await` and actors for concurrency.
+- Group benchmark evidence by `resolve`, `fetch`, and `search`. Restrict automatic P0 issues to explicitly eligible iDocs golden-truth failures in `resolve` and `fetch`.
 
-- Swift 6.0（项目设置）+ shell scripts + Tuist, swift-argument-parser, swift-log；外部目标为 `idocs` CLI、`apple-docs-mcp`、`apple-doc-mcp`、`sosumi.ai` (008-mcp-service-benchmark)
+## Diagnostics and telemetry
 
-## Project Structure
+- Keep leveled local logging through swift-log or the injected `DocumentationLogger`. Preserve successful output provenance, Xcode discovery, cache, fallback, and degradation diagnostics. Keep JSON `resolve_diagnostics`, `fetch_diagnostics`, and `search_diagnostics` scoped to their respective stages.
+- Instrument new runtime behavior under the [CLI span conventions](https://opentelemetry.io/docs/specs/semconv/cli/cli-spans/) and the [gateway client contract](docs/telemetry/otel-gateway-client-standard.md). Use a low-cardinality `INTERNAL` root span with `process.executable.name`, `process.pid`, `process.exit.code`, and a low-cardinality `error.type` on failure. Finish with a bounded flush. Use `CLIENT` spans for HTTP and subprocess calls, with distinguishable retry attempts.
+- Record each unrecovered exception once at the command boundary on its owning span. Export traces only. Exclude raw queries, paths, caller identities, tokens, documentation bodies, and free-form error or diagnostic text. Redact command arguments with flag-aware placeholders. Telemetry initialization, export, and flush failures must leave stdout, stderr, and exit status intact. Honeycomb credentials belong at the gateway.
 
-```text
-Project.swift
-Sources/
-Tests/
-Tuist/
-└── Package.swift
-```
+## Build, test, and delivery
 
-## Telemetry
-
-- **OpenTelemetry (OTel)**: For every new feature or requirement added, ensure you implement corresponding OpenTelemetry instrumentation (spans, events, or metrics) to maintain observability.
-- **OTel CLI Compliance**: All CLI programs and external subprocess wrappers must strictly follow the official [Semantic conventions for CLI programs](https://opentelemetry.io/docs/specs/semconv/cli/cli-spans/):
-  - Use `SpanKind.INTERNAL` for the CLI's own execution (callee spans) and `SpanKind.CLIENT` for subprocess calls (caller spans).
-  - Span names must default to `{process.executable.name}` (e.g. `"git"`, `"claude"`) or documented low-cardinality values.
-  - Correctly record all **Required** attributes: `process.executable.name`, `process.exit.code`, and `process.pid`.
-  - Correctly record `error.type` on failure spans (when `process.exit.code !== 0`) as **Conditionally Required**.
-- **Telemetry Privacy**: **All telemetry data must comply with privacy standards**—never log raw file paths, personally identifiable information (PII), or user secrets/tokens. Sanitization (e.g., `sanitizeArgs()`) is mandatory before collecting `process.command_args`.
-
-## Commands
-
-# Add commands for Swift 6.0（项目设置）+ shell scripts
-- **Build**: `./scripts/tuist-silent.sh build iDocs` or `tuist build`
-- **Test**: `./scripts/tuist-silent.sh test` or `tuist test iDocs --inspect-mode local --no-upload --no-selective-testing -- -destination 'platform=macOS,name=My Mac'`
-- **Run Resolve Smoke**: `./scripts/tuist-silent.sh run idocs resolve --framework SwiftUI --symbol NavigationSplitView --json`
-- **Generate Project**: `tuist generate --no-open`
-
-## Code Style
-
-Swift 6.0（项目设置）+ shell scripts: Follow standard conventions
-
-## Infrastructure Guidelines
-- **Project Generation**: This project uses Tuist (`Project.swift`, `Tuist.swift`) for project generation and management. Run `tuist generate --no-open` to generate Xcode workspace without launching Xcode IDE.
-- **Dependency Management**: Tuist owns the project graph in `Project.swift`; Swift Package Manager is used only for third-party dependencies declared in `Tuist/Package.swift` and consumed through `.external(...)`.
-- **SPM Boundary**: For App/CLI/main products, `Tuist/Package.swift` is a dependency entry point, not a repository identity manifest. Only SDK/library repositories that publish through SwiftPM should use a root `Package.swift`, because that manifest is their external release contract.
-- **Headless Tests**: Tuist test runs should use the shared `iDocs` scheme with local inspect mode, `--no-upload`, `--no-selective-testing`, and an explicit macOS destination so they do not depend on opening Xcode, remote result inspection, or Tuist server state.
-- **Git Commit Workflow**: Please follow Conventional Commits standard (e.g. `feat: ...`, `fix: ...`, `docs: ...`).
-- **Agent-Facing Documentation Entry**: `idocs resolve` is the P0 agent-facing capability for structured Apple documentation evidence retrieval. Agents should prefer structured resolve intents for API evidence, use `idocs fetch` as the canonical evidence authority for known paths, and treat `idocs search` as exploration and candidate discovery rather than the primary correctness path.
-
-## Recent Changes
-- 016-docc-lists-and-search-ranking: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, DocC list parsing, bounded search ranking and regression test suites
-- 015-resilient-docc-ingestion: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
-- 014-fix-docc-identifier: Added Swift 6.0 project settings + Tuist, Foundation, swift-argument-parser, swift-log, existing iDocsKit fetch/data-source/rendering stack
-
-
-<!-- MANUAL ADDITIONS START -->
-## Additional Grounded Workflows
-
-- **Silent CLI Workflow**: Prefer `./scripts/tuist-silent.sh` for headless local work. Useful commands include `./scripts/tuist-silent.sh build iDocs`, `./scripts/tuist-silent.sh run idocs --help`, `./scripts/tuist-silent.sh test`, `./scripts/tuist-silent.sh test iDocsAdapterTests`, and `./scripts/tuist-silent.sh test-all`.
-- **Source Checkout CLI Usage**: When validating commands from this checkout, replace installed `idocs` calls with `./scripts/tuist-silent.sh run idocs <args...>`. Agent and benchmark workflows can isolate state with `IDOCS_CACHE_PATH` and `IDOCS_USAGE_LOG_PATH`.
-- **Local npm/E2E Validation**: Use `./scripts/e2e-cli.sh offline` for deterministic link and pack validation. Use `./scripts/e2e-cli.sh live` only when network-dependent Apple documentation checks are intended.
-- **Quality Gates**: Run focused gates as needed with `./scripts/arch-gate.sh`, `./scripts/spec-trace-gate.sh`, `./scripts/coverage-gate.sh 60`, and `./scripts/benchmark/check-local-cli-latency.sh`.
-- **Release Packaging Smoke**: Install frozen tooling with `npm ci --prefix scripts/release --ignore-scripts --no-audit --no-fund`, then run `./scripts/test-release-config.sh`. `./scripts/release-package.sh` builds an archive locally; it is never called with publication credentials. See `docs/release/single-trunk.md` for the scheduled pipeline, artifact consumer and activation prerequisites.
-- **Release Runtime Ownership**: `.github/release-train/` is generated from the owning Skill and must not be edited manually. Run its local `sync.mjs check --consumer .` without upstream access. Repository configuration and native/registry/tap adapters remain outside the generated directory.
-- **Branching and publication**: Create short-lived branches from current `main`; PRs target `main` and use Conventional Commit squash messages. Friday 15:00 Asia/Singapore (`0 7 * * 5` UTC) and manual release share `release.yml`. Analysis/verification run without activation. Stable publication requires `RELEASE_ENABLED=true`; original-run recovery uses the same workflow. The separate PR preview workflow is documented in [the preview runbook](docs/release/pr-preview.md). No develop promotion, reverse sync, or release metadata commits. Never enable publication, merge PRs, create baseline tags, or delete remote branches merely to complete source migration.
-<!-- MANUAL ADDITIONS END -->
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-specs/016-docc-lists-and-search-ranking/plan.md
-<!-- SPECKIT END -->
+- `Project.swift` owns the Swift 6 Tuist graph. `Tuist/Package.swift` and its lockfile own third-party SwiftPM dependencies consumed through `.external(...)`. Use `tuist install` and `tuist generate --no-open` as needed. A root `Package.swift` is reserved for repositories that publish an SDK or library through SwiftPM.
+- Start behavior changes with a failing Swift Testing case or a focused automated reproduction. Implement, rerun the focused check, then run the affected gates. Run the architecture gate and both first-party test targets before merging. Live network integration is opt-in.
+- Use `./scripts/tuist-silent.sh build iDocs`, `./scripts/tuist-silent.sh run idocs <args...>`, and `./scripts/tuist-silent.sh test` from this checkout. The default headless suite runs `iDocsTests` and `iDocsAdapterTests` locally with upload and selective testing disabled. Use `IDOCS_CACHE_PATH` and `IDOCS_USAGE_LOG_PATH` to isolate CLI state.
+- Use `./scripts/arch-gate.sh`; use `./scripts/coverage-gate.sh 60`, `./scripts/e2e-cli.sh offline`, and `./scripts/benchmark/check-local-cli-latency.sh` when the change affects those contracts. Keep benchmark inputs under `scripts/benchmark/fixtures/` and generated benchmark run data outside the shipped product.
+- Develop from `main` on short-lived branches and use Conventional Commits. Follow the [single-trunk release runbook](docs/release/single-trunk.md) for SemVer, activation, verification, and recovery, and the [PR preview runbook](docs/release/pr-preview.md) for preview artifacts. Stable publication requires explicit activation. Treat `.github/release-train/` as generated and validate it locally with `node .github/release-train/sync.mjs check --consumer .`.
+- Work from the current request, relevant code, and existing checks. Keep planning in the active task. Consult [the RFCs](docs/rfcs/) for durable design rationale and report the verification evidence with the change.

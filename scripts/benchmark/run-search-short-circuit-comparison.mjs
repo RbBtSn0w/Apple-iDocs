@@ -6,7 +6,7 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const defaultRunId = `run-${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")}-search-short-circuit`;
 const runId = readArg("--run-id") ?? defaultRunId;
-const outputDir = path.join(repoRoot, "specs/008-mcp-service-benchmark/artifacts/results", runId);
+const outputDir = path.join(repoRoot, "scripts/benchmark/artifacts/results", runId);
 
 const cases = [
   {

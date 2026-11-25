@@ -28,9 +28,8 @@ Thanks for your interest in contributing.
 4. Run quality checks before opening a PR:
    ```bash
    ./scripts/arch-gate.sh
-   ./scripts/spec-trace-gate.sh
    ./scripts/coverage-gate.sh 60
-   ./scripts/e2e-cli.sh
+   ./scripts/e2e-cli.sh offline
    ```
 5. Open a PR with:
    - clear problem statement

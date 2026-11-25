@@ -201,17 +201,22 @@ Notes:
 
 ```bash
 ./scripts/arch-gate.sh
-./scripts/spec-trace-gate.sh
 ./scripts/coverage-gate.sh 60
-./scripts/e2e-cli.sh
+./scripts/e2e-cli.sh offline
 ./scripts/benchmark/check-local-cli-latency.sh
 ```
 
 Notes:
-- `spec-trace-gate.sh` verifies every `FR-*`/`SC-*` in `spec.md` has a mapped automated check.
+- `arch-gate.sh` checks dependency direction, the async adapter boundary, and retrieval capabilities against the code.
 - `coverage-gate.sh` runs `xcodebuild` with coverage and evaluates average line coverage for `iDocsKit`, `iDocsAdapter`, and `iDocsApp`.
 - `check-local-cli-latency.sh` runs a local binary directly, records usage JSONL in an isolated cache/log location, and fails if the current p50/p95 thresholds regress.
 - `check-local-cli-latency.sh` honors `IDOCS_LATENCY_SAMPLES`, `IDOCS_LATENCY_COMMAND_TIMEOUT_SECONDS`, `IDOCS_LATENCY_KEEP_ARTIFACTS`, `IDOCS_LATENCY_CACHE_DIR`, and `IDOCS_LATENCY_USAGE_LOG` for local diagnostics.
+
+## Design References
+
+- [Documentation retrieval and evidence](docs/rfcs/documentation-retrieval.md)
+- [Apple DocC ingestion and search](docs/rfcs/apple-docc-ingestion.md)
+- [Documentation benchmark evidence](docs/rfcs/benchmark-evidence.md)
 
 ## License
 MIT

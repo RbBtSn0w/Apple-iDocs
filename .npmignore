@@ -1,10 +1,10 @@
 .git/
 .github/
-.specify/
 .agent/
 .agents/
 .codex/
-specs/
+scripts/benchmark/artifacts/
+specs/008-mcp-service-benchmark/artifacts/
 Tests/
 Derived/
 DerivedData/

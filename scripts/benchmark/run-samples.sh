@@ -11,7 +11,7 @@ WARM_SAMPLES="${WARM_SAMPLES:-9}"
 TARGETS="${TARGETS:-idocs,apple-docs-mcp,apple-doc-mcp,sosumi-ai}"
 SHARED_LIMIT="${SHARED_LIMIT:-0}"
 
-RESULT_FILE="specs/008-mcp-service-benchmark/artifacts/results/${RUN_ID}/records.jsonl"
+RESULT_FILE="${BENCHMARK_ROOT}/artifacts/results/${RUN_ID}/records.jsonl"
 if [[ -f "$RESULT_FILE" ]]; then
   rm -f "$RESULT_FILE"
 fi
