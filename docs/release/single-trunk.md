@@ -4,7 +4,9 @@
 
 `main` is the only integration trunk. Short-lived feature/fix PRs target main and use reviewed Conventional Commit squash messages, including breaking-change footers. Retain branch cleanup. Remote develop may remain inactive; retirement needs separate authorization. This migration starts at main `69649730d68dcf24cfbda8d6ff79fd6682532f55` (the published `v1.10.0`); develop has no outstanding business delta. Existing dependency PR #58 stays independent.
 
-Friday 15:00 Asia/Singapore/Asia/Shanghai is `0 7 * * 5` UTC. The same `release.yml` supports immediate `workflow_dispatch` on main after validated code merges. Ordinary push/PR CI never publishes. Schedule delivery can be delayed; a manual invocation does not bypass checks or select a version. Analysis and needed exact-candidate verification run without activation. All publication is default-off unless repository variable `RELEASE_ENABLED` equals `true`. A proven no-change plan skips native/product builds.
+Friday 15:00 Asia/Singapore/Asia/Shanghai is `0 7 * * 5` UTC. The same `release.yml` supports immediate `workflow_dispatch` on main after validated code merges. Ordinary push/PR CI never publishes. Schedule delivery can be delayed; a manual invocation does not bypass checks or select a version. Analysis and needed exact-candidate verification run without activation. Stable publication is default-off unless repository variable `RELEASE_ENABLED` equals `true`. A proven no-change plan skips native/product builds.
+
+[PR previews](pr-preview.md) use an independent Actions artifact and an optional manual publisher with its own activation. Stable release analysis, registry `latest`, GitHub Releases, and Homebrew follow the stable workflow described here.
 
 ## Candidate, version and payload
 
